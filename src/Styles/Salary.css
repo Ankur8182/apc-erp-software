@@ -1,0 +1,127 @@
+.salary-page{
+    padding:30px;
+    background:#f4f6f9;
+    min-height:100vh;
+}
+
+.page-card{
+    background:#ffffff;
+    padding:25px;
+    border-radius:15px;
+    box-shadow:0 4px 15px rgba(0,0,0,.08);
+    margin-bottom:25px;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px;
+}
+
+.form-grid input,
+.form-grid select{
+    padding:12px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    font-size:15px;
+    outline:none;
+}
+
+.save-btn{
+    margin-top:20px;
+    padding:12px 22px;
+    background:#2563eb;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:16px;
+    font-weight:600;
+    transition:.3s;
+}
+
+.save-btn:hover{
+    background:#1d4ed8;
+}
+
+.table-card{
+    background:#ffffff;
+    border-radius:15px;
+    padding:20px;
+    box-shadow:0 4px 15px rgba(0,0,0,.08);
+}
+
+.salary-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.salary-table th{
+    background:#0f172a;
+    color:#ffffff;
+    padding:14px;
+    text-align:center;
+}
+
+.salary-table td{
+    padding:12px;
+    border:1px solid #e5e7eb;
+    text-align:center;
+}
+
+.salary-table tr:nth-child(even){
+    background:#f8fafc;
+}
+
+.salary-table tr:hover{
+    background:#eef4ff;
+}
+
+/* Status */
+
+.status-paid{
+    display:inline-block;
+    background:#16a34a;
+    color:#ffffff;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:13px;
+    font-weight:600;
+}
+
+.status-unpaid{
+    display:inline-block;
+    background:#dc2626;
+    color:#ffffff;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:13px;
+    font-weight:600;
+}
+
+/* Responsive */
+
+@media(max-width:1000px){
+
+    .form-grid{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+}
+
+@media(max-width:768px){
+
+    .salary-page{
+        padding:15px;
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+
+    .salary-table{
+        display:block;
+        overflow-x:auto;
+    }
+
+}

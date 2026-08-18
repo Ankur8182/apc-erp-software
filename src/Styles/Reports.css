@@ -1,0 +1,437 @@
+/* =========================================
+   REPORTS PAGE
+========================================= */
+
+.reports-page {
+  width: 100%;
+  min-height: 100vh;
+  padding: 30px;
+  box-sizing: border-box;
+  background: #f5f7fb;
+}
+
+/* =========================================
+   PAGE HEADER
+========================================= */
+
+.reports-title-section {
+  margin-bottom: 25px;
+}
+
+.reports-title-section h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  color: #26364a;
+}
+
+.reports-title-section p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: #667085;
+}
+
+/* =========================================
+   FILTER CARD
+========================================= */
+
+.reports-filter-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 22px;
+  box-sizing: border-box;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+}
+
+.report-filter-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr)
+    minmax(180px, 1fr)
+    minmax(180px, 1fr)
+    auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-group label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475467;
+}
+
+.filter-group select,
+.filter-group input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  outline: none;
+  box-sizing: border-box;
+  background: #ffffff;
+  font-size: 14px;
+  color: #344054;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+  border-color: #2563eb;
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.1);
+}
+
+/* =========================================
+   BUTTONS
+========================================= */
+
+.report-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.report-buttons button {
+  height: 46px;
+  border: none;
+  border-radius: 10px;
+  padding: 0 18px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: 0.2s ease;
+}
+
+.reset-report-btn {
+  background: #eef1f5;
+  color: #475467;
+}
+
+.reset-report-btn:hover {
+  background: #dfe4ea;
+}
+
+.print-report-btn {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.print-report-btn:hover {
+  background: #1d4ed8;
+}
+
+/* =========================================
+   SECTION TITLE
+========================================= */
+
+.report-section-title {
+  margin: 25px 0 18px;
+}
+
+.report-section-title h2 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+/* =========================================
+   FINANCIAL CARDS
+========================================= */
+
+.financial-cards {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.financial-card {
+  min-height: 125px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px;
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  gap: 15px;
+
+  box-shadow:
+    0 8px 24px
+    rgba(0, 0, 0, 0.07);
+
+  border-left: 5px solid #2563eb;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.financial-card:hover {
+  transform: translateY(-3px);
+
+  box-shadow:
+    0 12px 30px
+    rgba(0, 0, 0, 0.10);
+}
+
+.financial-icon {
+  width: 54px;
+  height: 54px;
+  min-width: 54px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background: #eef3f9;
+  border-radius: 15px;
+
+  font-size: 28px;
+}
+
+.financial-card span {
+  display: block;
+  font-size: 14px;
+  color: #667085;
+  margin-bottom: 8px;
+}
+
+.financial-card h3 {
+  margin: 0;
+  font-size: 23px;
+  color: #26364a;
+  font-weight: 700;
+}
+
+/* =========================================
+   CARD COLORS
+========================================= */
+
+.income-card {
+  border-left-color: #2563eb;
+}
+
+.received-card {
+  border-left-color: #198754;
+}
+
+.pending-card {
+  border-left-color: #f59e0b;
+}
+
+.material-card {
+  border-left-color: #7c3aed;
+}
+
+.labour-card {
+  border-left-color: #0891b2;
+}
+
+.other-card {
+  border-left-color: #dc2626;
+}
+
+.expense-card {
+  border-left-color: #ea580c;
+}
+
+.profit-card {
+  border-left-color: #198754;
+}
+
+.loss-card {
+  border-left-color: #dc2626;
+}
+
+/* =========================================
+   REPORT TABLE
+========================================= */
+
+.reports-table-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px;
+  box-sizing: border-box;
+  margin-top: 15px;
+  margin-bottom: 20px;
+
+  box-shadow:
+    0 8px 25px
+    rgba(0, 0, 0, 0.07);
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.reports-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 850px;
+}
+
+.reports-table thead {
+  background: #172033;
+}
+
+.reports-table th {
+  color: #ffffff;
+  padding: 15px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reports-table th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.reports-table th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.reports-table td {
+  padding: 15px;
+  border-bottom: 1px solid #e8eaed;
+  color: #344054;
+  font-size: 14px;
+}
+
+.reports-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.site-name-cell {
+  font-weight: 600;
+  color: #1d4ed8 !important;
+}
+
+.profit-text {
+  color: #198754 !important;
+  font-weight: 700;
+}
+
+.loss-text {
+  color: #dc2626 !important;
+  font-weight: 700;
+}
+
+.no-report-data {
+  text-align: center;
+  padding: 30px !important;
+  color: #667085;
+}
+
+/* =========================================
+   DEBUG INFO
+========================================= */
+
+.report-debug-info {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  padding: 14px 18px;
+
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  font-size: 13px;
+  color: #667085;
+}
+
+.report-debug-info strong {
+  color: #26364a;
+}
+
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 1100px) {
+  .report-filter-grid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .report-buttons {
+    justify-content: flex-start;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 768px) {
+  .reports-page {
+    padding: 18px;
+  }
+
+  .reports-title-section h1 {
+    font-size: 24px;
+  }
+
+  .report-section-title h2 {
+    font-size: 21px;
+  }
+
+  .report-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-buttons {
+    width: 100%;
+  }
+
+  .report-buttons button {
+    flex: 1;
+  }
+
+  .financial-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-card {
+    min-height: 105px;
+  }
+}
+
+/* =========================================
+   PRINT
+========================================= */
+
+@media print {
+  .sidebar,
+  .header,
+  .reports-filter-card,
+  .report-debug-info {
+    display: none !important;
+  }
+
+  .reports-page {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .financial-card,
+  .reports-table-card {
+    box-shadow: none;
+  }
+}

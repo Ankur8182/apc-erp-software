@@ -1,0 +1,143 @@
+.expense-page{
+    padding:30px;
+    background:#f4f6f9;
+    min-height:100vh;
+}
+
+.page-card{
+    background:#ffffff;
+    padding:25px;
+    border-radius:15px;
+    box-shadow:0 4px 15px rgba(0,0,0,.08);
+    margin-bottom:25px;
+}
+
+.search-box{
+    width:320px;
+    padding:12px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    outline:none;
+    margin-bottom:20px;
+    font-size:15px;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px;
+}
+
+.form-grid input,
+.form-grid select{
+    padding:12px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    font-size:15px;
+    outline:none;
+}
+
+.save-btn{
+    margin-top:20px;
+    padding:12px 22px;
+    background:#2563eb;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:16px;
+    font-weight:600;
+}
+
+.save-btn:hover{
+    background:#1d4ed8;
+}
+
+.table-card{
+    background:#fff;
+    border-radius:15px;
+    padding:20px;
+    box-shadow:0 4px 15px rgba(0,0,0,.08);
+}
+
+.expense-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.expense-table th{
+    background:#0f172a;
+    color:#fff;
+    padding:14px;
+    text-align:center;
+}
+
+.expense-table td{
+    padding:12px;
+    border:1px solid #e5e7eb;
+    text-align:center;
+}
+
+.expense-table tr:nth-child(even){
+    background:#f8fafc;
+}
+
+.expense-table tr:hover{
+    background:#eef4ff;
+}
+
+.edit-btn{
+    background:#16a34a;
+    color:#fff;
+    border:none;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    margin-right:6px;
+}
+
+.edit-btn:hover{
+    background:#15803d;
+}
+
+.delete-btn{
+    background:#dc2626;
+    color:#fff;
+    border:none;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.delete-btn:hover{
+    background:#b91c1c;
+}
+
+@media(max-width:1000px){
+
+    .form-grid{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+}
+
+@media(max-width:768px){
+
+    .expense-page{
+        padding:15px;
+    }
+
+    .search-box{
+        width:100%;
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+
+    .expense-table{
+        display:block;
+        overflow-x:auto;
+    }
+
+}

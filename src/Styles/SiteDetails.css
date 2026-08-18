@@ -1,0 +1,316 @@
+/* ================================
+   SITE DETAILS PAGE
+================================ */
+
+.site-details-page {
+  width: 100%;
+  padding: 20px 5px 40px;
+  box-sizing: border-box;
+}
+
+.site-details-title {
+  font-size: 30px;
+  font-weight: 700;
+  color: #1f2f46;
+  margin: 10px 0 8px;
+}
+
+.site-details-subtitle {
+  color: #667085;
+  font-size: 15px;
+  margin-bottom: 22px;
+}
+
+
+/* ================================
+   SITE SELECTOR
+================================ */
+
+.site-selector-card {
+  background: #ffffff;
+  padding: 18px 20px;
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.site-selector-card label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #26364b;
+}
+
+.site-selector-card select {
+  min-width: 280px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d0d7e2;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 15px;
+  outline: none;
+}
+
+.site-selector-card select:focus {
+  border-color: #2f67c7;
+}
+
+
+/* ================================
+   SELECTED SITE
+================================ */
+
+.selected-site-heading {
+  font-size: 25px;
+  color: #1f2f46;
+  margin: 20px 0;
+}
+
+
+/* ================================
+   SUMMARY GRID
+================================ */
+
+.site-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: 100%;
+  margin-bottom: 25px;
+}
+
+
+/* ================================
+   SUMMARY CARDS
+================================ */
+
+.site-summary-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 22px;
+  min-height: 165px;
+  box-sizing: border-box;
+
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+
+  border-left: 5px solid #2f67c7;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  transition: 0.2s ease;
+}
+
+.site-summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+}
+
+.summary-icon {
+  font-size: 34px;
+  margin-bottom: 8px;
+}
+
+.site-summary-card h3 {
+  font-size: 17px;
+  color: #3b4b61;
+  margin: 4px 0;
+}
+
+.site-summary-card h2 {
+  font-size: 27px;
+  color: #172b4d;
+  margin: 8px 0;
+}
+
+.site-summary-card p {
+  color: #7a8797;
+  font-size: 14px;
+  margin: 2px 0;
+}
+
+
+/* CARD DIFFERENT COLORS */
+
+.income-card {
+  border-left-color: #16a34a;
+}
+
+.material-card {
+  border-left-color: #f59e0b;
+}
+
+.labour-card {
+  border-left-color: #2563eb;
+}
+
+.vehicle-card-report {
+  border-left-color: #7c3aed;
+}
+
+.expense-card {
+  border-left-color: #dc2626;
+}
+
+.total-card {
+  border-left-color: #0f766e;
+}
+
+
+/* ================================
+   PROFIT / LOSS
+================================ */
+
+.profit-loss-card {
+  margin-top: 10px;
+  margin-bottom: 25px;
+
+  padding: 25px 30px;
+  border-radius: 15px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  color: #ffffff;
+
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
+}
+
+.profit-loss-card h3 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.profit-loss-card p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.profit-loss-card h1 {
+  font-size: 34px;
+  margin: 0;
+}
+
+.profit {
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+}
+
+.loss {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+}
+
+
+/* ================================
+   FINANCIAL TABLE
+================================ */
+
+.site-details-table-card {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 14px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+}
+
+.site-details-table-card h2 {
+  margin: 0 0 18px;
+  color: #1f2f46;
+}
+
+.site-details-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.site-details-table th {
+  background: #172033;
+  color: #ffffff;
+  padding: 14px;
+  text-align: left;
+  font-size: 15px;
+}
+
+.site-details-table td {
+  padding: 14px;
+  border-bottom: 1px solid #e4e8ee;
+  color: #26364b;
+}
+
+.site-details-table tr:hover {
+  background: #f7f9fc;
+}
+
+.total-row {
+  font-weight: 700;
+  background: #eef5ff;
+}
+
+.profit-row {
+  font-weight: 700;
+  color: #15803d;
+  background: #ecfdf3;
+}
+
+.loss-row {
+  font-weight: 700;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+
+/* ================================
+   EMPTY MESSAGE
+================================ */
+
+.select-site-message {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 50px;
+  text-align: center;
+  font-size: 18px;
+  color: #667085;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+}
+
+
+/* ================================
+   RESPONSIVE
+================================ */
+
+@media (max-width: 1100px) {
+  .site-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+
+  .site-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-selector-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .site-selector-card select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .profit-loss-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .site-details-title {
+    font-size: 24px;
+  }
+}
