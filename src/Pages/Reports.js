@@ -178,12 +178,9 @@ function Reports() {
 
   const filterRecords = useCallback(
     (data) => data.filter((item) => {
-      const itemSite = getSiteName(item);
-
       const siteMatched =
         selectedSite === "all" ||
-        itemSite.toLowerCase() ===
-          selectedSite.toLowerCase();
+        isSameSite(item, selectedSite);
 
       const dateMatched = isDateInRange(
         item,

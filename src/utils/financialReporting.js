@@ -17,19 +17,51 @@ export const toNumber = (value) => {
   return Number.isFinite(parsedValue) ? parsedValue : 0;
 };
 
-const firstNumber = (...values) => {
-  const value = values.find(hasValue);
-  return hasValue(value) ? toNumber(value) : 0;
+export const normaliseMoney = (value) => Math.max(toNumber(value), 0);
+
+const hasValidMoneyValue = (value) => {
+  if (!hasValue(value)) return false;
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0;
+
+  const numericValue = String(value)
+    .replace(/[₹,\s]/g, "")
+    .replace(/[^\d.-]/g, "");
+
+  return (
+    numericValue !== "" &&
+    Number.isFinite(Number(numericValue)) &&
+    Number(numericValue) >= 0
+  );
 };
 
-const normaliseText = (value) =>
+const firstMoney = (...values) => {
+  const value = values.find(hasValue);
+  return hasValue(value) ? normaliseMoney(value) : 0;
+};
+
+export const normaliseSiteName = (value) =>
   String(value || "")
     .trim()
-    .toLowerCase()
     .replace(/\s+/g, " ");
 
+const normaliseText = (value) => normaliseSiteName(value).toLowerCase();
+
+export const normaliseStatus = (value) => {
+  const status = normaliseText(value);
+  const aliases = {
+    "half day": "half-day",
+    halfday: "half-day",
+    half: "half-day",
+    h: "half-day",
+    p: "present",
+    "partially paid": "partial",
+  };
+
+  return aliases[status] || status;
+};
+
 export const getSiteName = (item = {}) =>
-  String(
+  normaliseSiteName(
     item.site ||
       item.siteName ||
       item.projectName ||
@@ -38,24 +70,14 @@ export const getSiteName = (item = {}) =>
       item.projectSite ||
       item.site_name ||
       ""
-  ).trim();
+  );
 
 export const isSameSite = (item, siteName) => {
   const currentSite = normaliseText(siteName);
   return currentSite !== "" && normaliseText(getSiteName(item)) === currentSite;
 };
 
-const getDateValue = (item = {}) =>
-  item.invoiceDate ||
-  item.paymentDate ||
-  item.date ||
-  item.purchaseDate ||
-  item.fuelDate ||
-  item.fuelUpdatedAt ||
-  item.createdAt ||
-  "";
-
-const normaliseDate = (value) => {
+export const normaliseDate = (value) => {
   if (!value) return "";
 
   if (typeof value === "string") {
@@ -73,20 +95,36 @@ const normaliseDate = (value) => {
     : date.toISOString().slice(0, 10);
 };
 
-export const isDateInRange = (item, fromDate, toDate) => {
-  if (!fromDate && !toDate) return true;
+export const getRecordDate = (item = {}) =>
+  [
+    item.invoiceDate,
+    item.paymentDate,
+    item.date,
+    item.purchaseDate,
+    item.fuelDate,
+    item.fuelUpdatedAt,
+    item.createdAt,
+  ]
+    .map(normaliseDate)
+    .find(Boolean) || "";
 
-  const date = normaliseDate(getDateValue(item));
+export const isDateInRange = (item, fromDate, toDate) => {
+  const from = normaliseDate(fromDate);
+  const to = normaliseDate(toDate);
+
+  if (!from && !to) return true;
+
+  const date = getRecordDate(item);
 
   return Boolean(
     date &&
-      (!fromDate || date >= fromDate) &&
-      (!toDate || date <= toDate)
+      (!from || date >= from) &&
+      (!to || date <= to)
   );
 };
 
 export const getInvoiceSummary = (item = {}) => {
-  const total = firstNumber(
+  const total = firstMoney(
     item.totalAmount,
     item.invoiceAmount,
     item.amount,
@@ -95,21 +133,25 @@ export const getInvoiceSummary = (item = {}) => {
     item.netAmount,
     item.value
   );
-  const received = firstNumber(
+  const receivedValue = [
     item.paidAmount,
     item.receivedAmount,
-    item.paymentReceived
-  );
-  const pending = hasValue(item.pendingAmount)
-    ? Math.max(toNumber(item.pendingAmount), 0)
-    : Math.max(total - received, 0);
+    item.paymentReceived,
+  ].find(hasValue);
+  const pendingValue = item.pendingAmount;
+  const received = hasValidMoneyValue(receivedValue)
+    ? Math.min(normaliseMoney(receivedValue), total)
+    : hasValidMoneyValue(pendingValue)
+      ? Math.max(total - normaliseMoney(pendingValue), 0)
+      : 0;
+  const pending = Math.max(total - received, 0);
 
   return { total, received, pending };
 };
 
 const isMaterialUsage = (item = {}) =>
-  ["usage", "used", "consume", "consumption"].includes(
-    normaliseText(item.entryType)
+  ["usage", "used", "consume", "consumption", "material usage"].includes(
+    normaliseStatus(item.entryType)
   );
 
 export const getMaterialAmount = (item = {}) => {
@@ -125,16 +167,16 @@ export const getMaterialAmount = (item = {}) => {
     item.totalCost,
   ].find(hasValue);
 
-  if (hasValue(savedAmount)) return toNumber(savedAmount);
+  if (hasValue(savedAmount)) return normaliseMoney(savedAmount);
 
   return (
-    firstNumber(item.quantity, item.qty) *
-    firstNumber(item.rate, item.unitRate, item.price, item.unitPrice)
+    firstMoney(item.quantity, item.qty) *
+    firstMoney(item.rate, item.unitRate, item.price, item.unitPrice)
   );
 };
 
 export const getExpenseAmount = (item = {}) =>
-  firstNumber(
+  firstMoney(
     item.amount,
     item.expenseAmount,
     item.totalAmount,
@@ -152,7 +194,7 @@ export const isLabourExpense = (item) =>
   ["labour", "labor", "wages", "salary"].includes(getExpenseType(item));
 
 export const getSalaryAmount = (item = {}) =>
-  firstNumber(
+  firstMoney(
     item.salary,
     item.totalSalary,
     item.netSalary,
@@ -162,7 +204,7 @@ export const getSalaryAmount = (item = {}) =>
   );
 
 export const getVehicleAmount = (item = {}) =>
-  firstNumber(
+  firstMoney(
     item.fuelExpense,
     item.fuelAmount,
     item.fuelCost,
@@ -174,22 +216,13 @@ export const getVehicleAmount = (item = {}) =>
     item.cost
   );
 
-const getDirectLabourPayment = (item = {}) =>
-  firstNumber(
-    item.amount,
-    item.payment,
-    item.paidAmount,
-    item.totalAmount,
-    item.totalWage
-  );
-
 const getDailyWage = (item = {}) =>
-  firstNumber(item.dailyWage, item.wage, item.rate);
+  firstMoney(item.dailyWage, item.wage, item.rate);
 
 const getAttendanceMultiplier = (item = {}) => {
-  const status = normaliseText(item.status);
+  const status = normaliseStatus(item.status);
 
-  if (["half day", "half-day", "half", "h"].includes(status)) {
+  if (status === "half-day") {
     return 0.5;
   }
 
@@ -205,7 +238,7 @@ const getSalaryPeriod = (item = {}) => {
   const month = String(item.month || "").trim();
   if (/^\d{4}-\d{2}$/.test(month)) return month;
 
-  return normaliseDate(getDateValue(item)).slice(0, 7);
+  return getRecordDate(item).slice(0, 7);
 };
 
 const getAttendancePeriod = (item = {}) =>
@@ -297,10 +330,9 @@ export const calculateFinancialSummary = ({
     (total, item) => total + getSalaryAmount(item),
     0
   );
-  const directLabourPayment = labours.reduce(
-    (total, item) => total + getDirectLabourPayment(item),
-    0
-  );
+  // Labour records are wage masters only. Payments must be recorded in
+  // salaries, attendance, or the Labour category of expenses.
+  const directLabourPayment = 0;
   const attendanceExpense = getAttendanceExpense(
     attendance,
     labours,

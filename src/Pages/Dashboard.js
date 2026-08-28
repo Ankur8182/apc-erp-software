@@ -9,6 +9,8 @@ import {
   getInvoiceSummary,
   getSiteName,
   isSameSite,
+  normaliseMoney,
+  normaliseStatus,
   toNumber,
 } from "../utils/financialReporting";
 
@@ -269,21 +271,15 @@ function Dashboard() {
   // =========================
 
   const runningSites = sites.filter(
-    (item) =>
-      (item.status || "").toLowerCase() ===
-      "running"
+    (item) => normaliseStatus(item.status) === "running"
   ).length;
 
   const completedSites = sites.filter(
-    (item) =>
-      (item.status || "").toLowerCase() ===
-      "completed"
+    (item) => normaliseStatus(item.status) === "completed"
   ).length;
 
   const pendingSites = sites.filter(
-    (item) =>
-      (item.status || "").toLowerCase() ===
-      "pending"
+    (item) => normaliseStatus(item.status) === "pending"
   ).length;
 
   // =========================
@@ -291,15 +287,11 @@ function Dashboard() {
   // =========================
 
   const presentCount = attendance.filter(
-    (item) =>
-      (item.status || "").toLowerCase() ===
-      "present"
+    (item) => normaliseStatus(item.status) === "present"
   ).length;
 
   const absentCount = attendance.filter(
-    (item) =>
-      (item.status || "").toLowerCase() ===
-      "absent"
+    (item) => normaliseStatus(item.status) === "absent"
   ).length;
 
   // =========================
@@ -307,14 +299,14 @@ function Dashboard() {
   // =========================
 
   const lowStockMaterials = materials.filter((item) => {
-    const stock = Number(
+    const stock = normaliseMoney(
       item.stock ??
       item.quantity ??
       item.qty ??
       0
     );
 
-    const minimumStock = Number(
+    const minimumStock = normaliseMoney(
       item.minimumStock ??
       item.minStock ??
       10
@@ -642,23 +634,7 @@ function Dashboard() {
             ) : (
               pendingInvoices.slice(0, 5).map(
                 (item) => {
-                  const total = Number(
-                    item.totalAmount ??
-                    item.amount ??
-                    0
-                  );
-
-                  const paid = Number(
-                    item.paidAmount ??
-                    0
-                  );
-
-                  const pending =
-                    item.pendingAmount !== undefined
-                      ? Number(
-                          item.pendingAmount || 0
-                        )
-                      : total - paid;
+                  const { pending } = getInvoiceSummary(item);
 
                   return (
                     <div

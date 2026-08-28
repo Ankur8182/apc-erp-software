@@ -1,6 +1,12 @@
 import {
   calculateFinancialSummary,
+  getInvoiceSummary,
   isDateInRange,
+  isSameSite,
+  normaliseDate,
+  normaliseMoney,
+  normaliseSiteName,
+  normaliseStatus,
 } from "./financialReporting";
 
 const liveCollectionFixture = {
@@ -92,6 +98,89 @@ test("date filters include boundaries and exclude undated legacy records", () =>
   expect(isDateInRange({ fuelUpdatedAt: new Date("2026-08-10T00:00:00Z") }, "2026-08-10", "2026-08-10")).toBe(true);
   expect(isDateInRange({ fuel: 10 }, "2026-08-01", "2026-08-31")).toBe(false);
   expect(isDateInRange({ fuel: 10 }, "", "")).toBe(true);
+});
+
+test("normalises legacy site, status, date, and money values safely", () => {
+  expect(normaliseSiteName("  LKO   Site ")).toBe("LKO Site");
+  expect(normaliseStatus("Half Day")).toBe("half-day");
+  expect(normaliseDate("not-a-date")).toBe("");
+  expect(normaliseMoney("₹ 1,250")).toBe(1250);
+  expect(normaliseMoney("invalid")).toBe(0);
+  expect(normaliseMoney("-100")).toBe(0);
+  expect(
+    isDateInRange(
+      { invoiceDate: "invalid", date: "2026-08-10" },
+      "2026-08-10",
+      "2026-08-10"
+    )
+  ).toBe(true);
+});
+
+test("keeps invoice received and pending amounts internally consistent", () => {
+  expect(
+    getInvoiceSummary({ totalAmount: 1000, paidAmount: 1200, pendingAmount: 900 })
+  ).toEqual({ total: 1000, received: 1000, pending: 0 });
+  expect(getInvoiceSummary({ totalAmount: 1000, pendingAmount: 250 })).toEqual({
+    total: 1000,
+    received: 750,
+    pending: 250,
+  });
+  expect(getInvoiceSummary({ totalAmount: 1000, pendingAmount: "invalid" })).toEqual({
+    total: 1000,
+    received: 0,
+    pending: 1000,
+  });
+});
+
+test("never treats labour master values as direct expenses", () => {
+  const summary = calculateFinancialSummary({
+    labours: [
+      {
+        site: "LKO",
+        name: "Monu",
+        wage: 400,
+        amount: 5000,
+        totalAmount: 5000,
+      },
+    ],
+    expenses: [{ site: "LKO", expenseType: "Labour", amount: 1000 }],
+  });
+
+  expect(summary.directLabourPayment).toBe(0);
+  expect(summary.labourExpense).toBe(1000);
+});
+
+test("counts a material or vehicle record only once when legacy amount aliases coexist", () => {
+  const summary = calculateFinancialSummary({
+    materials: [
+      {
+        site: "LKO",
+        totalAmount: 100,
+        amount: 100,
+        expenseAmount: 100,
+      },
+    ],
+    vehicles: [{ site: "LKO", fuel: 25, fuelCost: 25, amount: 25 }],
+  });
+
+  expect(summary.materialExpense).toBe(100);
+  expect(summary.vehicleExpense).toBe(25);
+  expect(summary.totalExpense).toBe(125);
+});
+
+test("uses the same site key for site-wise financial calculations", () => {
+  const invoices = [
+    { site: " LKO  Site ", totalAmount: 1000 },
+    { site: "Civil", totalAmount: 2000 },
+  ];
+  const summary = calculateFinancialSummary({
+    invoices: invoices.filter((invoice) => isSameSite(invoice, "lko site")),
+    expenses: [{ site: "LKO Site", amount: 100, expenseType: "Other" }],
+  });
+
+  expect(summary.income).toBe(1000);
+  expect(summary.totalExpense).toBe(100);
+  expect(summary.profit).toBe(900);
 });
 
 test("matches the live Reports totals for date-filtered records", () => {
