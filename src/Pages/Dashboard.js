@@ -4,6 +4,13 @@ import { collection, onSnapshot } from "firebase/firestore";
 import Layout from "../Components/Layout";
 import { db } from "../firebase";
 import "../Styles/Dashboard.css";
+import {
+  calculateFinancialSummary,
+  getInvoiceSummary,
+  getSiteName,
+  isSameSite,
+  toNumber,
+} from "../utils/financialReporting";
 
 function Dashboard() {
   const [sites, setSites] = useState([]);
@@ -13,6 +20,7 @@ function Dashboard() {
   const [labours, setLabours] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [salaries, setSalaries] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
 
   // =========================
   // LOAD ALL FIREBASE DATA
@@ -124,6 +132,21 @@ function Dashboard() {
       }
     );
 
+    const unsubscribeVehicles = onSnapshot(
+      collection(db, "vehicles"),
+      (snapshot) => {
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }));
+
+        setVehicles(data);
+      },
+      (error) => {
+        console.error("Vehicle Error:", error);
+      }
+    );
+
     return () => {
       unsubscribeSites();
       unsubscribeInvoices();
@@ -132,6 +155,7 @@ function Dashboard() {
       unsubscribeLabours();
       unsubscribeAttendance();
       unsubscribeSalaries();
+      unsubscribeVehicles();
     };
   }, []);
 
@@ -139,187 +163,78 @@ function Dashboard() {
   // HELPER FUNCTIONS
   // =========================
 
-  const getSiteName = (item) => {
-    return (
-      item.siteName ||
-      item.site ||
-      item.name ||
-      "Unnamed Site"
-    );
-  };
-
   const formatMoney = (amount) => {
-    return `₹ ${Number(amount || 0).toLocaleString("en-IN")}`;
-  };
-
-  const getMaterialAmount = (item) => {
-    const quantity = Number(
-      item.quantity ??
-      item.qty ??
-      0
-    );
-
-    const rate = Number(
-      item.rate ??
-      item.price ??
-      item.unitPrice ??
-      0
-    );
-
-    const directAmount = Number(
-      item.totalAmount ??
-      item.amount ??
-      item.total ??
-      0
-    );
-
-    if (directAmount > 0) {
-      return directAmount;
-    }
-
-    return quantity * rate;
-  };
-
-  const getExpenseAmount = (item) => {
-    return Number(
-      item.amount ??
-      item.expenseAmount ??
-      item.totalAmount ??
-      0
-    );
-  };
-
-  const getSalaryAmount = (item) => {
-    return Number(
-      item.amount ??
-      item.salary ??
-      item.netSalary ??
-      item.totalAmount ??
-      0
-    );
+    return `₹ ${toNumber(amount).toLocaleString("en-IN")}`;
   };
 
   // =========================
   // DASHBOARD SUMMARY
   // =========================
 
-  const summary = useMemo(() => {
-    let totalInvoiceAmount = 0;
-    let totalReceivedAmount = 0;
-    let totalPendingAmount = 0;
-
-    let totalExpense = 0;
-    let totalMaterialExpense = 0;
-    let totalSalary = 0;
-
-    invoices.forEach((item) => {
-      const total = Number(
-        item.totalAmount ??
-        item.amount ??
-        0
-      );
-
-      const paid = Number(
-        item.paidAmount ??
-        item.receivedAmount ??
-        0
-      );
-
-      const pending =
-        item.pendingAmount !== undefined
-          ? Number(item.pendingAmount || 0)
-          : total - paid;
-
-      totalInvoiceAmount += total;
-      totalReceivedAmount += paid;
-      totalPendingAmount += pending;
-    });
-
-    expenses.forEach((item) => {
-      totalExpense += getExpenseAmount(item);
-    });
-
-    materials.forEach((item) => {
-      totalMaterialExpense += getMaterialAmount(item);
-    });
-
-    salaries.forEach((item) => {
-      totalSalary += getSalaryAmount(item);
-    });
-
-    const totalBusinessExpense =
-      totalExpense +
-      totalMaterialExpense +
-      totalSalary;
-
-    const estimatedProfit =
-      totalInvoiceAmount -
-      totalBusinessExpense;
-
-    const cashProfit =
-      totalReceivedAmount -
-      totalBusinessExpense;
-
-    return {
-      totalInvoiceAmount,
-      totalReceivedAmount,
-      totalPendingAmount,
-      totalExpense,
-      totalMaterialExpense,
-      totalSalary,
-      totalBusinessExpense,
-      estimatedProfit,
-      cashProfit,
-    };
-  }, [invoices, expenses, materials, salaries]);
+  const summary = useMemo(
+    () =>
+      calculateFinancialSummary({
+        invoices,
+        expenses,
+        materials,
+        labours,
+        salaries,
+        attendance,
+        vehicles,
+      }),
+    [
+      invoices,
+      expenses,
+      materials,
+      labours,
+      salaries,
+      attendance,
+      vehicles,
+    ]
+  );
 
   // =========================
   // SITE SUMMARY
   // =========================
 
   const siteSummary = useMemo(() => {
-    return sites.map((siteItem) => {
-      const siteName = getSiteName(siteItem);
+    const siteMap = new Map();
 
-      let income = 0;
-      let otherExpense = 0;
-      let materialExpense = 0;
-      let salaryExpense = 0;
+    const addSite = (item, siteDetails = {}) => {
+      const siteName = getSiteName(item);
+      const key = siteName.toLowerCase();
 
-      invoices.forEach((item) => {
-        if (item.site === siteName) {
-          income += Number(
-            item.totalAmount ??
-            item.amount ??
-            0
-          );
-        }
+      if (!siteName || siteMap.has(key)) return;
+
+      siteMap.set(key, {
+        id: siteDetails.id || key,
+        siteName,
+        location: siteDetails.location || "-",
+        status: siteDetails.status || "Running",
       });
+    };
 
-      expenses.forEach((item) => {
-        if (item.site === siteName) {
-          otherExpense += getExpenseAmount(item);
-        }
+    sites.forEach((site) => addSite(site, site));
+    [
+      invoices,
+      expenses,
+      materials,
+      salaries,
+      attendance,
+      vehicles,
+    ].forEach((records) => records.forEach((record) => addSite(record)));
+
+    return Array.from(siteMap.values()).map((siteItem) => {
+      const siteName = getSiteName(siteItem) || "Unnamed Site";
+      const siteSummary = calculateFinancialSummary({
+        invoices: invoices.filter((item) => isSameSite(item, siteName)),
+        expenses: expenses.filter((item) => isSameSite(item, siteName)),
+        materials: materials.filter((item) => isSameSite(item, siteName)),
+        labours: labours.filter((item) => isSameSite(item, siteName)),
+        salaries: salaries.filter((item) => isSameSite(item, siteName)),
+        attendance: attendance.filter((item) => isSameSite(item, siteName)),
+        vehicles: vehicles.filter((item) => isSameSite(item, siteName)),
       });
-
-      materials.forEach((item) => {
-        if (item.site === siteName) {
-          materialExpense += getMaterialAmount(item);
-        }
-      });
-
-      salaries.forEach((item) => {
-        if (item.site === siteName) {
-          salaryExpense += getSalaryAmount(item);
-        }
-      });
-
-      const totalExpense =
-        otherExpense +
-        materialExpense +
-        salaryExpense;
-
-      const profit = income - totalExpense;
 
       return {
         id: siteItem.id,
@@ -330,12 +245,12 @@ function Dashboard() {
         status:
           siteItem.status ||
           "Running",
-        income,
-        otherExpense,
-        materialExpense,
-        salaryExpense,
-        totalExpense,
-        profit,
+        income: siteSummary.income,
+        otherExpense: siteSummary.otherExpense,
+        materialExpense: siteSummary.materialExpense,
+        salaryExpense: siteSummary.labourExpense,
+        totalExpense: siteSummary.totalExpense,
+        profit: siteSummary.profit,
       };
     });
   }, [
@@ -343,7 +258,10 @@ function Dashboard() {
     invoices,
     expenses,
     materials,
+    labours,
     salaries,
+    attendance,
+    vehicles,
   ]);
 
   // =========================
@@ -410,23 +328,7 @@ function Dashboard() {
   // =========================
 
   const pendingInvoices = invoices.filter((item) => {
-    const total = Number(
-      item.totalAmount ??
-      item.amount ??
-      0
-    );
-
-    const paid = Number(
-      item.paidAmount ??
-      0
-    );
-
-    const pending =
-      item.pendingAmount !== undefined
-        ? Number(item.pendingAmount || 0)
-        : total - paid;
-
-    return pending > 0;
+    return getInvoiceSummary(item).pending > 0;
   });
 
   return (
@@ -611,7 +513,7 @@ function Dashboard() {
             <h3>🧾 Total Invoice</h3>
             <p>
               {formatMoney(
-                summary.totalInvoiceAmount
+                summary.income
               )}
             </p>
           </div>
@@ -620,7 +522,7 @@ function Dashboard() {
             <h3>💰 Received</h3>
             <p>
               {formatMoney(
-                summary.totalReceivedAmount
+                summary.received
               )}
             </p>
           </div>
@@ -629,7 +531,7 @@ function Dashboard() {
             <h3>⏳ Pending Payment</h3>
             <p>
               {formatMoney(
-                summary.totalPendingAmount
+                summary.pending
               )}
             </p>
           </div>
@@ -638,7 +540,7 @@ function Dashboard() {
             <h3>📦 Material Expense</h3>
             <p>
               {formatMoney(
-                summary.totalMaterialExpense
+                summary.materialExpense
               )}
             </p>
           </div>
@@ -647,16 +549,16 @@ function Dashboard() {
             <h3>💸 Other Expense</h3>
             <p>
               {formatMoney(
-                summary.totalExpense
+                summary.otherExpense
               )}
             </p>
           </div>
 
           <div className="dashboard-card">
-            <h3>👷 Salary Expense</h3>
+            <h3>👷 Labour / Salary Expense</h3>
             <p>
               {formatMoney(
-                summary.totalSalary
+                summary.labourExpense
               )}
             </p>
           </div>
@@ -665,27 +567,27 @@ function Dashboard() {
             <h3>📉 Total Expense</h3>
             <p>
               {formatMoney(
-                summary.totalBusinessExpense
+                summary.totalExpense
               )}
             </p>
           </div>
 
           <div className="dashboard-card">
             <h3>
-              {summary.estimatedProfit >= 0
+              {summary.profit >= 0
                 ? "📈 Estimated Profit"
                 : "📉 Estimated Loss"}
             </h3>
 
             <p
               className={
-                summary.estimatedProfit >= 0
+                summary.profit >= 0
                   ? "profit-text"
                   : "loss-text"
               }
             >
               {formatMoney(
-                summary.estimatedProfit
+                summary.profit
               )}
             </p>
           </div>

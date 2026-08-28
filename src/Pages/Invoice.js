@@ -121,10 +121,11 @@ function Invoice() {
       invoiceNo.trim() === "" ||
       site.trim() === "" ||
       clientName.trim() === "" ||
-      totalAmount === ""
+      totalAmount === "" ||
+      invoiceDate === ""
     ) {
       alert(
-        "Invoice No, Site, Client Name aur Total Amount bharna zaroori hai."
+        "Invoice No, Site, Client Name, Invoice Date aur Total Amount bharna zaroori hai."
       );
       return;
     }
@@ -132,13 +133,13 @@ function Invoice() {
     const total = Number(totalAmount || 0);
     const paid = Number(paidAmount || 0);
 
-    if (total <= 0) {
-      alert("Total Amount 0 se zyada hona chahiye.");
+    if (!Number.isFinite(total) || total <= 0) {
+      alert("Total Amount 0 se zyada valid number hona chahiye.");
       return;
     }
 
-    if (paid > total) {
-      alert("Paid Amount Total Amount se zyada nahi ho sakta.");
+    if (!Number.isFinite(paid) || paid < 0 || paid > total) {
+      alert("Paid Amount 0 aur Total Amount ke beech hona chahiye.");
       return;
     }
 
@@ -473,6 +474,7 @@ function Invoice() {
 
             <input
               type="date"
+              aria-label="Invoice Date *"
               value={invoiceDate}
               onChange={(e) =>
                 setInvoiceDate(e.target.value)

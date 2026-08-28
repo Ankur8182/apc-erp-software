@@ -10,7 +10,8 @@ import {
   onSnapshot,
   updateDoc,
   deleteDoc,
-  doc
+  doc,
+  serverTimestamp
 } from "firebase/firestore";
 
 
@@ -94,6 +95,8 @@ function Expenses() {
 
   const saveExpense = async () => {
 
+    const amountValue = Number(amount);
+
     if (
       site.trim() === "" ||
       expenseType.trim() === "" ||
@@ -108,15 +111,23 @@ function Expenses() {
       return;
     }
 
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+
+      alert("Amount 0 se zyada valid number hona chahiye.");
+
+      return;
+    }
+
 
     const expenseData = {
 
       site: site.trim(),
       expenseType: expenseType.trim(),
-      amount: amount,
+      amount: amountValue,
       date: date,
       paidTo: paidTo.trim(),
-      description: description.trim()
+      description: description.trim(),
+      updatedAt: serverTimestamp()
 
     };
 
@@ -149,7 +160,10 @@ function Expenses() {
 
         await addDoc(
           collection(db, "expenses"),
-          expenseData
+          {
+            ...expenseData,
+            createdAt: serverTimestamp()
+          }
         );
 
         alert("Expense successfully saved.");

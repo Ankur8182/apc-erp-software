@@ -122,21 +122,31 @@ function Materials() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const quantity = Number(formData.quantity);
+    const rate = Number(formData.rate);
+
     if (
       !formData.materialName.trim() ||
-      !formData.quantity ||
-      !formData.rate ||
-      !formData.site
+      !formData.site ||
+      !formData.date
     ) {
-      alert("Material Name, Quantity, Rate aur Site bharna zaroori hai.");
+      alert("Material Name, Site aur Date bharna zaroori hai.");
+      return;
+    }
+
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      !Number.isFinite(rate) ||
+      rate <= 0
+    ) {
+      alert("Quantity aur Rate 0 se zyada valid numbers hone chahiye.");
       return;
     }
 
     try {
       setLoading(true);
 
-      const quantity = Number(formData.quantity) || 0;
-      const rate = Number(formData.rate) || 0;
       const calculatedTotal = quantity * rate;
 
       const materialData = {
@@ -392,7 +402,7 @@ function Materials() {
                   value={formData.quantity}
                   onChange={handleChange}
                   placeholder="0"
-                  min="0"
+                  min="1"
                 />
               </div>
 
@@ -423,7 +433,7 @@ function Materials() {
                   value={formData.rate}
                   onChange={handleChange}
                   placeholder="₹ Rate"
-                  min="0"
+                  min="1"
                 />
               </div>
 

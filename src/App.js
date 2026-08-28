@@ -13,41 +13,47 @@ import Salary from "./Pages/Salary";
 import Vehicle from "./Pages/Vehicle";
 import Invoice from "./Pages/Invoice";
 import Reports from "./Pages/Reports";
+import { AuthProvider } from "./auth/AuthProvider";
+import ProtectedRoute, { PublicOnlyRoute } from "./auth/ProtectedRoute";
+
+const protectedPage = (page) => <ProtectedRoute>{page}</ProtectedRoute>;
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <AuthProvider>
+        <Routes>
 
-        <Route path="/" element={<Login />} />
+          <Route path="/" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
 
-        <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={protectedPage(<Dashboard />)} />
 
-        <Route path="/labour" element={<Labour />} />
+          <Route path="/labour" element={protectedPage(<Labour />)} />
 
-        <Route path="/sites" element={<Sites />} />
+          <Route path="/sites" element={protectedPage(<Sites />)} />
 
-        {/* SITE DETAILS */}
-        <Route
-          path="/site-details/:id"
-          element={<SiteDetails />}
-        />
+          {/* SITE DETAILS */}
+          <Route
+            path="/site-details/:id"
+            element={protectedPage(<SiteDetails />)}
+          />
 
-        <Route path="/materials" element={<Materials />} />
+          <Route path="/materials" element={protectedPage(<Materials />)} />
 
-        <Route path="/expenses" element={<Expenses />} />
+          <Route path="/expenses" element={protectedPage(<Expenses />)} />
 
-        <Route path="/attendance" element={<Attendance />} />
+          <Route path="/attendance" element={protectedPage(<Attendance />)} />
 
-        <Route path="/salary" element={<Salary />} />
+          <Route path="/salary" element={protectedPage(<Salary />)} />
 
-        <Route path="/vehicle" element={<Vehicle />} />
+          <Route path="/vehicle" element={protectedPage(<Vehicle />)} />
 
-        <Route path="/invoice" element={<Invoice />} />
+          <Route path="/invoice" element={protectedPage(<Invoice />)} />
 
-        <Route path="/reports" element={<Reports />} />
+          <Route path="/reports" element={protectedPage(<Reports />)} />
 
-      </Routes>
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

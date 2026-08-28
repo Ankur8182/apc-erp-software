@@ -1,260 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import "../Styles/Reports.css";
-
 import { db } from "../firebase";
-
+import { collection, onSnapshot } from "firebase/firestore";
 import {
-  collection,
-  onSnapshot,
-} from "firebase/firestore";
-
-/* =========================================
-   HELPER FUNCTIONS
-========================================= */
-
-const toNumber = (value) => {
-  if (value === undefined || value === null || value === "") {
-    return 0;
-  }
-
-  if (typeof value === "number") {
-    return Number.isNaN(value) ? 0 : value;
-  }
-
-  const cleanValue = String(value)
-    .replace(/₹/g, "")
-    .replace(/,/g, "")
-    .replace(/[^\d.-]/g, "");
-
-  const number = Number(cleanValue);
-
-  return Number.isNaN(number) ? 0 : number;
-};
+  calculateFinancialSummary,
+  getSiteName,
+  isDateInRange,
+  isSameSite,
+  toNumber,
+} from "../utils/financialReporting";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
     maximumFractionDigits: 2,
   })}`;
-};
-
-const getDateValue = (item) => {
-  return (
-    item.invoiceDate ||
-    item.paymentDate ||
-    item.date ||
-    item.purchaseDate ||
-    item.createdAt ||
-    ""
-  );
-};
-
-const normalizeDate = (value) => {
-  if (!value) return "";
-
-  if (typeof value === "string") {
-    return value.substring(0, 10);
-  }
-
-  if (value?.toDate) {
-    return value.toDate().toISOString().split("T")[0];
-  }
-
-  try {
-    const date = new Date(value);
-
-    if (!Number.isNaN(date.getTime())) {
-      return date.toISOString().split("T")[0];
-    }
-  } catch (error) {
-    return "";
-  }
-
-  return "";
-};
-
-const isDateInRange = (item, fromDate, toDate) => {
-  if (!fromDate && !toDate) {
-    return true;
-  }
-
-  const date = normalizeDate(getDateValue(item));
-
-  if (!date) {
-    return true;
-  }
-
-  if (fromDate && date < fromDate) {
-    return false;
-  }
-
-  if (toDate && date > toDate) {
-    return false;
-  }
-
-  return true;
-};
-
-const getSiteName = (item) => {
-  return String(
-    item?.site ||
-      item?.siteName ||
-      item?.projectName ||
-      item?.project ||
-      ""
-  ).trim();
-};
-
-/* =========================================
-   MATERIAL AMOUNT HELPER
-   Purchase = expense
-   Usage = expense dobara count nahi hoga
-========================================= */
-
-const getMaterialAmount = (item) => {
-  const entryType = String(
-    item?.entryType || "Purchase"
-  )
-    .trim()
-    .toLowerCase();
-
-  if (
-    entryType === "usage" ||
-    entryType === "used" ||
-    entryType === "consume" ||
-    entryType === "consumption"
-  ) {
-    return 0;
-  }
-
-  const savedAmount =
-    toNumber(item?.totalAmount) ||
-    toNumber(item?.purchaseAmount) ||
-    toNumber(item?.amount) ||
-    toNumber(item?.total) ||
-    toNumber(item?.cost);
-
-  if (savedAmount > 0) {
-    return savedAmount;
-  }
-
-  const quantity = toNumber(item?.quantity);
-
-  const rate = toNumber(
-    item?.rate ||
-      item?.unitRate ||
-      item?.price
-  );
-
-  return quantity * rate;
-};
-
-/* =========================================
-   INVOICE HELPERS
-========================================= */
-
-const getInvoiceAmount = (item) => {
-  return (
-    toNumber(item?.totalAmount) ||
-    toNumber(item?.invoiceAmount) ||
-    toNumber(item?.amount) ||
-    toNumber(item?.total) ||
-    0
-  );
-};
-
-const getReceivedAmount = (item) => {
-  return (
-    toNumber(item?.paidAmount) ||
-    toNumber(item?.receivedAmount) ||
-    toNumber(item?.paymentReceived) ||
-    0
-  );
-};
-
-/* =========================================
-   EXPENSE HELPERS
-========================================= */
-
-const getExpenseType = (item) => {
-  return String(
-    item?.expenseType ||
-      item?.category ||
-      item?.type ||
-      ""
-  )
-    .trim()
-    .toLowerCase();
-};
-
-const getExpenseAmount = (item) => {
-  return (
-    toNumber(item?.amount) ||
-    toNumber(item?.totalAmount) ||
-    toNumber(item?.total) ||
-    toNumber(item?.cost) ||
-    0
-  );
-};
-
-const isMaterialExpense = (item) => {
-  const type = getExpenseType(item);
-
-  return (
-    type === "material" ||
-    type === "materials"
-  );
-};
-
-const isLabourExpense = (item) => {
-  const type = getExpenseType(item);
-
-  return (
-    type === "labour" ||
-    type === "labor" ||
-    type === "wages"
-  );
-};
-
-/* =========================================
-   LABOUR / SALARY HELPERS
-========================================= */
-
-const getLabourAmount = (item) => {
-  const directAmount =
-    toNumber(item?.amount) ||
-    toNumber(item?.payment) ||
-    toNumber(item?.paidAmount) ||
-    toNumber(item?.totalAmount);
-
-  if (directAmount > 0) {
-    return directAmount;
-  }
-
-  const dailyWage =
-    toNumber(item?.salary) ||
-    toNumber(item?.wage) ||
-    toNumber(item?.rate);
-
-  const days =
-    toNumber(item?.days) ||
-    toNumber(item?.workingDays);
-
-  if (dailyWage > 0 && days > 0) {
-    return dailyWage * days;
-  }
-
-  return dailyWage;
-};
-
-const getSalaryAmount = (item) => {
-  return (
-    toNumber(item?.salary) ||
-    toNumber(item?.amount) ||
-    toNumber(item?.paidAmount) ||
-    toNumber(item?.totalAmount) ||
-    0
-  );
 };
 
 /* =========================================
@@ -268,6 +28,8 @@ function Reports() {
   const [materials, setMaterials] = useState([]);
   const [labours, setLabours] = useState([]);
   const [salaries, setSalaries] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -281,8 +43,16 @@ function Reports() {
 
   useEffect(() => {
     const unsubscribers = [];
-    let loadedCollections = 0;
-    const totalCollections = 6;
+    const completedCollections = new Set();
+    const totalCollections = 8;
+
+    const markCollectionComplete = (collectionName) => {
+      completedCollections.add(collectionName);
+
+      if (completedCollections.size === totalCollections) {
+        setLoading(false);
+      }
+    };
 
     const loadCollection = (
       collectionName,
@@ -299,11 +69,7 @@ function Reports() {
 
           setData(data);
 
-          loadedCollections += 1;
-
-          if (loadedCollections >= totalCollections) {
-            setLoading(false);
-          }
+          markCollectionComplete(collectionName);
         },
 
         (error) => {
@@ -314,11 +80,7 @@ function Reports() {
 
           setData([]);
 
-          loadedCollections += 1;
-
-          if (loadedCollections >= totalCollections) {
-            setLoading(false);
-          }
+          markCollectionComplete(collectionName);
         }
       );
 
@@ -329,8 +91,10 @@ function Reports() {
     loadCollection("invoices", setInvoices);
     loadCollection("expenses", setExpenses);
     loadCollection("materials", setMaterials);
-    loadCollection("labour", setLabours);
+    loadCollection("labours", setLabours);
     loadCollection("salaries", setSalaries);
+    loadCollection("attendance", setAttendance);
+    loadCollection("vehicles", setVehicles);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -386,6 +150,14 @@ function Reports() {
       addSite(getSiteName(item))
     );
 
+    attendance.forEach((item) =>
+      addSite(getSiteName(item))
+    );
+
+    vehicles.forEach((item) =>
+      addSite(getSiteName(item))
+    );
+
     return Array.from(siteMap.values()).sort(
       (a, b) => a.localeCompare(b)
     );
@@ -396,14 +168,16 @@ function Reports() {
     materials,
     labours,
     salaries,
+    attendance,
+    vehicles,
   ]);
 
   /* =========================================
      COMMON FILTER
   ========================================= */
 
-  const filterRecords = (data) => {
-    return data.filter((item) => {
+  const filterRecords = useCallback(
+    (data) => data.filter((item) => {
       const itemSite = getSiteName(item);
 
       const siteMatched =
@@ -418,8 +192,9 @@ function Reports() {
       );
 
       return siteMatched && dateMatched;
-    });
-  };
+    }),
+    [selectedSite, fromDate, toDate]
+  );
 
   /* =========================================
      FILTERED DATA
@@ -427,156 +202,77 @@ function Reports() {
 
   const filteredInvoices = useMemo(
     () => filterRecords(invoices),
-    [invoices, selectedSite, fromDate, toDate]
+    [invoices, filterRecords]
   );
 
   const filteredExpenses = useMemo(
     () => filterRecords(expenses),
-    [expenses, selectedSite, fromDate, toDate]
+    [expenses, filterRecords]
   );
 
   const filteredMaterials = useMemo(
     () => filterRecords(materials),
-    [materials, selectedSite, fromDate, toDate]
+    [materials, filterRecords]
   );
 
   const filteredLabours = useMemo(
-    () => filterRecords(labours),
-    [labours, selectedSite, fromDate, toDate]
+    () =>
+      labours.filter((item) =>
+        selectedSite === "all" ||
+        isSameSite(item, selectedSite)
+      ),
+    [labours, selectedSite]
   );
 
   const filteredSalaries = useMemo(
     () => filterRecords(salaries),
-    [salaries, selectedSite, fromDate, toDate]
+    [salaries, filterRecords]
   );
 
-  /* =========================================
-     INCOME CALCULATIONS
-  ========================================= */
-
-  const totalIncome = useMemo(() => {
-    return filteredInvoices.reduce(
-      (total, item) =>
-        total + getInvoiceAmount(item),
-      0
-    );
-  }, [filteredInvoices]);
-
-  const totalReceived = useMemo(() => {
-    return filteredInvoices.reduce(
-      (total, item) =>
-        total + getReceivedAmount(item),
-      0
-    );
-  }, [filteredInvoices]);
-
-  const totalPending = Math.max(
-    totalIncome - totalReceived,
-    0
+  // Payroll covers the worker's whole salary month. Keep that coverage when a
+  // narrow date range excludes the payment date, otherwise attendance wages
+  // for a salaried worker could be charged again.
+  const attendanceSalaryCoverage = useMemo(
+    () =>
+      salaries.filter(
+        (item) => selectedSite === "all" || isSameSite(item, selectedSite)
+      ),
+    [salaries, selectedSite]
   );
 
-  /* =========================================
-     MATERIAL EXPENSE
-  ========================================= */
+  const filteredAttendance = useMemo(
+    () => filterRecords(attendance),
+    [attendance, filterRecords]
+  );
 
-  const materialPurchaseExpense = useMemo(() => {
-    return filteredMaterials.reduce(
-      (total, item) =>
-        total + getMaterialAmount(item),
-      0
-    );
-  }, [filteredMaterials]);
+  const filteredVehicles = useMemo(
+    () => filterRecords(vehicles),
+    [vehicles, filterRecords]
+  );
 
-  const materialExpenseFromExpenses = useMemo(() => {
-    return filteredExpenses.reduce(
-      (total, item) => {
-        if (isMaterialExpense(item)) {
-          return total + getExpenseAmount(item);
-        }
-
-        return total;
-      },
-      0
-    );
-  }, [filteredExpenses]);
-
-  const totalMaterialExpense =
-    materialPurchaseExpense +
-    materialExpenseFromExpenses;
-
-  /* =========================================
-     LABOUR EXPENSE
-  ========================================= */
-
-  const labourExpenseFromExpenses = useMemo(() => {
-    return filteredExpenses.reduce(
-      (total, item) => {
-        if (isLabourExpense(item)) {
-          return total + getExpenseAmount(item);
-        }
-
-        return total;
-      },
-      0
-    );
-  }, [filteredExpenses]);
-
-  const labourCollectionExpense = useMemo(() => {
-    return filteredLabours.reduce(
-      (total, item) =>
-        total + getLabourAmount(item),
-      0
-    );
-  }, [filteredLabours]);
-
-  const salaryExpense = useMemo(() => {
-    return filteredSalaries.reduce(
-      (total, item) =>
-        total + getSalaryAmount(item),
-      0
-    );
-  }, [filteredSalaries]);
-
-  const labourBaseExpense =
-    salaryExpense > 0
-      ? salaryExpense
-      : labourCollectionExpense;
-
-  const totalLabourExpense =
-    labourExpenseFromExpenses +
-    labourBaseExpense;
-
-  /* =========================================
-     OTHER EXPENSE
-  ========================================= */
-
-  const otherExpense = useMemo(() => {
-    return filteredExpenses.reduce(
-      (total, item) => {
-        if (
-          isMaterialExpense(item) ||
-          isLabourExpense(item)
-        ) {
-          return total;
-        }
-
-        return total + getExpenseAmount(item);
-      },
-      0
-    );
-  }, [filteredExpenses]);
-
-  /* =========================================
-     FINAL EXPENSE / PROFIT
-  ========================================= */
-
-  const totalExpense =
-    totalMaterialExpense +
-    totalLabourExpense +
-    otherExpense;
-
-  const netProfit =
-    totalIncome - totalExpense;
+  const financialSummary = useMemo(
+    () =>
+      calculateFinancialSummary({
+        invoices: filteredInvoices,
+        expenses: filteredExpenses,
+        materials: filteredMaterials,
+        labours: filteredLabours,
+        salaries: filteredSalaries,
+        attendance: filteredAttendance,
+        attendanceSalaryCoverage,
+        vehicles: filteredVehicles,
+      }),
+    [
+      filteredInvoices,
+      filteredExpenses,
+      filteredMaterials,
+      filteredLabours,
+      filteredSalaries,
+      filteredAttendance,
+      attendanceSalaryCoverage,
+      filteredVehicles,
+    ]
+  );
 
   /* =========================================
      SITE WISE REPORT
@@ -585,181 +281,26 @@ function Reports() {
   const reportRows = useMemo(() => {
     return allSiteNames
       .map((siteName) => {
-        const siteMatch = (item) =>
-          getSiteName(item).toLowerCase() ===
-          siteName.toLowerCase();
-
-        const siteInvoices =
-          invoices.filter(
-            (item) =>
-              siteMatch(item) &&
-              isDateInRange(
-                item,
-                fromDate,
-                toDate
-              )
-          );
-
-        const siteExpenses =
-          expenses.filter(
-            (item) =>
-              siteMatch(item) &&
-              isDateInRange(
-                item,
-                fromDate,
-                toDate
-              )
-          );
-
-        const siteMaterials =
-          materials.filter(
-            (item) =>
-              siteMatch(item) &&
-              isDateInRange(
-                item,
-                fromDate,
-                toDate
-              )
-          );
-
-        const siteLabours =
-          labours.filter(
-            (item) =>
-              siteMatch(item) &&
-              isDateInRange(
-                item,
-                fromDate,
-                toDate
-              )
-          );
-
-        const siteSalaries =
-          salaries.filter(
-            (item) =>
-              siteMatch(item) &&
-              isDateInRange(
-                item,
-                fromDate,
-                toDate
-              )
-          );
-
-        const income =
-          siteInvoices.reduce(
-            (total, item) =>
-              total + getInvoiceAmount(item),
-            0
-          );
-
-        const received =
-          siteInvoices.reduce(
-            (total, item) =>
-              total + getReceivedAmount(item),
-            0
-          );
-
-        /* Material aur Labour ko normal expense
-           me include nahi karenge */
-
-        const normalExpense =
-          siteExpenses.reduce(
-            (total, item) => {
-              if (
-                isMaterialExpense(item) ||
-                isLabourExpense(item)
-              ) {
-                return total;
-              }
-
-              return (
-                total +
-                getExpenseAmount(item)
-              );
-            },
-            0
-          );
-
-        const materialFromMaterials =
-          siteMaterials.reduce(
-            (total, item) =>
-              total +
-              getMaterialAmount(item),
-            0
-          );
-
-        const materialFromExpenses =
-          siteExpenses.reduce(
-            (total, item) => {
-              if (isMaterialExpense(item)) {
-                return (
-                  total +
-                  getExpenseAmount(item)
-                );
-              }
-
-              return total;
-            },
-            0
-          );
-
-        const materialExpense =
-          materialFromMaterials +
-          materialFromExpenses;
-
-        const labourFromLabour =
-          siteLabours.reduce(
-            (total, item) =>
-              total +
-              getLabourAmount(item),
-            0
-          );
-
-        const salaryExpenseForSite =
-          siteSalaries.reduce(
-            (total, item) =>
-              total +
-              getSalaryAmount(item),
-            0
-          );
-
-        const labourFromExpenses =
-          siteExpenses.reduce(
-            (total, item) => {
-              if (isLabourExpense(item)) {
-                return (
-                  total +
-                  getExpenseAmount(item)
-                );
-              }
-
-              return total;
-            },
-            0
-          );
-
-        const labourBaseForSite =
-          salaryExpenseForSite > 0
-            ? salaryExpenseForSite
-            : labourFromLabour;
-
-        const labourExpense =
-          labourFromExpenses +
-          labourBaseForSite;
-
-        const expense =
-          normalExpense +
-          materialExpense +
-          labourExpense;
-
-        const profit =
-          income - expense;
+        const siteRecords = {
+          invoices: filteredInvoices.filter((item) => isSameSite(item, siteName)),
+          expenses: filteredExpenses.filter((item) => isSameSite(item, siteName)),
+          materials: filteredMaterials.filter((item) => isSameSite(item, siteName)),
+          labours: filteredLabours.filter((item) => isSameSite(item, siteName)),
+          salaries: filteredSalaries.filter((item) => isSameSite(item, siteName)),
+          attendance: filteredAttendance.filter((item) => isSameSite(item, siteName)),
+          attendanceSalaryCoverage: salaries.filter((item) =>
+            isSameSite(item, siteName)
+          ),
+          vehicles: filteredVehicles.filter((item) => isSameSite(item, siteName)),
+        };
+        const summary = calculateFinancialSummary(siteRecords);
 
         return {
           siteName,
-          income,
-          received,
-          expense,
-          profit,
+          income: summary.income,
+          received: summary.received,
+          expense: summary.totalExpense,
+          profit: summary.profit,
         };
       })
       .filter((item) => {
@@ -774,14 +315,15 @@ function Reports() {
       });
   }, [
     allSiteNames,
-    invoices,
-    expenses,
-    materials,
-    labours,
+    filteredInvoices,
+    filteredExpenses,
+    filteredMaterials,
+    filteredLabours,
+    filteredSalaries,
+    filteredAttendance,
+    filteredVehicles,
     salaries,
     selectedSite,
-    fromDate,
-    toDate,
   ]);
 
   /* =========================================
@@ -809,61 +351,61 @@ function Reports() {
   const financialCards = [
     {
       title: "Total Income",
-      value: totalIncome,
+      value: financialSummary.income,
       icon: "💰",
       className: "income-card",
     },
     {
       title: "Total Received",
-      value: totalReceived,
+      value: financialSummary.received,
       icon: "💵",
       className: "received-card",
     },
     {
       title: "Pending Payment",
-      value: totalPending,
+      value: financialSummary.pending,
       icon: "⏳",
       className: "pending-card",
     },
     {
       title: "Material Expense",
-      value: totalMaterialExpense,
+      value: financialSummary.materialExpense,
       icon: "📦",
       className: "material-card",
     },
     {
       title: "Labour Expense",
-      value: totalLabourExpense,
+      value: financialSummary.labourExpense,
       icon: "👷",
       className: "labour-card",
     },
     {
       title: "Other Expense",
-      value: otherExpense,
+      value: financialSummary.otherExpense,
       icon: "🛠️",
       className: "other-card",
     },
     {
       title: "Total Expense",
-      value: totalExpense,
+      value: financialSummary.totalExpense,
       icon: "📉",
       className: "expense-card",
     },
     {
       title:
-        netProfit >= 0
+        financialSummary.profit >= 0
           ? "Net Profit"
           : "Net Loss",
 
-      value: Math.abs(netProfit),
+      value: Math.abs(financialSummary.profit),
 
       icon:
-        netProfit >= 0
+        financialSummary.profit >= 0
           ? "📈"
           : "📉",
 
       className:
-        netProfit >= 0
+        financialSummary.profit >= 0
           ? "profit-card"
           : "loss-card",
     },

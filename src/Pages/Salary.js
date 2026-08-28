@@ -10,7 +10,8 @@ import {
   onSnapshot,
   updateDoc,
   deleteDoc,
-  doc
+  doc,
+  serverTimestamp
 } from "firebase/firestore";
 
 
@@ -100,12 +101,14 @@ function Salary() {
 
     if (
       employeeName.trim() === "" ||
+      site.trim() === "" ||
       month === "" ||
-      salary.trim() === ""
+      salary.trim() === "" ||
+      paymentDate === ""
     ) {
 
       alert(
-        "Employee Name, Month aur Salary bharna zaroori hai."
+        "Employee Name, Site, Month, Salary aur Payment Date bharna zaroori hai."
       );
 
       return;
@@ -113,16 +116,40 @@ function Salary() {
     }
 
 
+    const salaryAmount = Number(salary);
+    const advanceAmount = Number(advance || 0);
+    const workingDayCount = Number(workingDays || 0);
+
+    if (!Number.isFinite(salaryAmount) || salaryAmount <= 0) {
+      alert("Salary 0 se zyada honi chahiye.");
+      return;
+    }
+
+    if (
+      !Number.isFinite(advanceAmount) ||
+      advanceAmount < 0 ||
+      advanceAmount > salaryAmount
+    ) {
+      alert("Advance 0 aur Total Salary ke beech hona chahiye.");
+      return;
+    }
+
+    if (!Number.isFinite(workingDayCount) || workingDayCount < 0) {
+      alert("Working Days valid number hona chahiye.");
+      return;
+    }
+
     const salaryData = {
 
       employeeName: employeeName.trim(),
       site: site.trim(),
       month: month,
-      workingDays: workingDays,
-      salary: salary,
-      advance: advance || "0",
+      workingDays: workingDayCount,
+      salary: salaryAmount,
+      advance: advanceAmount,
       paymentDate: paymentDate,
-      status: status
+      status: status,
+      updatedAt: serverTimestamp()
 
     };
 
@@ -153,7 +180,10 @@ function Salary() {
 
         await addDoc(
           collection(db, "salaries"),
-          salaryData
+          {
+            ...salaryData,
+            createdAt: serverTimestamp()
+          }
         );
 
         alert(
@@ -399,7 +429,7 @@ function Salary() {
 
             <input
               type="text"
-              placeholder="Site Name"
+              placeholder="Site Name *"
               value={site}
               onChange={(e) =>
                 setSite(e.target.value)
@@ -409,6 +439,7 @@ function Salary() {
 
             <input
               type="month"
+              aria-label="Salary Month *"
               value={month}
               onChange={(e) =>
                 setMonth(e.target.value)
@@ -450,6 +481,7 @@ function Salary() {
 
             <input
               type="date"
+              aria-label="Payment Date *"
               value={paymentDate}
               onChange={(e) =>
                 setPaymentDate(

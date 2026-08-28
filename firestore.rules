@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAuthorizedErpUser() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "manager", "viewer"];
+    }
+
+    function canWriteErpData() {
+      return isAuthorizedErpUser() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "manager"];
+    }
+
+    // Users may read only their own authorization profile. Roles can only be
+    // assigned or changed from the Firebase Console/Admin SDK, never by a client.
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /sites/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /labours/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /materials/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /expenses/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /attendance/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /salaries/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /vehicles/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    match /invoices/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
+    // Any current or future collection not explicitly listed is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

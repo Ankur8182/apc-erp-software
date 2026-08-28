@@ -1,18 +1,50 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
+import { getAuthorizedRole } from "../auth/authorization";
 
 function Login() {
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (username === "admin" && password === "1234") {
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      alert("Email and Password are required.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+      const profileSnapshot = await getDoc(
+        doc(db, "users", credential.user.uid)
+      );
+      const role = profileSnapshot.exists()
+        ? getAuthorizedRole(profileSnapshot.data())
+        : null;
+
+      if (!role) {
+        await signOut(auth);
+        alert("This account is not authorized to access the ERP.");
+        return;
+      }
+
       alert("Login Successful");
       navigate("/dashboard");
-    } else {
+    } catch (error) {
+      console.error("Firebase login error:", error);
       alert("Invalid Username or Password");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,10 +76,11 @@ function Login() {
         </p>
 
         <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          type="email"
+          placeholder="Email Address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
           style={{
             width: "100%",
             padding: "10px",
@@ -60,6 +93,7 @@ function Login() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
           style={{
             width: "100%",
             padding: "10px",
@@ -69,6 +103,7 @@ function Login() {
 
         <button
           onClick={handleLogin}
+          disabled={loading}
           style={{
             width: "100%",
             padding: "10px",
@@ -78,7 +113,7 @@ function Login() {
             cursor: "pointer",
           }}
         >
-          LOGIN
+          {loading ? "LOGGING IN..." : "LOGIN"}
         </button>
       </div>
     </div>

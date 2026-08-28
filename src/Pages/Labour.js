@@ -10,7 +10,8 @@ import {
   onSnapshot,
   deleteDoc,
   updateDoc,
-  doc
+  doc,
+  serverTimestamp
 } from "firebase/firestore";
 
 
@@ -95,16 +96,31 @@ function Labour() {
 
   const saveLabour = async () => {
 
+    const cleanMobile = mobile.trim();
+    const wageAmount = Number(wage);
+
     if (
       name.trim() === "" ||
-      mobile.trim() === "" ||
-      work.trim() === ""
+      cleanMobile === "" ||
+      work.trim() === "" ||
+      site.trim() === "" ||
+      wage === ""
     ) {
 
       alert(
-        "Labour Name, Mobile Number aur Work Type bharna zaroori hai."
+        "Labour Name, Mobile Number, Work Type, Site aur Wage bharna zaroori hai."
       );
 
+      return;
+    }
+
+    if (!/^[0-9]{10}$/.test(cleanMobile)) {
+      alert("Mobile Number 10 digit ka hona chahiye.");
+      return;
+    }
+
+    if (!Number.isFinite(wageAmount) || wageAmount <= 0) {
+      alert("Wage 0 se zyada hona chahiye.");
       return;
     }
 
@@ -112,12 +128,13 @@ function Labour() {
     const labourData = {
 
       name: name.trim(),
-      mobile: mobile.trim(),
+      mobile: cleanMobile,
       aadhaar: aadhaar.trim(),
       work: work.trim(),
       site: site.trim(),
-      wage: wage,
-      joiningDate: joiningDate
+      wage: wageAmount,
+      joiningDate: joiningDate,
+      updatedAt: serverTimestamp()
 
     };
 
@@ -150,7 +167,10 @@ function Labour() {
 
         await addDoc(
           collection(db, "labours"),
-          labourData
+          {
+            ...labourData,
+            createdAt: serverTimestamp()
+          }
         );
 
         alert("Labour successfully saved.");
@@ -360,7 +380,7 @@ function Labour() {
 
             <input
               type="text"
-              placeholder="Site Name"
+              placeholder="Site Name *"
               value={site}
               onChange={(e) =>
                 setSite(e.target.value)
@@ -370,7 +390,7 @@ function Labour() {
 
             <input
               type="number"
-              placeholder="Daily Wage"
+              placeholder="Daily Wage *"
               value={wage}
               onChange={(e) =>
                 setWage(e.target.value)

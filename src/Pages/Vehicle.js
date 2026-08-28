@@ -77,14 +77,20 @@ function Vehicle() {
   const saveVehicle = async () => {
     const cleanVehicleNumber = vehicleNumber.trim().toUpperCase();
     const cleanVehicleType = vehicleType.trim();
+    const fuelAmount = Number(fuel || 0);
 
-    if (!cleanVehicleNumber || !cleanVehicleType) {
-      alert("Vehicle Number aur Vehicle Type bharna zaroori hai.");
+    if (!cleanVehicleNumber || !cleanVehicleType || !site.trim()) {
+      alert("Vehicle Number, Vehicle Type aur Site bharna zaroori hai.");
       return;
     }
 
     if (mobile && !/^[0-9]{10}$/.test(mobile.trim())) {
       alert("Driver Mobile Number 10 digit ka hona chahiye.");
+      return;
+    }
+
+    if (!Number.isFinite(fuelAmount) || fuelAmount < 0) {
+      alert("Fuel Cost valid non-negative number hona chahiye.");
       return;
     }
 
@@ -100,16 +106,24 @@ function Vehicle() {
       return;
     }
 
+    const currentVehicle = editId
+      ? vehicles.find((item) => item.id === editId)
+      : null;
+
     const vehicleData = {
       vehicleNumber: cleanVehicleNumber,
       vehicleType: cleanVehicleType,
       driverName: driverName.trim(),
       mobile: mobile.trim(),
       site: site.trim(),
-      fuel: Number(fuel) || 0,
+      fuel: fuelAmount,
       status: status || "Active",
       updatedAt: serverTimestamp()
     };
+
+    if (!currentVehicle || Number(currentVehicle.fuel || 0) !== fuelAmount) {
+      vehicleData.fuelUpdatedAt = serverTimestamp();
+    }
 
     try {
       setLoading(true);
@@ -353,11 +367,11 @@ function Vehicle() {
             </div>
 
             <div className="form-group">
-              <label>Site Name</label>
+              <label>Site Name *</label>
 
               <input
                 type="text"
-                placeholder="Site Name"
+                placeholder="Site Name *"
                 value={site}
                 onChange={(e) =>
                   setSite(e.target.value)

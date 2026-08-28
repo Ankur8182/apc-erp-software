@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import Sidebar from "../Components/Sidebar";
 import Header from "../Components/Header";
 import "../Styles/SiteDetails.css";
 
 import { db } from "../firebase";
+import {
+  calculateFinancialSummary,
+  getSiteName,
+  isSameSite,
+} from "../utils/financialReporting";
 
 import {
   collection,
@@ -12,15 +18,68 @@ import {
 
 function SiteDetails() {
 
+  const { id } = useParams();
+
   const [sites, setSites] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [labours, setLabours] = useState([]);
   const [salaries, setSalaries] = useState([]);
+  const [attendance, setAttendance] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [vehicles, setVehicles] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("");
+
+  useEffect(() => {
+    if (!id) return;
+
+    const routeSite = sites.find((site) => site.id === id);
+
+    if (routeSite) {
+      setSelectedSite(getSiteName(routeSite));
+    }
+  }, [id, sites]);
+
+  const availableSites = useMemo(() => {
+    const siteMap = new Map();
+
+    const addSite = (item) => {
+      const siteName = getSiteName(item);
+      const key = siteName.toLowerCase();
+
+      if (!siteName || siteMap.has(key)) return;
+
+      siteMap.set(key, {
+        id: item.id || key,
+        siteName,
+      });
+    };
+
+    sites.forEach(addSite);
+    [
+      invoices,
+      materials,
+      labours,
+      salaries,
+      attendance,
+      expenses,
+      vehicles,
+    ].forEach((records) => records.forEach(addSite));
+
+    return Array.from(siteMap.values()).sort((first, second) =>
+      first.siteName.localeCompare(second.siteName)
+    );
+  }, [
+    sites,
+    invoices,
+    materials,
+    labours,
+    salaries,
+    attendance,
+    expenses,
+    vehicles,
+  ]);
 
   // =========================
   // SITES
@@ -41,6 +100,32 @@ function SiteDetails() {
       },
       (error) => {
         console.error("Sites error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+
+  }, []);
+
+  // =========================
+  // ATTENDANCE
+  // =========================
+
+  useEffect(() => {
+
+    const unsubscribe = onSnapshot(
+      collection(db, "attendance"),
+      (snapshot) => {
+
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data()
+        }));
+
+        setAttendance(data);
+      },
+      (error) => {
+        console.error("Attendance error:", error);
       }
     );
 
@@ -217,65 +302,7 @@ function SiteDetails() {
 
   const siteReport = useMemo(() => {
 
-    const toNumber = (value) => {
-
-      if (
-        value === undefined ||
-        value === null ||
-        value === ""
-      ) {
-        return 0;
-      }
-
-      return (
-        Number(
-          String(value).replace(/[^0-9.-]+/g, "")
-        ) || 0
-      );
-    };
-
-
-    const normalize = (value) => {
-
-      return String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-    };
-
-
-    const getItemSite = (item) => {
-
-      return (
-        item.site ||
-        item.siteName ||
-        item.siteId ||
-        item.projectSite ||
-        item.site_name ||
-        ""
-      );
-    };
-
-
-    const isSameSite = (item) => {
-
-      const itemSite = normalize(
-        getItemSite(item)
-      );
-
-      const currentSite = normalize(
-        selectedSite
-      );
-
-      return (
-        itemSite === currentSite &&
-        currentSite !== ""
-      );
-    };
-
-
     if (!selectedSite) {
-
       return {
         income: 0,
         materialExpense: 0,
@@ -284,7 +311,6 @@ function SiteDetails() {
         otherExpense: 0,
         totalExpense: 0,
         profitLoss: 0,
-
         invoiceCount: 0,
         materialCount: 0,
         expenseCount: 0,
@@ -292,196 +318,49 @@ function SiteDetails() {
       };
     }
 
-
-    // =========================
-    // TOTAL INCOME
-    // =========================
-
-    const siteInvoices = invoices.filter(isSameSite);
-
-    const income = siteInvoices.reduce(
-      (total, item) => {
-
-        return total + toNumber(
-          item.amount ??
-          item.total ??
-          item.invoiceAmount ??
-          item.grandTotal ??
-          item.netAmount ??
-          item.value
-        );
-
-      },
-      0
+    const siteInvoices = invoices.filter((item) =>
+      isSameSite(item, selectedSite)
     );
-
-
-    // =========================
-    // MATERIAL EXPENSE
-    // =========================
-
-    const siteMaterials = materials.filter(isSameSite);
-
-    const materialExpense = siteMaterials.reduce(
-      (total, item) => {
-
-        return total + toNumber(
-          item.totalAmount ??
-          item.amount ??
-          item.total ??
-          item.cost ??
-          item.purchaseAmount ??
-          item.totalCost
-        );
-
-      },
-      0
+    const siteMaterials = materials.filter((item) =>
+      isSameSite(item, selectedSite)
     );
-
-
-    // =========================
-    // SALARY EXPENSE
-    // =========================
-
-    const siteSalaries = salaries.filter(isSameSite);
-
-    const salaryExpense = siteSalaries.reduce(
-      (total, item) => {
-
-        return total + toNumber(
-          item.amount ??
-          item.salary ??
-          item.totalSalary ??
-          item.paidAmount ??
-          item.totalAmount
-        );
-
-      },
-      0
+    const siteLabours = labours.filter((item) =>
+      isSameSite(item, selectedSite)
     );
-
-
-    // =========================
-    // LABOUR EXPENSE
-    // =========================
-
-    const siteLabours = labours.filter(isSameSite);
-
-    const labourExpenseFromLabours = siteLabours.reduce(
-      (total, item) => {
-
-        return total + toNumber(
-          item.totalWage ??
-          item.amount ??
-          item.wage ??
-          item.dailyWage ??
-          item.payment
-        );
-
-      },
-      0
+    const siteSalaries = salaries.filter((item) =>
+      isSameSite(item, selectedSite)
     );
-
-
-    // Salary collection available ho
-    // to salary ko priority milegi
-
-    const labourExpense =
-      salaryExpense > 0
-        ? salaryExpense
-        : labourExpenseFromLabours;
-
-
-    // =========================
-    // VEHICLE EXPENSE
-    // =========================
-
-    const siteVehicles = vehicles.filter(isSameSite);
-
-    const vehicleExpense = siteVehicles.reduce(
-      (total, item) => {
-
-        return total + toNumber(
-          item.expense ??
-          item.fuelExpense ??
-          item.fuelCost ??
-          item.amount ??
-          item.totalFuelCost
-        );
-
-      },
-      0
+    const siteAttendance = attendance.filter((item) =>
+      isSameSite(item, selectedSite)
     );
-
-
-    // =========================
-    // OTHER EXPENSE
-    // =========================
-
-    const siteExpenses = expenses.filter(isSameSite);
-
-    const otherExpense = siteExpenses.reduce(
-      (total, item) => {
-
-        return total + toNumber(
-          item.amount ??
-          item.totalAmount ??
-          item.expenseAmount ??
-          item.cost
-        );
-
-      },
-      0
+    const siteExpenses = expenses.filter((item) =>
+      isSameSite(item, selectedSite)
     );
-
-
-    // =========================
-    // TOTAL EXPENSE
-    // =========================
-
-    const totalExpense =
-      materialExpense +
-      labourExpense +
-      vehicleExpense +
-      otherExpense;
-
-
-    // =========================
-    // PROFIT / LOSS
-    // =========================
-
-    const profitLoss =
-      income - totalExpense;
-
+    const siteVehicles = vehicles.filter((item) =>
+      isSameSite(item, selectedSite)
+    );
+    const summary = calculateFinancialSummary({
+      invoices: siteInvoices,
+      materials: siteMaterials,
+      labours: siteLabours,
+      salaries: siteSalaries,
+      attendance: siteAttendance,
+      expenses: siteExpenses,
+      vehicles: siteVehicles
+    });
 
     return {
-
-      income,
-
-      materialExpense,
-
-      labourExpense,
-
-      vehicleExpense,
-
-      otherExpense,
-
-      totalExpense,
-
-      profitLoss,
-
-      invoiceCount:
-        siteInvoices.length,
-
-      materialCount:
-        siteMaterials.length,
-
-      expenseCount:
-        siteExpenses.length,
-
-      salaryCount:
-        siteSalaries.length
-
+      income: summary.income,
+      materialExpense: summary.materialExpense,
+      labourExpense: summary.labourExpense,
+      vehicleExpense: summary.vehicleExpense,
+      otherExpense: summary.otherExpenseFromExpenses,
+      totalExpense: summary.totalExpense,
+      profitLoss: summary.profit,
+      invoiceCount: siteInvoices.length,
+      materialCount: siteMaterials.length,
+      expenseCount: siteExpenses.length,
+      salaryCount: siteSalaries.length
     };
 
   }, [
@@ -495,6 +374,8 @@ function SiteDetails() {
     labours,
 
     salaries,
+
+    attendance,
 
     expenses,
 
@@ -595,23 +476,14 @@ function SiteDetails() {
               </option>
 
 
-              {sites.map((item) => (
+              {availableSites.map((item) => (
 
                 <option
                   key={item.id}
-                  value={
-                    item.siteName ||
-                    item.name ||
-                    item.site ||
-                    ""
-                  }
+                  value={item.siteName}
                 >
 
-                  {
-                    item.siteName ||
-                    item.name ||
-                    item.site
-                  }
+                  {item.siteName}
 
                 </option>
 

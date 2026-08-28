@@ -10,7 +10,8 @@ import {
   onSnapshot,
   updateDoc,
   deleteDoc,
-  doc
+  doc,
+  serverTimestamp
 } from "firebase/firestore";
 
 function Attendance() {
@@ -94,12 +95,13 @@ function Attendance() {
 
     if (
       employeeName.trim() === "" ||
+      site.trim() === "" ||
       date === "" ||
       status === ""
     ) {
 
       alert(
-        "Employee Name, Date aur Status bharna zaroori hai."
+        "Employee Name, Site, Date aur Status bharna zaroori hai."
       );
 
       return;
@@ -114,7 +116,8 @@ function Attendance() {
       date: date,
       status: status,
       workType: workType.trim(),
-      remarks: remarks.trim()
+      remarks: remarks.trim(),
+      updatedAt: serverTimestamp()
 
     };
 
@@ -145,7 +148,10 @@ function Attendance() {
 
         await addDoc(
           collection(db, "attendance"),
-          attendanceData
+          {
+            ...attendanceData,
+            createdAt: serverTimestamp()
+          }
         );
 
         alert(
@@ -375,7 +381,7 @@ function Attendance() {
 
             <input
               type="text"
-              placeholder="Site Name"
+              placeholder="Site Name *"
               value={site}
               onChange={(e) =>
                 setSite(e.target.value)
@@ -385,6 +391,7 @@ function Attendance() {
 
             <input
               type="date"
+              aria-label="Attendance Date *"
               value={date}
               onChange={(e) =>
                 setDate(e.target.value)
