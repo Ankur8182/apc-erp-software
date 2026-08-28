@@ -2,7 +2,14 @@ import React, { useEffect, useState } from "react";
 import Layout from "../Components/Layout";
 import "../Styles/Vehicle.css";
 
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
+import {
+  getSiteName,
+  isDateInRange,
+  normaliseDate,
+  normaliseMoney,
+  normaliseSiteName,
+} from "../utils/financialReporting";
 
 import {
   collection,
@@ -14,8 +21,19 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 
+const expenseTypes = [
+  "Fuel",
+  "Maintenance",
+  "Repair",
+  "Driver Payment",
+  "Toll",
+  "Insurance",
+  "Other",
+];
+
 function Vehicle() {
   const [vehicles, setVehicles] = useState([]);
+  const [vehicleExpenses, setVehicleExpenses] = useState([]);
   const [search, setSearch] = useState("");
 
   const [vehicleNumber, setVehicleNumber] = useState("");
@@ -28,6 +46,21 @@ function Vehicle() {
 
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const [expenseVehicleId, setExpenseVehicleId] = useState("");
+  const [expenseSite, setExpenseSite] = useState("");
+  const [expenseDate, setExpenseDate] = useState("");
+  const [expenseType, setExpenseType] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseRemarks, setExpenseRemarks] = useState("");
+  const [expenseEditId, setExpenseEditId] = useState(null);
+  const [expenseLoading, setExpenseLoading] = useState(false);
+
+  const [historyVehicleFilter, setHistoryVehicleFilter] = useState("all");
+  const [historySiteFilter, setHistorySiteFilter] = useState("all");
+  const [historyTypeFilter, setHistoryTypeFilter] = useState("all");
+  const [historyFromDate, setHistoryFromDate] = useState("");
+  const [historyToDate, setHistoryToDate] = useState("");
 
   // =========================
   // LOAD VEHICLES - REAL TIME
@@ -55,6 +88,26 @@ function Vehicle() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "vehicleExpenses"),
+      (snapshot) => {
+        setVehicleExpenses(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            ...item.data(),
+          }))
+        );
+      },
+      (error) => {
+        console.error("Firestore vehicle expense error:", error);
+        alert("Vehicle expense history load nahi ho saka.");
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   // =========================
   // CLEAR FORM
   // =========================
@@ -68,6 +121,16 @@ function Vehicle() {
     setFuel("");
     setStatus("Active");
     setEditId(null);
+  };
+
+  const clearExpenseForm = () => {
+    setExpenseVehicleId("");
+    setExpenseSite("");
+    setExpenseDate("");
+    setExpenseType("");
+    setExpenseAmount("");
+    setExpenseRemarks("");
+    setExpenseEditId(null);
   };
 
   // =========================
@@ -185,6 +248,18 @@ function Vehicle() {
   // =========================
 
   const deleteVehicle = async (id, vehicleNo) => {
+    const hasExpenseHistory = vehicleExpenses.some(
+      (expense) =>
+        expense.vehicleId === id ||
+        String(expense.vehicleNumber || "").trim().toLowerCase() ===
+          String(vehicleNo || "").trim().toLowerCase()
+    );
+
+    if (hasExpenseHistory) {
+      alert("Vehicle expense history pehle remove karein, phir vehicle delete karein.");
+      return;
+    }
+
     const confirmDelete = window.confirm(
       `Kya aap vehicle "${vehicleNo}" ko delete karna chahte hain?`
     );
@@ -205,6 +280,119 @@ function Vehicle() {
       console.error("Delete Vehicle Error:", error);
 
       alert("Vehicle delete nahi hua.");
+    }
+  };
+
+  const selectExpenseVehicle = (selectedVehicleId) => {
+    setExpenseVehicleId(selectedVehicleId);
+
+    const selectedVehicle = vehicles.find(
+      (item) => item.id === selectedVehicleId
+    );
+
+    if (selectedVehicle) {
+      setExpenseSite(getSiteName(selectedVehicle));
+    }
+  };
+
+  const saveVehicleExpense = async () => {
+    const selectedVehicle = vehicles.find(
+      (item) => item.id === expenseVehicleId
+    );
+    const cleanSite = normaliseSiteName(expenseSite);
+    const normalisedExpenseDate = normaliseDate(expenseDate);
+    const amount = Number(expenseAmount);
+
+    if (!selectedVehicle || !cleanSite || !normalisedExpenseDate || !expenseType) {
+      alert("Vehicle, Site, Date aur Expense Type bharna zaroori hai.");
+      return;
+    }
+
+    if (normalisedExpenseDate !== expenseDate) {
+      alert("Valid expense date select karein.");
+      return;
+    }
+
+    if (!expenseTypes.includes(expenseType)) {
+      alert("Valid expense type select karein.");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert("Expense amount 0 se zyada valid number hona chahiye.");
+      return;
+    }
+
+    const expenseData = {
+      vehicleId: selectedVehicle.id,
+      vehicleNumber: String(selectedVehicle.vehicleNumber || "").trim(),
+      vehicleName: String(
+        selectedVehicle.vehicleType || selectedVehicle.vehicleNumber || ""
+      ).trim(),
+      site: cleanSite,
+      date: normalisedExpenseDate,
+      expenseType,
+      amount: normaliseMoney(amount),
+      remarks: expenseRemarks.trim(),
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      setExpenseLoading(true);
+
+      if (expenseEditId) {
+        await updateDoc(
+          doc(db, "vehicleExpenses", expenseEditId),
+          expenseData
+        );
+        alert("Vehicle expense successfully updated.");
+      } else {
+        const createdBy = auth.currentUser?.uid;
+
+        await addDoc(collection(db, "vehicleExpenses"), {
+          ...expenseData,
+          ...(createdBy ? { createdBy } : {}),
+          createdAt: serverTimestamp(),
+        });
+        alert("Vehicle expense successfully saved.");
+      }
+
+      clearExpenseForm();
+    } catch (error) {
+      console.error("Save vehicle expense error:", error);
+      alert("Vehicle expense save nahi hua. Firebase connection/rules check karein.");
+    } finally {
+      setExpenseLoading(false);
+    }
+  };
+
+  const editVehicleExpense = (item) => {
+    setExpenseVehicleId(item.vehicleId || "");
+    setExpenseSite(getSiteName(item));
+    setExpenseDate(normaliseDate(item.date));
+    setExpenseType(item.expenseType || "");
+    setExpenseAmount(item.amount ?? "");
+    setExpenseRemarks(item.remarks || "");
+    setExpenseEditId(item.id);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const deleteVehicleExpense = async (id) => {
+    if (!window.confirm("Kya aap is vehicle expense ko delete karna chahte hain?")) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, "vehicleExpenses", id));
+      alert("Vehicle expense successfully deleted.");
+
+      if (expenseEditId === id) {
+        clearExpenseForm();
+      }
+    } catch (error) {
+      console.error("Delete vehicle expense error:", error);
+      alert("Vehicle expense delete nahi hua.");
     }
   };
 
@@ -241,6 +429,42 @@ function Vehicle() {
         .includes(text)
     );
   });
+
+  const expenseSites = Array.from(
+    new Set(
+      [...vehicles, ...vehicleExpenses]
+        .map((item) => getSiteName(item))
+        .filter(Boolean)
+    )
+  ).sort((first, second) => first.localeCompare(second));
+
+  const filteredVehicleExpenses = vehicleExpenses
+    .filter((item) => {
+      const selectedVehicle = vehicles.find(
+        (vehicle) => vehicle.id === historyVehicleFilter
+      );
+      const vehicleMatched =
+        historyVehicleFilter === "all" ||
+        item.vehicleId === historyVehicleFilter ||
+        (selectedVehicle &&
+          String(item.vehicleNumber || "").trim().toLowerCase() ===
+            String(selectedVehicle.vehicleNumber || "").trim().toLowerCase());
+      const siteMatched =
+        historySiteFilter === "all" ||
+        getSiteName(item).toLowerCase() === historySiteFilter.toLowerCase();
+      const typeMatched =
+        historyTypeFilter === "all" || item.expenseType === historyTypeFilter;
+
+      return (
+        vehicleMatched &&
+        siteMatched &&
+        typeMatched &&
+        isDateInRange(item, historyFromDate, historyToDate)
+      );
+    })
+    .sort((first, second) =>
+      normaliseDate(second.date).localeCompare(normaliseDate(first.date))
+    );
 
   // =========================
   // SUMMARY
@@ -444,6 +668,290 @@ function Vehicle() {
 
           </div>
 
+        </div>
+
+
+        {/* ========================= */}
+        {/* VEHICLE EXPENSE HISTORY */}
+        {/* ========================= */}
+
+        <div className="page-card vehicle-form-card">
+
+          <div className="vehicle-card-header">
+            <div>
+              <h2>
+                💳 {expenseEditId
+                  ? "Update Vehicle Expense"
+                  : "Add Vehicle Expense"}
+              </h2>
+
+              <p>
+                Fuel aur vehicle costs ko date ke saath record karein
+              </p>
+            </div>
+
+            {expenseEditId && (
+              <span className="edit-mode-badge">
+                ✏️ Edit Mode
+              </span>
+            )}
+          </div>
+
+          <div className="form-grid">
+
+            <div className="form-group">
+              <label>Vehicle *</label>
+
+              <select
+                value={expenseVehicleId}
+                onChange={(event) => selectExpenseVehicle(event.target.value)}
+              >
+                <option value="">Select Vehicle</option>
+                {vehicles.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.vehicleNumber || item.vehicleType || item.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Site *</label>
+
+              <select
+                value={expenseSite}
+                onChange={(event) => setExpenseSite(event.target.value)}
+              >
+                <option value="">Select Site</option>
+                {expenseSites.map((siteName) => (
+                  <option key={siteName} value={siteName}>
+                    {siteName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Expense Date *</label>
+
+              <input
+                type="date"
+                value={expenseDate}
+                onChange={(event) => setExpenseDate(event.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Expense Type *</label>
+
+              <select
+                value={expenseType}
+                onChange={(event) => setExpenseType(event.target.value)}
+              >
+                <option value="">Select Expense Type</option>
+                {expenseTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Amount (₹) *</label>
+
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="Expense Amount"
+                value={expenseAmount}
+                onChange={(event) => setExpenseAmount(event.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Remarks</label>
+
+              <input
+                type="text"
+                placeholder="Optional remarks"
+                value={expenseRemarks}
+                onChange={(event) => setExpenseRemarks(event.target.value)}
+              />
+            </div>
+
+          </div>
+
+          <div className="vehicle-action-buttons">
+            <button
+              className="save-btn"
+              onClick={saveVehicleExpense}
+              disabled={expenseLoading}
+            >
+              {expenseLoading
+                ? "⏳ Saving..."
+                : expenseEditId
+                ? "✏️ Update Expense"
+                : "💾 Save Expense"}
+            </button>
+
+            {expenseEditId && (
+              <button
+                className="cancel-btn"
+                onClick={clearExpenseForm}
+              >
+                ❌ Cancel
+              </button>
+            )}
+          </div>
+
+        </div>
+
+
+        {/* ========================= */}
+        {/* EXPENSE FILTERS */}
+        {/* ========================= */}
+
+        <div className="page-card vehicle-form-card">
+          <div className="vehicle-card-header">
+            <div>
+              <h2>🔎 Vehicle Expense History</h2>
+              <p>Vehicle, site, date aur type ke hisaab se filter karein</p>
+            </div>
+
+            <span className="record-count">
+              {filteredVehicleExpenses.length} Records
+            </span>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Vehicle</label>
+              <select
+                value={historyVehicleFilter}
+                onChange={(event) => setHistoryVehicleFilter(event.target.value)}
+              >
+                <option value="all">All Vehicles</option>
+                {vehicles.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.vehicleNumber || item.vehicleType || item.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Site</label>
+              <select
+                value={historySiteFilter}
+                onChange={(event) => setHistorySiteFilter(event.target.value)}
+              >
+                <option value="all">All Sites</option>
+                {expenseSites.map((siteName) => (
+                  <option key={siteName} value={siteName}>
+                    {siteName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Expense Type</label>
+              <select
+                value={historyTypeFilter}
+                onChange={(event) => setHistoryTypeFilter(event.target.value)}
+              >
+                <option value="all">All Expense Types</option>
+                {expenseTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>From Date</label>
+              <input
+                type="date"
+                value={historyFromDate}
+                onChange={(event) => setHistoryFromDate(event.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>To Date</label>
+              <input
+                type="date"
+                value={historyToDate}
+                onChange={(event) => setHistoryToDate(event.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+
+        <div className="table-card">
+          <div className="table-header">
+            <div>
+              <h2>🧾 Vehicle Expense Records</h2>
+              <p>New dated expenses are the preferred reporting source</p>
+            </div>
+          </div>
+
+          <div className="table-responsive">
+            <table className="vehicle-table">
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Date</th>
+                  <th>Vehicle</th>
+                  <th>Site</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Remarks</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredVehicleExpenses.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="no-record">
+                      No Vehicle Expense Record Found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredVehicleExpenses.map((item, index) => (
+                    <tr key={item.id}>
+                      <td>{index + 1}</td>
+                      <td>{normaliseDate(item.date) || "-"}</td>
+                      <td>{item.vehicleNumber || item.vehicleName || "-"}</td>
+                      <td>{getSiteName(item) || "-"}</td>
+                      <td>{item.expenseType || "-"}</td>
+                      <td className="fuel-amount">
+                        ₹ {normaliseMoney(item.amount).toLocaleString("en-IN")}
+                      </td>
+                      <td>{item.remarks || "-"}</td>
+                      <td className="action-cell">
+                        <button
+                          className="edit-btn"
+                          onClick={() => editVehicleExpense(item)}
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          className="delete-btn"
+                          onClick={() => deleteVehicleExpense(item.id)}
+                        >
+                          🗑️ Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
 

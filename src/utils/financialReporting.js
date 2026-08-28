@@ -216,6 +216,59 @@ export const getVehicleAmount = (item = {}) =>
     item.cost
   );
 
+const getVehicleKeys = (item = {}) => {
+  const keys = [];
+  const vehicleId = normaliseText(item.vehicleId || item.id);
+
+  if (vehicleId) keys.push(`id:${vehicleId}`);
+
+  const vehicleNumber = normaliseText(
+    item.vehicleNumber || item.vehicleName || item.name
+  );
+
+  if (vehicleNumber) keys.push(`number:${vehicleNumber}`);
+
+  return keys;
+};
+
+export const getVehicleExpenseAmount = (item = {}) =>
+  firstMoney(
+    item.amount,
+    item.expenseAmount,
+    item.totalAmount,
+    item.total,
+    item.cost
+  );
+
+const getVehicleExpenseSummary = (
+  vehicles = [],
+  vehicleExpenses = [],
+  vehicleExpenseCoverage = vehicleExpenses
+) => {
+  const ledgerVehicleKeys = new Set(
+    vehicleExpenseCoverage.flatMap(getVehicleKeys)
+  );
+  const vehicleExpenseFromLedger = vehicleExpenses.reduce(
+    (total, item) => total + getVehicleExpenseAmount(item),
+    0
+  );
+  const legacyVehicleExpense = vehicles.reduce((total, item) => {
+    const hasLedgerHistory = getVehicleKeys(item).some((vehicleKey) =>
+      ledgerVehicleKeys.has(vehicleKey)
+    );
+
+    return total + (hasLedgerHistory
+      ? 0
+      : getVehicleAmount(item));
+  }, 0);
+
+  return {
+    vehicleExpense: vehicleExpenseFromLedger + legacyVehicleExpense,
+    vehicleExpenseFromLedger,
+    legacyVehicleExpense,
+  };
+};
+
 const getDailyWage = (item = {}) =>
   firstMoney(item.dailyWage, item.wage, item.rate);
 
@@ -290,6 +343,8 @@ export const calculateFinancialSummary = ({
   attendance = [],
   attendanceSalaryCoverage = salaries,
   vehicles = [],
+  vehicleExpenses = [],
+  vehicleExpenseCoverage = vehicleExpenses,
 } = {}) => {
   const invoiceSummary = invoices.reduce(
     (summary, invoice) => {
@@ -338,10 +393,12 @@ export const calculateFinancialSummary = ({
     labours,
     attendanceSalaryCoverage
   );
-  const vehicleExpense = vehicles.reduce(
-    (total, item) => total + getVehicleAmount(item),
-    0
+  const vehicleSummary = getVehicleExpenseSummary(
+    vehicles,
+    vehicleExpenses,
+    vehicleExpenseCoverage
   );
+  const vehicleExpense = vehicleSummary.vehicleExpense;
   const materialExpense =
     materialPurchaseExpense + materialExpenseFromExpenses;
   const labourExpense =
@@ -366,6 +423,8 @@ export const calculateFinancialSummary = ({
     directLabourPayment,
     attendanceExpense,
     vehicleExpense,
+    vehicleExpenseFromLedger: vehicleSummary.vehicleExpenseFromLedger,
+    legacyVehicleExpense: vehicleSummary.legacyVehicleExpense,
     otherExpenseFromExpenses,
   };
 };

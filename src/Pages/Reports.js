@@ -30,6 +30,7 @@ function Reports() {
   const [salaries, setSalaries] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [vehicleExpenses, setVehicleExpenses] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -44,7 +45,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 8;
+    const totalCollections = 9;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -95,6 +96,7 @@ function Reports() {
     loadCollection("salaries", setSalaries);
     loadCollection("attendance", setAttendance);
     loadCollection("vehicles", setVehicles);
+    loadCollection("vehicleExpenses", setVehicleExpenses);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -158,6 +160,10 @@ function Reports() {
       addSite(getSiteName(item))
     );
 
+    vehicleExpenses.forEach((item) =>
+      addSite(getSiteName(item))
+    );
+
     return Array.from(siteMap.values()).sort(
       (a, b) => a.localeCompare(b)
     );
@@ -170,6 +176,7 @@ function Reports() {
     salaries,
     attendance,
     vehicles,
+    vehicleExpenses,
   ]);
 
   /* =========================================
@@ -247,6 +254,19 @@ function Reports() {
     [vehicles, filterRecords]
   );
 
+  const filteredVehicleExpenses = useMemo(
+    () => filterRecords(vehicleExpenses),
+    [vehicleExpenses, filterRecords]
+  );
+
+  const vehicleExpenseCoverage = useMemo(
+    () =>
+      vehicleExpenses.filter(
+        (item) => selectedSite === "all" || isSameSite(item, selectedSite)
+      ),
+    [vehicleExpenses, selectedSite]
+  );
+
   const financialSummary = useMemo(
     () =>
       calculateFinancialSummary({
@@ -258,6 +278,8 @@ function Reports() {
         attendance: filteredAttendance,
         attendanceSalaryCoverage,
         vehicles: filteredVehicles,
+        vehicleExpenses: filteredVehicleExpenses,
+        vehicleExpenseCoverage,
       }),
     [
       filteredInvoices,
@@ -268,6 +290,8 @@ function Reports() {
       filteredAttendance,
       attendanceSalaryCoverage,
       filteredVehicles,
+      filteredVehicleExpenses,
+      vehicleExpenseCoverage,
     ]
   );
 
@@ -289,6 +313,12 @@ function Reports() {
             isSameSite(item, siteName)
           ),
           vehicles: filteredVehicles.filter((item) => isSameSite(item, siteName)),
+          vehicleExpenses: filteredVehicleExpenses.filter((item) =>
+            isSameSite(item, siteName)
+          ),
+          vehicleExpenseCoverage: vehicleExpenses.filter((item) =>
+            isSameSite(item, siteName)
+          ),
         };
         const summary = calculateFinancialSummary(siteRecords);
 
@@ -319,7 +349,9 @@ function Reports() {
     filteredSalaries,
     filteredAttendance,
     filteredVehicles,
+    filteredVehicleExpenses,
     salaries,
+    vehicleExpenses,
     selectedSite,
   ]);
 

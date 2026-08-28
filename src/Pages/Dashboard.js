@@ -23,6 +23,7 @@ function Dashboard() {
   const [attendance, setAttendance] = useState([]);
   const [salaries, setSalaries] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [vehicleExpenses, setVehicleExpenses] = useState([]);
 
   // =========================
   // LOAD ALL FIREBASE DATA
@@ -149,6 +150,21 @@ function Dashboard() {
       }
     );
 
+    const unsubscribeVehicleExpenses = onSnapshot(
+      collection(db, "vehicleExpenses"),
+      (snapshot) => {
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }));
+
+        setVehicleExpenses(data);
+      },
+      (error) => {
+        console.error("Vehicle expense Error:", error);
+      }
+    );
+
     return () => {
       unsubscribeSites();
       unsubscribeInvoices();
@@ -158,6 +174,7 @@ function Dashboard() {
       unsubscribeAttendance();
       unsubscribeSalaries();
       unsubscribeVehicles();
+      unsubscribeVehicleExpenses();
     };
   }, []);
 
@@ -183,6 +200,7 @@ function Dashboard() {
         salaries,
         attendance,
         vehicles,
+        vehicleExpenses,
       }),
     [
       invoices,
@@ -192,6 +210,7 @@ function Dashboard() {
       salaries,
       attendance,
       vehicles,
+      vehicleExpenses,
     ]
   );
 
@@ -224,6 +243,7 @@ function Dashboard() {
       salaries,
       attendance,
       vehicles,
+      vehicleExpenses,
     ].forEach((records) => records.forEach((record) => addSite(record)));
 
     return Array.from(siteMap.values()).map((siteItem) => {
@@ -236,6 +256,9 @@ function Dashboard() {
         salaries: salaries.filter((item) => isSameSite(item, siteName)),
         attendance: attendance.filter((item) => isSameSite(item, siteName)),
         vehicles: vehicles.filter((item) => isSameSite(item, siteName)),
+        vehicleExpenses: vehicleExpenses.filter((item) =>
+          isSameSite(item, siteName)
+        ),
       });
 
       return {
@@ -264,6 +287,7 @@ function Dashboard() {
     salaries,
     attendance,
     vehicles,
+    vehicleExpenses,
   ]);
 
   // =========================

@@ -28,6 +28,7 @@ function SiteDetails() {
   const [attendance, setAttendance] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [vehicleExpenses, setVehicleExpenses] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("");
 
@@ -65,6 +66,7 @@ function SiteDetails() {
       attendance,
       expenses,
       vehicles,
+      vehicleExpenses,
     ].forEach((records) => records.forEach(addSite));
 
     return Array.from(siteMap.values()).sort((first, second) =>
@@ -79,6 +81,7 @@ function SiteDetails() {
     attendance,
     expenses,
     vehicles,
+    vehicleExpenses,
   ]);
 
   // =========================
@@ -126,6 +129,32 @@ function SiteDetails() {
       },
       (error) => {
         console.error("Attendance error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+
+  }, []);
+
+  // =========================
+  // VEHICLE EXPENSE HISTORY
+  // =========================
+
+  useEffect(() => {
+
+    const unsubscribe = onSnapshot(
+      collection(db, "vehicleExpenses"),
+      (snapshot) => {
+
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data()
+        }));
+
+        setVehicleExpenses(data);
+      },
+      (error) => {
+        console.error("Vehicle expense error:", error);
       }
     );
 
@@ -339,6 +368,9 @@ function SiteDetails() {
     const siteVehicles = vehicles.filter((item) =>
       isSameSite(item, selectedSite)
     );
+    const siteVehicleExpenses = vehicleExpenses.filter((item) =>
+      isSameSite(item, selectedSite)
+    );
     const summary = calculateFinancialSummary({
       invoices: siteInvoices,
       materials: siteMaterials,
@@ -346,7 +378,8 @@ function SiteDetails() {
       salaries: siteSalaries,
       attendance: siteAttendance,
       expenses: siteExpenses,
-      vehicles: siteVehicles
+      vehicles: siteVehicles,
+      vehicleExpenses: siteVehicleExpenses
     });
 
     return {
@@ -379,7 +412,9 @@ function SiteDetails() {
 
     expenses,
 
-    vehicles
+    vehicles,
+
+    vehicleExpenses
 
   ]);
 

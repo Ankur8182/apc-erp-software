@@ -168,6 +168,75 @@ test("counts a material or vehicle record only once when legacy amount aliases c
   expect(summary.totalExpense).toBe(125);
 });
 
+test("uses legacy vehicle fuel only when the vehicle has no expense history", () => {
+  const summary = calculateFinancialSummary({
+    vehicles: [
+      { id: "truck-1", vehicleNumber: "UP32 AB 1234", site: "LKO", fuel: 100 },
+      { id: "truck-2", vehicleNumber: "UP32 AB 5678", site: "LKO", fuel: 50 },
+    ],
+    vehicleExpenses: [
+      {
+        vehicleNumber: "UP32 AB 1234",
+        site: "LKO",
+        date: "2026-08-10",
+        expenseType: "Fuel",
+        amount: 200,
+      },
+    ],
+  });
+
+  expect(summary.vehicleExpenseFromLedger).toBe(200);
+  expect(summary.legacyVehicleExpense).toBe(50);
+  expect(summary.vehicleExpense).toBe(250);
+});
+
+test("calculates site and date filtered vehicle expenses without double counting", () => {
+  const vehicles = [
+    { id: "truck-lko", vehicleNumber: "UP32 AB 1234", site: "LKO", fuel: 100 },
+    { id: "truck-civil", vehicleNumber: "UP32 AB 5678", site: "Civil", fuel: 50 },
+  ];
+  const vehicleExpenses = [
+    {
+      vehicleId: "truck-lko",
+      vehicleNumber: "UP32 AB 1234",
+      site: "LKO",
+      date: "2026-08-10",
+      expenseType: "Fuel",
+      amount: 200,
+    },
+    {
+      vehicleId: "truck-civil",
+      vehicleNumber: "UP32 AB 5678",
+      site: "Civil",
+      date: "2026-08-11",
+      expenseType: "Repair",
+      amount: 75,
+    },
+  ];
+  const lkoExpenses = vehicleExpenses.filter((item) => isSameSite(item, "lko"));
+  const august10Expenses = vehicleExpenses.filter((item) =>
+    isDateInRange(item, "2026-08-10", "2026-08-10")
+  );
+
+  const lkoSummary = calculateFinancialSummary({
+    invoices: [{ site: "LKO", totalAmount: 1000 }],
+    vehicles: vehicles.filter((item) => isSameSite(item, "LKO")),
+    vehicleExpenses: lkoExpenses,
+    vehicleExpenseCoverage: lkoExpenses,
+  });
+  const august10Summary = calculateFinancialSummary({
+    vehicles,
+    vehicleExpenses: august10Expenses,
+    vehicleExpenseCoverage: vehicleExpenses,
+  });
+
+  expect(lkoSummary.vehicleExpense).toBe(200);
+  expect(lkoSummary.totalExpense).toBe(200);
+  expect(lkoSummary.profit).toBe(800);
+  expect(august10Summary.vehicleExpense).toBe(200);
+  expect(august10Summary.legacyVehicleExpense).toBe(0);
+});
+
 test("uses the same site key for site-wise financial calculations", () => {
   const invoices = [
     { site: " LKO  Site ", totalAmount: 1000 },
