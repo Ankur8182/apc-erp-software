@@ -1,0 +1,270 @@
+.field-update-page {
+  width: 100%;
+  max-width: 1100px;
+  padding: 14px 5px 40px;
+  box-sizing: border-box;
+}
+
+.field-update-heading {
+  margin-bottom: 20px;
+}
+
+.field-update-heading h1,
+.field-history-card h2 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.field-update-heading h1 {
+  font-size: 28px;
+}
+
+.field-update-heading p {
+  margin: 8px 0 0;
+  color: #64748b;
+}
+
+.field-update-card,
+.field-history-card {
+  background: #ffffff;
+  border: 1px solid #e3e9f2;
+  border-radius: 18px;
+  padding: 24px;
+  box-sizing: border-box;
+  box-shadow: 0 8px 25px rgba(20, 40, 80, 0.08);
+}
+
+.field-update-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.field-update-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.field-update-group label {
+  margin-bottom: 8px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.field-update-group label span {
+  color: #dc2626;
+}
+
+.field-update-group input,
+.field-update-group select,
+.field-update-group textarea {
+  width: 100%;
+  border: 1px solid #cfd8e5;
+  border-radius: 12px;
+  box-sizing: border-box;
+  color: #1f2937;
+  font: inherit;
+  outline: none;
+}
+
+.field-update-group input,
+.field-update-group select {
+  min-height: 52px;
+  padding: 0 15px;
+}
+
+.field-update-group textarea {
+  min-height: 100px;
+  padding: 14px 15px;
+  resize: vertical;
+}
+
+.field-update-group input:focus,
+.field-update-group select:focus,
+.field-update-group textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.field-update-group input:disabled,
+.field-update-group select:disabled,
+.field-update-group textarea:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.field-update-full-width {
+  grid-column: 1 / -1;
+}
+
+.field-photo-upload {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px dashed #b9c7db;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.field-photo-upload label {
+  display: block;
+  color: #334155;
+  font-weight: 700;
+}
+
+.field-photo-upload input {
+  width: 100%;
+  margin-top: 12px;
+  color: #334155;
+}
+
+.field-photo-upload p {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.field-photo-upload .field-photo-selected {
+  color: #166534;
+  font-weight: 700;
+}
+
+.field-photo-progress {
+  width: 100%;
+  height: 12px;
+  margin-top: 12px;
+}
+
+.field-discard-draft-btn {
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.field-feedback {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.field-feedback-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.field-feedback-success {
+  color: #166534;
+  background: #ecfdf3;
+}
+
+.field-feedback-draft {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.field-submit-btn {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.field-submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.field-history-card {
+  margin-top: 22px;
+}
+
+.field-history-card h2 {
+  font-size: 20px;
+}
+
+.field-history-list {
+  margin-top: 14px;
+}
+
+.field-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.field-history-item:last-child {
+  border-bottom: none;
+}
+
+.field-history-item strong {
+  color: #1f2937;
+}
+
+.field-history-item p,
+.field-history-item span,
+.field-state {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.field-history-item p {
+  margin: 5px 0 0;
+}
+
+.field-history-item span {
+  color: #334155;
+  font-weight: 600;
+  text-align: right;
+}
+
+.field-state {
+  margin: 18px 0 0;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .field-update-page {
+    padding: 5px 0 28px;
+  }
+
+  .field-update-heading h1 {
+    font-size: 24px;
+  }
+
+  .field-update-card,
+  .field-history-card {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .field-update-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-history-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field-history-item span {
+    text-align: left;
+  }
+}

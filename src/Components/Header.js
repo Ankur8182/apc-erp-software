@@ -5,7 +5,10 @@ import { auth } from "../firebase";
 import { useAuth } from "../auth/AuthProvider";
 
 function Header() {
-  const { user } = useAuth();
+  const { role, user } = useAuth();
+  const roleLabel = role
+    ? `${role.charAt(0).toUpperCase()}${role.slice(1)}`
+    : "User";
 
   const handleLogout = async () => {
     try {
@@ -30,20 +33,17 @@ function Header() {
 
         <span>🔔</span>
 
-        <span
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
+          className="header-logout-btn"
           title="Sign out"
           aria-label="Sign out"
           onClick={handleLogout}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              handleLogout();
-            }
-          }}
         >
-          👤 {user?.email || "User"}
-        </span>
+          <span className="header-user-identity">👤 {user?.email || "User"}</span>
+          <small>{roleLabel}</small>
+          <strong>Logout</strong>
+        </button>
       </div>
     </div>
   );

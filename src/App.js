@@ -14,10 +14,18 @@ import Vehicle from "./Pages/Vehicle";
 import Invoice from "./Pages/Invoice";
 import Reports from "./Pages/Reports";
 import DailyProgressReport from "./Pages/DailyProgressReport";
+import FieldUpdate from "./Pages/FieldUpdate";
+import FieldDashboard from "./Pages/FieldDashboard";
 import { AuthProvider } from "./auth/AuthProvider";
 import ProtectedRoute, { PublicOnlyRoute } from "./auth/ProtectedRoute";
+import {
+  FIELD_UPDATE_ROLES,
+  STANDARD_ERP_ROLES,
+} from "./auth/authorization";
 
-const protectedPage = (page) => <ProtectedRoute>{page}</ProtectedRoute>;
+const protectedPage = (page, allowedRoles = STANDARD_ERP_ROLES) => (
+  <ProtectedRoute allowedRoles={allowedRoles}>{page}</ProtectedRoute>
+);
 
 function App() {
   return (
@@ -54,6 +62,16 @@ function App() {
           <Route path="/reports" element={protectedPage(<Reports />)} />
 
           <Route path="/daily-progress-report" element={protectedPage(<DailyProgressReport />)} />
+
+          <Route
+            path="/field-update"
+            element={protectedPage(<FieldUpdate />, FIELD_UPDATE_ROLES)}
+          />
+
+          <Route
+            path="/field-dashboard"
+            element={protectedPage(<FieldDashboard />, FIELD_UPDATE_ROLES)}
+          />
 
         </Routes>
       </AuthProvider>

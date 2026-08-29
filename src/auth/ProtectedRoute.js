@@ -1,21 +1,35 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
+import {
+  getRoleLandingPath,
+  isFieldOnlyRole,
+} from "./authorization";
 
-function ProtectedRoute({ children }) {
-  const { loading, isAuthorized } = useAuth();
+function ProtectedRoute({ children, allowedRoles }) {
+  const { loading, isAuthorized, role } = useAuth();
+  const hasRoleAccess =
+    !allowedRoles || allowedRoles.includes(role);
 
-  if (loading) return null;
+  if (loading) {
+    return <p role="status">Checking account access...</p>;
+  }
 
-  return isAuthorized ? children : <Navigate to="/" replace />;
+  if (!isAuthorized) return <Navigate to="/" replace />;
+
+  return hasRoleAccess
+    ? children
+    : <Navigate to={isFieldOnlyRole(role) ? "/field-dashboard" : "/dashboard"} replace />;
 }
 
 export function PublicOnlyRoute({ children }) {
-  const { loading, isAuthorized } = useAuth();
+  const { loading, isAuthorized, role } = useAuth();
 
   if (loading) return null;
 
-  return isAuthorized ? <Navigate to="/dashboard" replace /> : children;
+  const landingPath = getRoleLandingPath(role);
+
+  return isAuthorized ? <Navigate to={landingPath} replace /> : children;
 }
 
 export default ProtectedRoute;

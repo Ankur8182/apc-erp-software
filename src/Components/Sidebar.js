@@ -1,22 +1,30 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import "../Styles/Sidebar.css";
+import { useAuth } from "../auth/AuthProvider";
+import {
+  FIELD_UPDATE_ROLES,
+  STANDARD_ERP_ROLES,
+} from "../auth/authorization";
 
 function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { role } = useAuth();
 
   const menuItems = [
-    { path: "/dashboard", icon: "🏠", label: "Dashboard" },
-    { path: "/labour", icon: "👷", label: "Labour" },
-    { path: "/sites", icon: "🏗️", label: "Sites" },
-    { path: "/materials", icon: "📦", label: "Materials" },
-    { path: "/expenses", icon: "💰", label: "Expenses" },
-    { path: "/attendance", icon: "📅", label: "Attendance" },
-    { path: "/salary", icon: "💵", label: "Salary" },
-    { path: "/vehicle", icon: "🚚", label: "Vehicle" },
-    { path: "/invoice", icon: "📜", label: "Invoice" },
-    { path: "/daily-progress-report", icon: "📋", label: "Daily Progress" },
-    { path: "/reports", icon: "📊", label: "Reports" },
+    { path: "/dashboard", icon: "🏠", label: "Dashboard", roles: STANDARD_ERP_ROLES },
+    { path: "/labour", icon: "👷", label: "Labour", roles: STANDARD_ERP_ROLES },
+    { path: "/sites", icon: "🏗️", label: "Sites", roles: STANDARD_ERP_ROLES },
+    { path: "/materials", icon: "📦", label: "Materials", roles: STANDARD_ERP_ROLES },
+    { path: "/expenses", icon: "💰", label: "Expenses", roles: STANDARD_ERP_ROLES },
+    { path: "/attendance", icon: "📅", label: "Attendance", roles: STANDARD_ERP_ROLES },
+    { path: "/salary", icon: "💵", label: "Salary", roles: STANDARD_ERP_ROLES },
+    { path: "/vehicle", icon: "🚚", label: "Vehicle", roles: STANDARD_ERP_ROLES },
+    { path: "/invoice", icon: "📜", label: "Invoice", roles: STANDARD_ERP_ROLES },
+    { path: "/daily-progress-report", icon: "📋", label: "Daily Progress", roles: STANDARD_ERP_ROLES },
+    { path: "/field-dashboard", icon: "📱", label: "Field Home", roles: FIELD_UPDATE_ROLES },
+    { path: "/field-update", icon: "📱", label: "Field Update", roles: FIELD_UPDATE_ROLES },
+    { path: "/reports", icon: "📊", label: "Reports", roles: STANDARD_ERP_ROLES },
   ];
 
   const closeSidebar = () => {
@@ -51,7 +59,7 @@ function Sidebar() {
         <div className="sidebar-divider" />
 
         <nav className="sidebar-menu">
-          {menuItems.map((item) => (
+          {menuItems.filter((item) => item.roles.includes(role)).map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

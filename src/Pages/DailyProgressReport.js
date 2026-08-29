@@ -283,7 +283,7 @@ function DailyProgressReport() {
 
                 <div className="form-group">
                   <label>Quantity *</label>
-                  <input type="number" min="0.01" step="0.01" name="quantity" value={formData.quantity} onChange={handleChange} placeholder="0" />
+                  <input type="number" min="0" step="0.01" name="quantity" value={formData.quantity} onChange={handleChange} placeholder="0" />
                 </div>
 
                 <div className="form-group">

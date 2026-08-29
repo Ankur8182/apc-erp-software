@@ -18,6 +18,70 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "manager"];
     }
 
+    function isFieldUser() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["supervisor", "engineer"];
+    }
+
+    function canReadDailyProgressReport() {
+      // Field users only see their own operational updates. Core ERP roles keep
+      // their existing access to all DPR documents, including legacy records.
+      return isAuthorizedErpUser() ||
+        (isFieldUser() && resource.data.createdBy == request.auth.uid);
+    }
+
+    function isValidDprUsageValue(value) {
+      // Current forms submit text. Phase 3 legacy/structured DPRs can contain
+      // a list of material or equipment entries, so both are accepted.
+      return value is string || (value is list && value.size() <= 25);
+    }
+
+    function hasValidOptionalDprUsageFields() {
+      return (!request.resource.data.keys().hasAll(["materialsUsed"]) ||
+          isValidDprUsageValue(request.resource.data.materialsUsed)) &&
+        (!request.resource.data.keys().hasAll(["equipmentUsed"]) ||
+          isValidDprUsageValue(request.resource.data.equipmentUsed));
+    }
+
+    function hasValidFieldDailyProgressReport() {
+      return request.resource.data.keys().hasAll([
+          "site",
+          "date",
+          "workActivity",
+          "workLocation",
+          "quantity",
+          "unit",
+          "manpowerCount",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.date is string && request.resource.data.date.size() > 0 &&
+        request.resource.data.workActivity is string && request.resource.data.workActivity.size() > 0 &&
+        request.resource.data.workLocation is string && request.resource.data.workLocation.size() > 0 &&
+        request.resource.data.unit is string && request.resource.data.unit.size() > 0 &&
+        request.resource.data.quantity is number && request.resource.data.quantity >= 0 &&
+        request.resource.data.manpowerCount is number && request.resource.data.manpowerCount >= 0 &&
+        hasValidOptionalDprUsageFields() &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        (!request.resource.data.keys().hasAll(["materialQuantity"]) ||
+          (request.resource.data.materialQuantity is number && request.resource.data.materialQuantity >= 0)) &&
+        (!request.resource.data.keys().hasAll(["equipmentUsage"]) ||
+          (request.resource.data.equipmentUsage is number && request.resource.data.equipmentUsage >= 0)) &&
+        (!request.resource.data.keys().hasAll(["photos"]) ||
+          (request.resource.data.photos is list && request.resource.data.photos.size() <= 5));
+    }
+
+    function canCreateFieldDailyProgressReport() {
+      return isFieldUser() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        hasValidFieldDailyProgressReport();
+    }
+
     // Users may read only their own authorization profile. Roles can only be
     // assigned or changed from the Firebase Console/Admin SDK, never by a client.
     match /users/{userId} {
@@ -26,7 +90,7 @@ service cloud.firestore {
     }
 
     match /sites/{document=**} {
-      allow read: if isAuthorizedErpUser();
+      allow read: if isAuthorizedErpUser() || isFieldUser();
       allow create, update, delete: if canWriteErpData();
     }
 
@@ -36,7 +100,7 @@ service cloud.firestore {
     }
 
     match /materials/{document=**} {
-      allow read: if isAuthorizedErpUser();
+      allow read: if isAuthorizedErpUser() || isFieldUser();
       allow create, update, delete: if canWriteErpData();
     }
 
@@ -56,7 +120,7 @@ service cloud.firestore {
     }
 
     match /vehicles/{document=**} {
-      allow read: if isAuthorizedErpUser();
+      allow read: if isAuthorizedErpUser() || isFieldUser();
       allow create, update, delete: if canWriteErpData();
     }
 
@@ -66,8 +130,9 @@ service cloud.firestore {
     }
 
     match /dailyProgressReports/{document=**} {
-      allow read: if isAuthorizedErpUser();
-      allow create, update, delete: if canWriteErpData();
+      allow read: if canReadDailyProgressReport();
+      allow create: if canWriteErpData() || canCreateFieldDailyProgressReport();
+      allow update, delete: if canWriteErpData();
     }
 
     match /invoices/{document=**} {

@@ -67,6 +67,27 @@ describe("Login", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
   });
 
+  test("sends an authorized supervisor directly to Field Home", async () => {
+    signInWithEmailAndPassword.mockResolvedValue({ user: { uid: "supervisor-1" } });
+    getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ active: true, role: "supervisor" }),
+    });
+    render(<Login />);
+
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "supervisor@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "secure-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "LOGIN" }));
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith("/field-dashboard")
+    );
+  });
+
   test("signs out a Firebase user without an active ERP role", async () => {
     signInWithEmailAndPassword.mockResolvedValue({ user: { uid: "user-1" } });
     getDoc.mockResolvedValue({ exists: () => false });
@@ -84,7 +105,7 @@ describe("Login", () => {
     await waitFor(() => expect(signOut).toHaveBeenCalled());
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(window.alert).toHaveBeenCalledWith(
-      "This account is not authorized to access the ERP."
+      "This account does not have an active ERP role. Contact an administrator."
     );
   });
 });

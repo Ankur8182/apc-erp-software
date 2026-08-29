@@ -14,6 +14,7 @@ import {
 import {
   getDailyProgressOperationalSummary,
   getDprTodayDate,
+  getDprUsageValues,
 } from "../utils/dailyProgressReporting";
 
 import {
@@ -1080,6 +1081,9 @@ function SiteDetails() {
                                 <th>Location</th>
                                 <th>Output</th>
                                 <th>Manpower</th>
+                                <th>Materials</th>
+                                <th>Equipment</th>
+                                <th>Remarks</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1088,12 +1092,15 @@ function SiteDetails() {
                                   <td>{getRecordDate(report) || "Date not recorded"}</td>
                                   <td>{report.workActivity || "Not recorded"}</td>
                                   <td>{report.workLocation || "Not recorded"}</td>
-                                  <td>{report.quantity || "-"} {report.unit || ""}</td>
+                                  <td>{report.quantity ?? "-"} {report.unit || ""}</td>
                                   <td>
                                     {report.manpowerCount === undefined || report.manpowerCount === ""
                                       ? "-"
                                       : report.manpowerCount}
                                   </td>
+                                  <td>{getDprUsageValues(report.materialsUsed).join(", ") || "-"}</td>
+                                  <td>{getDprUsageValues(report.equipmentUsed).join(", ") || "-"}</td>
+                                  <td>{String(report.remarks || "").trim() || "-"}</td>
                                 </tr>
                               ))}
                             </tbody>

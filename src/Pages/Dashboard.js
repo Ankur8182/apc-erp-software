@@ -721,7 +721,7 @@ function Dashboard() {
                   </div>
 
                   <span>
-                    {report.quantity || "-"} {report.unit || ""}
+                    {report.quantity ?? "-"} {report.unit || ""}
                     {report.manpowerCount !== undefined && report.manpowerCount !== ""
                       ? ` · ${report.manpowerCount} manpower`
                       : ""}

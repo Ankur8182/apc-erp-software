@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { getAuthorizedRole } from "../auth/authorization";
+import { getAuthorizedRole, getRoleLandingPath } from "../auth/authorization";
 
 function Login() {
   const navigate = useNavigate();
@@ -34,12 +34,12 @@ function Login() {
 
       if (!role) {
         await signOut(auth);
-        alert("This account is not authorized to access the ERP.");
+        alert("This account does not have an active ERP role. Contact an administrator.");
         return;
       }
 
       alert("Login Successful");
-      navigate("/dashboard");
+      navigate(getRoleLandingPath(role));
     } catch (error) {
       console.error("Firebase login error:", error);
       alert("Invalid Username or Password");

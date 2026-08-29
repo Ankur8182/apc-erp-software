@@ -32,7 +32,43 @@ export const createInitialDprForm = () => ({
   remarks: "",
 });
 
+export const createInitialFieldUpdateForm = () => ({
+  ...createInitialDprForm(),
+  materialQuantity: "",
+  equipmentUsage: "",
+});
+
 const normaliseText = (value) => String(value || "").trim();
+
+const getUsageEntryText = (value) => {
+  if (typeof value === "string") return normaliseText(value);
+
+  if (value && typeof value === "object") {
+    return normaliseText(
+      value.name ||
+      value.materialName ||
+      value.vehicleNumber ||
+      value.vehicleName ||
+      value.label
+    );
+  }
+
+  return "";
+};
+
+export const getDprUsageValues = (value) => {
+  const values = Array.isArray(value) ? value : [value];
+  const uniqueValues = new Map();
+
+  values.forEach((entry) => {
+    const text = getUsageEntryText(entry);
+    const key = text.toLowerCase();
+
+    if (text && !uniqueValues.has(key)) uniqueValues.set(key, text);
+  });
+
+  return Array.from(uniqueValues.values());
+};
 
 const getFiniteNumber = (value) => {
   if (value === "" || value === null || value === undefined) return null;
@@ -57,10 +93,10 @@ export const validateDailyProgressReport = (form = {}) => {
     };
   }
 
-  if (quantity === null || quantity <= 0) {
+  if (quantity === null || quantity < 0) {
     return {
       isValid: false,
-      error: "Quantity 0 se zyada valid number honi chahiye.",
+      error: "Quantity valid non-negative number honi chahiye.",
     };
   }
 
@@ -84,6 +120,76 @@ export const validateDailyProgressReport = (form = {}) => {
       materialsUsed: normaliseText(form.materialsUsed),
       equipmentUsed: normaliseText(form.equipmentUsed),
       remarks: normaliseText(form.remarks),
+    },
+  };
+};
+
+export const validateFieldUpdate = (form = {}) => {
+  const validation = validateDailyProgressReport(form);
+
+  if (!validation.isValid) return validation;
+
+  const materialQuantity = getFiniteNumber(form.materialQuantity);
+  const equipmentUsage = getFiniteNumber(form.equipmentUsage);
+
+  if (materialQuantity !== null && materialQuantity < 0) {
+    return {
+      isValid: false,
+      error: "Material Quantity valid non-negative number honi chahiye.",
+    };
+  }
+
+  if (equipmentUsage !== null && equipmentUsage < 0) {
+    return {
+      isValid: false,
+      error: "Equipment Usage valid non-negative number hona chahiye.",
+    };
+  }
+
+  return {
+    isValid: true,
+    value: {
+      ...validation.value,
+      ...(materialQuantity !== null ? { materialQuantity } : {}),
+      ...(equipmentUsage !== null ? { equipmentUsage } : {}),
+    },
+  };
+};
+
+export const createFieldUpdateDprPayload = (form = {}, createdBy = "") => {
+  const validation = validateFieldUpdate(form);
+  const userId = normaliseText(createdBy);
+
+  if (!validation.isValid) return validation;
+
+  if (!userId) {
+    return {
+      isValid: false,
+      error: "Authenticated user is required to submit a field update.",
+    };
+  }
+
+  return {
+    isValid: true,
+    value: {
+      ...validation.value,
+      createdBy: userId,
+    },
+  };
+};
+
+export const createDprSubmitGuard = () => {
+  let submitting = false;
+
+  return {
+    begin: () => {
+      if (submitting) return false;
+
+      submitting = true;
+      return true;
+    },
+    release: () => {
+      submitting = false;
     },
   };
 };
@@ -115,8 +221,8 @@ export const filterDailyProgressReports = (
     return [
       report.workActivity,
       report.workLocation,
-      report.materialsUsed,
-      report.equipmentUsed,
+      ...getDprUsageValues(report.materialsUsed),
+      ...getDprUsageValues(report.equipmentUsed),
       report.remarks,
       report.site,
     ].some((value) => String(value || "").toLowerCase().includes(searchText));
@@ -143,8 +249,8 @@ const getReportIdentity = (report = {}) => {
     normaliseText(report.quantity),
     normaliseText(report.unit).toLowerCase(),
     normaliseText(report.manpowerCount),
-    normaliseText(report.materialsUsed).toLowerCase(),
-    normaliseText(report.equipmentUsed).toLowerCase(),
+    getDprUsageValues(report.materialsUsed).join("|").toLowerCase(),
+    getDprUsageValues(report.equipmentUsed).join("|").toLowerCase(),
     normaliseText(report.remarks).toLowerCase(),
   ].join("|");
 };
@@ -178,10 +284,11 @@ const getUniqueTextValues = (reports, field) => {
   const values = new Map();
 
   reports.forEach((report) => {
-    const value = normaliseText(report[field]);
-    const key = value.toLowerCase();
+    getDprUsageValues(report[field]).forEach((value) => {
+      const key = value.toLowerCase();
 
-    if (value && !values.has(key)) values.set(key, value);
+      if (!values.has(key)) values.set(key, value);
+    });
   });
 
   return Array.from(values.values());

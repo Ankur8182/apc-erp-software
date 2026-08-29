@@ -1,9 +1,13 @@
 import {
   createInitialDprForm,
+  createDprSubmitGuard,
+  createFieldUpdateDprPayload,
+  createInitialFieldUpdateForm,
   filterDailyProgressReports,
   getDailyProgressOperationalSummary,
   summariseDailyProgressReports,
   sortDailyProgressReports,
+  validateFieldUpdate,
   validateDailyProgressReport,
 } from "./dailyProgressReporting";
 
@@ -50,7 +54,24 @@ test("blocks missing or negative DPR values", () => {
     })
   ).toMatchObject({
     isValid: false,
-    error: "Quantity 0 se zyada valid number honi chahiye.",
+    error: "Quantity valid non-negative number honi chahiye.",
+  });
+});
+
+test("allows zero quantity when no measurable output is reported", () => {
+  expect(
+    validateDailyProgressReport({
+      date: "2026-09-01",
+      site: "LKO",
+      workActivity: "Site preparation",
+      workLocation: "Zone 1",
+      quantity: "0",
+      unit: "Nos",
+      manpowerCount: "4",
+    })
+  ).toMatchObject({
+    isValid: true,
+    value: { quantity: 0, manpowerCount: 4 },
   });
 });
 
@@ -303,5 +324,161 @@ test("returns a safe empty DPR summary for empty datasets", () => {
     materialsUsed: [],
     equipmentUsed: [],
     submittedSites: [],
+  });
+});
+
+test("validates field-entry quantities and normalises the DPR payload", () => {
+  const form = {
+    ...createInitialFieldUpdateForm(),
+    date: "2026-09-04",
+    site: "  Civil Site ",
+    workActivity: " Slab work ",
+    workLocation: " Level 1 ",
+    quantity: "15.5",
+    unit: "m²",
+    manpowerCount: "7",
+    materialsUsed: " Cement ",
+    materialQuantity: "8.25",
+    equipmentUsed: " Mixer ",
+    equipmentUsage: "3",
+  };
+
+  expect(validateFieldUpdate({ ...form, materialQuantity: "-1" })).toMatchObject({
+    isValid: false,
+    error: "Material Quantity valid non-negative number honi chahiye.",
+  });
+
+  expect(validateFieldUpdate({ ...form, equipmentUsage: "-1" })).toMatchObject({
+    isValid: false,
+    error: "Equipment Usage valid non-negative number hona chahiye.",
+  });
+
+  expect(createFieldUpdateDprPayload(form, "  user-123 ")).toMatchObject({
+    isValid: true,
+    value: {
+      site: "Civil Site",
+      workActivity: "Slab work",
+      quantity: 15.5,
+      manpowerCount: 7,
+      materialQuantity: 8.25,
+      equipmentUsage: 3,
+      createdBy: "user-123",
+    },
+  });
+
+  expect(createFieldUpdateDprPayload(form, "")).toMatchObject({
+    isValid: false,
+    error: "Authenticated user is required to submit a field update.",
+  });
+});
+
+test("prevents duplicate field submissions until the active request completes", () => {
+  const submitGuard = createDprSubmitGuard();
+
+  expect(submitGuard.begin()).toBe(true);
+  expect(submitGuard.begin()).toBe(false);
+
+  submitGuard.release();
+
+  expect(submitGuard.begin()).toBe(true);
+});
+
+test("keeps structured legacy material and equipment values safe in DPR summaries", () => {
+  const summary = summariseDailyProgressReports([
+    {
+      id: "structured-dpr",
+      date: "2026-09-04",
+      site: "Civil",
+      workActivity: "PCC",
+      workLocation: "Block A",
+      quantity: 5,
+      unit: "m³",
+      manpowerCount: 4,
+      materialsUsed: [{ materialName: "Cement" }, { name: "Steel" }],
+      equipmentUsed: [{ vehicleNumber: "UP32 AB 1234" }],
+    },
+  ]);
+
+  expect(summary.materialsUsed).toEqual(["Cement", "Steel"]);
+  expect(summary.equipmentUsed).toEqual(["UP32 AB 1234"]);
+});
+
+test("provides the field dashboard today count, manpower, and recent submissions", () => {
+  const reports = [
+    {
+      id: "today-1",
+      date: "2026-09-04",
+      site: "Civil",
+      workActivity: "PCC",
+      workLocation: "Block A",
+      quantity: 2,
+      unit: "m³",
+      manpowerCount: 5,
+    },
+    {
+      id: "today-2",
+      date: "2026-09-04",
+      site: "Civil",
+      workActivity: "Brickwork",
+      workLocation: "Block B",
+      quantity: 8,
+      unit: "m",
+      manpowerCount: 3,
+    },
+    {
+      id: "prior-day",
+      date: "2026-09-03",
+      site: "Civil",
+      workActivity: "Excavation",
+      workLocation: "Block C",
+      quantity: 4,
+      unit: "m³",
+      manpowerCount: 2,
+    },
+  ];
+
+  const summary = getDailyProgressOperationalSummary(reports, {
+    date: "2026-09-04",
+  });
+
+  expect(summary.todayCount).toBe(2);
+  expect(summary.totalManpower).toBe(8);
+  expect(summary.recentReports.map((report) => report.id)).toEqual([
+    "today-1",
+    "today-2",
+    "prior-day",
+  ]);
+});
+
+test("keeps engineer DPR operational details available to management site summaries", () => {
+  const report = {
+    id: "engineer-dpr-1",
+    createdBy: "engineer-1",
+    date: "2026-09-04",
+    site: "  Civil   Site ",
+    workActivity: "Column casting",
+    workLocation: "Block B",
+    quantity: 0,
+    unit: "m³",
+    manpowerCount: 6,
+    materialsUsed: [{ materialName: "Cement" }],
+    equipmentUsed: [{ vehicleName: "Concrete Mixer" }],
+    remarks: "Rain delay after pour",
+  };
+
+  const summary = summariseDailyProgressReports([report], {
+    site: "civil site",
+  });
+
+  expect(summary.reportCount).toBe(1);
+  expect(summary.manpowerTotal).toBe(6);
+  expect(summary.materialsUsed).toEqual(["Cement"]);
+  expect(summary.equipmentUsed).toEqual(["Concrete Mixer"]);
+  expect(summary.recentReports[0]).toMatchObject({
+    createdBy: "engineer-1",
+    workActivity: "Column casting",
+    remarks: "Rain delay after pour",
+    quantity: 0,
+    unit: "m³",
   });
 });
