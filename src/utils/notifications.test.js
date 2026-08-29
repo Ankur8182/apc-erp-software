@@ -1,0 +1,126 @@
+import {
+  generateNotifications,
+  getUnreadNotificationCount,
+  loadReadNotificationIds,
+  saveReadNotificationIds,
+} from "./notifications";
+
+const TODAY = "2026-08-29";
+
+describe("notification generation", () => {
+  const createCoreData = () => ({
+    invoices: [
+      { id: "invoice-1", invoiceNo: "INV-1", totalAmount: 10000, paidAmount: 7000 },
+    ],
+    materials: [
+      {
+        id: "material-1",
+        materialName: "Cement",
+        currentStock: 4,
+        reorderLevel: 10,
+      },
+      { id: "material-purchase", materialName: "Sand", quantity: 1 },
+    ],
+    sites: [{ id: "site-1", siteName: "River View" }],
+    attendance: [
+      { id: "attendance-1", employeeName: "Ravi", date: TODAY, status: "Absent" },
+    ],
+    salaries: [
+      { id: "salary-1", employeeName: "Ravi", status: "Pending", pendingAmount: 1200 },
+    ],
+    vehicles: [{ id: "vehicle-1", vehicleNumber: "UP 01 AB 1234", status: "Maintenance" }],
+    dailyProgressReports: [],
+  });
+
+  it("derives pending payments, low stock, missing DPR, attendance, salary and maintenance alerts", () => {
+    const alerts = generateNotifications({
+      role: "admin",
+      today: TODAY,
+      ...createCoreData(),
+    });
+
+    expect(alerts.map((alert) => alert.title)).toEqual(
+      expect.arrayContaining([
+        "Payment pending",
+        "Low material stock",
+        "Today’s DPR is pending",
+        "Attendance needs attention",
+        "Salary payment pending",
+        "Vehicle maintenance reminder",
+      ])
+    );
+    expect(alerts.some((alert) => alert.message.includes("Sand"))).toBe(false);
+  });
+
+  it("uses canonical site matching and deduplicated DPRs before flagging missing site reports", () => {
+    const alerts = generateNotifications({
+      role: "manager",
+      today: TODAY,
+      sites: [{ id: "site-1", siteName: "River   View" }],
+      dailyProgressReports: [
+        { id: "dpr-1", site: "river view", date: TODAY, workActivity: "Slab" },
+        { id: "dpr-1", site: "river view", date: TODAY, workActivity: "Slab" },
+      ],
+    });
+
+    expect(alerts.find((alert) => alert.title === "Today’s DPR is pending")).toBeUndefined();
+  });
+
+  it("keeps field users on their own operational DPR alert only", () => {
+    const alerts = generateNotifications({
+      role: "supervisor",
+      userId: "supervisor-1",
+      today: TODAY,
+      ...createCoreData(),
+      dailyProgressReports: [
+        { id: "other-user-dpr", createdBy: "other-user", site: "River View", date: TODAY },
+      ],
+    });
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({
+      title: "Today’s site update is pending",
+      href: "/field-update",
+    });
+  });
+
+  it("returns an empty notification state when the ERP dataset is empty", () => {
+    expect(generateNotifications({ role: "viewer", today: TODAY })).toEqual([]);
+  });
+
+  it("handles empty and malformed records without generating alerts", () => {
+    expect(
+      generateNotifications({
+        role: "viewer",
+        today: TODAY,
+        invoices: [null, { id: "bad", totalAmount: "not-a-number" }],
+        materials: [{ materialName: "Bad", currentStock: "x", reorderLevel: 2 }],
+        sites: [null, {}],
+        attendance: [{ date: "not-a-date", status: "Absent" }],
+        salaries: [{ status: "Paid", pendingAmount: -5 }],
+        vehicles: [{ status: "Active", nextMaintenanceDate: "invalid" }],
+        dailyProgressReports: [null, "not-a-record"],
+      })
+    ).toEqual([]);
+  });
+});
+
+describe("local notification read state", () => {
+  it("stores read ids locally and calculates unread notifications", () => {
+    const storage = {
+      data: {},
+      getItem(key) {
+        return this.data[key] || null;
+      },
+      setItem(key, value) {
+        this.data[key] = value;
+      },
+    };
+
+    saveReadNotificationIds("user-1", ["one", "one", "two"], storage);
+    expect(loadReadNotificationIds("user-1", storage)).toEqual(["one", "two"]);
+    expect(
+      getUnreadNotificationCount([{ id: "one" }, { id: "two" }, { id: "three" }], ["one", "two"])
+    ).toBe(1);
+  });
+});
