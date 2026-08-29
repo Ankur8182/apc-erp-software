@@ -36,6 +36,7 @@ import {
 } from "../utils/siteBudget";
 import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
+import { getTodayWorkforceSummary } from "../utils/payrollReporting";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
@@ -487,13 +488,15 @@ function Dashboard() {
   // ATTENDANCE SUMMARY
   // =========================
 
-  const presentCount = attendance.filter(
-    (item) => normaliseStatus(item.status) === "present"
-  ).length;
-
-  const absentCount = attendance.filter(
-    (item) => normaliseStatus(item.status) === "absent"
-  ).length;
+  const workforceSummary = useMemo(
+    () => getTodayWorkforceSummary({
+      attendance,
+      labours,
+      salaries,
+      today: getDprTodayDate(),
+    }),
+    [attendance, labours, salaries]
+  );
 
   // =========================
   // LOW STOCK MATERIAL
@@ -925,9 +928,11 @@ function Dashboard() {
             </div>
           </div>
           <div className="dashboard-status-grid dashboard-attendance-grid">
-            <article className="dashboard-status-card status-present"><span>🟢 Present</span><strong>{presentCount}</strong><small>Attendance records marked present</small></article>
-            <article className="dashboard-status-card status-absent"><span>🔴 Absent</span><strong>{absentCount}</strong><small>Attendance records marked absent</small></article>
-            <article className="dashboard-status-card status-labour"><span>👷 Total Labour</span><strong>{labours.length}</strong><small>Registered labour records</small></article>
+            <article className="dashboard-status-card status-present"><span>🟢 Present Today</span><strong>{workforceSummary.presentToday}</strong><small>Today's attendance records</small></article>
+            <article className="dashboard-status-card status-absent"><span>🔴 Absent Today</span><strong>{workforceSummary.absentToday}</strong><small>Today's attendance records</small></article>
+            <article className="dashboard-status-card status-labour"><span>👷 Active Labour</span><strong>{workforceSummary.activeLabour}</strong><small>Active labour masters</small></article>
+            <article className="dashboard-status-card status-labour"><span>💵 Monthly Payroll</span><strong>{formatMoney(workforceSummary.monthlyPayroll)}</strong><small>Current-month net payroll</small></article>
+            <article className="dashboard-status-card status-labour"><span>💵 Pending Salary</span><strong>{formatMoney(workforceSummary.pendingSalary)}</strong><small>Current-month payroll balance</small></article>
           </div>
         </section>
 

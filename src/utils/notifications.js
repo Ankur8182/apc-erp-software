@@ -383,23 +383,61 @@ const createCoreAlerts = ({
     if (normaliseDate(entry.date) !== today) return;
 
     const status = normaliseStatus(entry.status);
-    if (!["absent", "leave", "late"].includes(status)) return;
-
     const label = getRecordLabel(entry, "Labour");
-    addAlert(alerts, {
-      id: `attendance-${status}-${normaliseId(entry.id || `${label}-${getSiteName(entry)}`)}-${today}`,
-      severity:
-        status === "absent"
-          ? NOTIFICATION_SEVERITIES.warning
-          : NOTIFICATION_SEVERITIES.info,
-      title: "Attendance needs attention",
-      message: `${label} is marked ${status} today.`,
-      date: today,
-      href: "/attendance",
-      module: "Attendance",
-      site: getSiteName(entry),
-    });
+    if (["absent", "leave", "late"].includes(status)) {
+      addAlert(alerts, {
+        id: `attendance-${status}-${normaliseId(entry.id || `${label}-${getSiteName(entry)}`)}-${today}`,
+        severity:
+          status === "absent"
+            ? NOTIFICATION_SEVERITIES.warning
+            : NOTIFICATION_SEVERITIES.info,
+        title: "Attendance needs attention",
+        message: `${label} is marked ${status} today.`,
+        date: today,
+        href: "/attendance",
+        module: "Attendance",
+        site: getSiteName(entry),
+      });
+    }
+
+    const overtimeHours = normaliseMoney(entry.overtimeHours ?? entry.overtime);
+    if (overtimeHours > 8) {
+      addAlert(alerts, {
+        id: `attendance-overtime-${normaliseId(entry.id || `${label}-${getSiteName(entry)}`)}-${today}`,
+        severity: NOTIFICATION_SEVERITIES.warning,
+        title: "Unusual overtime reported",
+        message: `${label} has ${overtimeHours} overtime hours recorded today.`,
+        date: today,
+        href: "/attendance",
+        module: "Attendance",
+        site: getSiteName(entry),
+      });
+    }
   });
+
+  // One aggregate alert per site avoids notification spam while still making
+  // missing daily attendance visible to operations.
+  const attendanceKeys = new Set(attendance.filter((entry) => normaliseDate(entry?.date) === today)
+    .map((entry) => cleanText(entry.labourId || entry.employeeName || entry.labourName).toLowerCase())
+    .filter(Boolean));
+  const missingAttendanceBySite = new Map();
+  labours.filter((labour) => labour && labour.active !== false && normaliseStatus(labour.status) !== "inactive")
+    .forEach((labour) => {
+      const labourKey = cleanText(labour.id || labour.name).toLowerCase();
+      if (!labourKey || attendanceKeys.has(labourKey)) return;
+      const siteName = getSiteName(labour) || "Unassigned site";
+      missingAttendanceBySite.set(siteName, (missingAttendanceBySite.get(siteName) || 0) + 1);
+    });
+  missingAttendanceBySite.forEach((count, siteName) => addAlert(alerts, {
+    id: `attendance-missing-${normaliseId(siteName)}-${today}`,
+    severity: NOTIFICATION_SEVERITIES.info,
+    title: "Attendance not entered",
+    message: `${count} active labour ${count === 1 ? "record has" : "records have"} no attendance entry for today at ${siteName}.`,
+    date: today,
+    href: "/attendance",
+    module: "Attendance",
+    site: siteName,
+  }));
 
   salaries.forEach((salary) => {
     if (!salary || typeof salary !== "object") return;

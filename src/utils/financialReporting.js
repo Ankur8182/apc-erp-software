@@ -195,6 +195,11 @@ export const isLabourExpense = (item) =>
 
 export const getSalaryAmount = (item = {}) =>
   firstMoney(
+    // Phase 6D payroll writes the final net obligation here. Salary payment
+    // ledger rows are deliberately not read by financial reporting, which
+    // prevents a paid salary from being charged a second time.
+    item.netSalary,
+    item.netPay,
     item.salary,
     item.totalSalary,
     item.netSalary,
@@ -283,9 +288,11 @@ const getAttendanceMultiplier = (item = {}) => {
 };
 
 const getWorkerKey = (item = {}) =>
-  `${normaliseText(getSiteName(item))}::${normaliseText(
-    item.employeeName || item.name
-  )}`;
+  normaliseText(item.labourId)
+    ? `id:${normaliseText(item.labourId)}`
+    : `${normaliseText(getSiteName(item))}::${normaliseText(
+      item.employeeName || item.labourName || item.name
+    )}`;
 
 const getSalaryPeriod = (item = {}) => {
   const month = String(item.month || "").trim();

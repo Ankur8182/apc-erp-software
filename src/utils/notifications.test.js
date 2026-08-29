@@ -66,6 +66,23 @@ describe("notification generation", () => {
     expect(alerts.find((alert) => alert.title === "Today’s DPR is pending")).toBeUndefined();
   });
 
+  it("adds one missing-attendance alert per site and flags unusually high recorded overtime", () => {
+    const alerts = generateNotifications({
+      role: "manager",
+      today: TODAY,
+      labours: [
+        { id: "labour-1", name: "Amit", site: "River View", active: true },
+        { id: "labour-2", name: "Ravi", site: "River View", active: true },
+      ],
+      attendance: [{ labourId: "labour-1", employeeName: "Amit", site: "River View", date: TODAY, status: "Present", overtimeHours: 9 }],
+    });
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Attendance not entered", site: "River View" }),
+      expect.objectContaining({ title: "Unusual overtime reported", site: "River View" }),
+    ]));
+    expect(alerts.filter((alert) => alert.title === "Attendance not entered")).toHaveLength(1);
+  });
+
   it("adds the highest applicable budget alert using canonical site financial data", () => {
     const alerts = generateNotifications({
       role: "admin",

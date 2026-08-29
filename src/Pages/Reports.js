@@ -839,6 +839,7 @@ function Reports() {
       { key: "site", label: "Site" },
       { key: "employee", label: "Employee / Labour" },
       { key: "status", label: "Status" },
+      { key: "overtime", label: "Overtime (Hrs)" },
       { key: "workType", label: "Work Type" },
       { key: "remarks", label: "Remarks", width: 1.5 },
     ],
@@ -847,8 +848,44 @@ function Reports() {
       site: getSiteName(entry) || "-",
       employee: entry.employeeName || entry.labourName || entry.name || "-",
       status: entry.status || "-",
+      overtime: toNumber(entry.overtimeHours ?? entry.overtime),
       workType: entry.workType || "-",
       remarks: entry.remarks || "-",
+    })),
+  };
+
+  const payrollSummary = filteredSalaries.reduce((summary, salary) => ({
+    payroll: summary.payroll + toNumber(salary.netSalary ?? salary.netPay ?? salary.salary),
+    paid: summary.paid + toNumber(salary.paidAmount),
+    pending: summary.pending + toNumber(salary.pendingAmount),
+    overtime: summary.overtime + toNumber(salary.overtimeHours),
+  }), { payroll: 0, paid: 0, pending: 0, overtime: 0 });
+  const payrollExport = {
+    title: "Payroll Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Payroll Records", value: filteredSalaries.length },
+      { label: "Net Payroll", value: formatExportMoney(payrollSummary.payroll) },
+      { label: "Salary Paid", value: formatExportMoney(payrollSummary.paid) },
+      { label: "Pending Salary", value: formatExportMoney(payrollSummary.pending) },
+      { label: "Overtime Hours", value: payrollSummary.overtime },
+    ],
+    columns: [
+      { key: "month", label: "Payroll Month" }, { key: "site", label: "Site" },
+      { key: "labour", label: "Labour" }, { key: "present", label: "Present Days" },
+      { key: "half", label: "Half Days" }, { key: "overtime", label: "Overtime (Hrs)" },
+      { key: "gross", label: "Gross (INR)", format: formatExportMoney },
+      { key: "net", label: "Net Salary (INR)", format: formatExportMoney },
+      { key: "paid", label: "Paid (INR)", format: formatExportMoney },
+      { key: "pending", label: "Pending (INR)", format: formatExportMoney },
+      { key: "status", label: "Status" },
+    ],
+    rows: filteredSalaries.map((salary) => ({
+      month: salary.month || salary.payrollMonth || "-", site: getSiteName(salary) || "-",
+      labour: salary.employeeName || salary.labourName || "-", present: toNumber(salary.presentDays),
+      half: toNumber(salary.halfDays), overtime: toNumber(salary.overtimeHours),
+      gross: toNumber(salary.grossPay ?? salary.salary), net: toNumber(salary.netSalary ?? salary.netPay ?? salary.salary),
+      paid: toNumber(salary.paidAmount), pending: toNumber(salary.pendingAmount), status: salary.status || "-",
     })),
   };
 
@@ -1017,6 +1054,7 @@ function Reports() {
             <ReportExportActions report={dprExport} disabled={loading || Boolean(dprError)} />
             <ReportExportActions report={expensesExport} disabled={loading} />
             <ReportExportActions report={attendanceExport} disabled={loading} />
+            <ReportExportActions report={payrollExport} disabled={loading} />
             <ReportExportActions report={inventoryExport} disabled={loading} />
             <ReportExportActions report={procurementExport} disabled={loading} />
           </div>
@@ -1225,6 +1263,21 @@ function Reports() {
             </div>
 
             {/* PROCUREMENT */}
+
+            <div className="report-section-title">
+              <h2>👷 Workforce & Payroll</h2>
+            </div>
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card"><span>💵 Net Payroll</span><h3>{formatMoney(payrollSummary.payroll)}</h3></div>
+              <div className="dpr-report-summary-card"><span>⏳ Pending Salary</span><h3>{formatMoney(payrollSummary.pending)}</h3></div>
+              <div className="dpr-report-summary-card"><span>🕒 Overtime Hours</span><h3>{payrollSummary.overtime}</h3></div>
+              <div className="dpr-report-summary-card"><span>📋 Attendance Records</span><h3>{filteredAttendance.length}</h3></div>
+            </div>
+            <div className="reports-table-card">
+              <div className="table-responsive"><table className="reports-table"><thead><tr><th>Labour</th><th>Site</th><th>Month</th><th>Present / Half</th><th>OT</th><th>Net Salary</th><th>Paid</th><th>Pending</th><th>Status</th></tr></thead><tbody>
+                {filteredSalaries.length === 0 ? <tr><td colSpan="9" className="no-report-data">No payroll records match the current filters.</td></tr> : filteredSalaries.map((salary) => <tr key={salary.id}><td>{salary.employeeName || salary.labourName || "-"}</td><td>{getSiteName(salary) || "-"}</td><td>{salary.month || salary.payrollMonth || "-"}</td><td>{toNumber(salary.presentDays)} / {toNumber(salary.halfDays)}</td><td>{toNumber(salary.overtimeHours)}h</td><td>{formatMoney(salary.netSalary ?? salary.netPay ?? salary.salary)}</td><td>{formatMoney(salary.paidAmount)}</td><td>{formatMoney(salary.pendingAmount)}</td><td>{salary.status || "-"}</td></tr>)}
+              </tbody></table></div>
+            </div>
 
             <div className="report-section-title">
               <h2>🛒 Procurement Summary</h2>

@@ -123,6 +123,8 @@ service cloud.firestore {
           "expenses",
           "attendance",
           "salary",
+          "salaryPayments",
+          "labourAdvances",
           "vehicle",
           "vehicleExpenses",
           "invoices",
@@ -731,6 +733,68 @@ service cloud.firestore {
     match /salaries/{document=**} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
+    }
+
+    function isLinkedSalaryPayment() {
+      let salaryPath = /databases/$(database)/documents/salaries/$(request.resource.data.salaryId);
+      let beforeSalary = get(salaryPath).data;
+      let afterSalary = getAfter(salaryPath).data;
+      return exists(salaryPath) &&
+        beforeSalary.pendingAmount is number && beforeSalary.paidAmount is number &&
+        request.resource.data.amount <= beforeSalary.pendingAmount &&
+        afterSalary.paidAmount == beforeSalary.paidAmount + request.resource.data.amount &&
+        afterSalary.pendingAmount == beforeSalary.pendingAmount - request.resource.data.amount;
+    }
+
+    // Payroll payments are an immutable settlement ledger. They do not add a
+    // second financial expense: the linked salary's net amount is canonical.
+    match /salaryPayments/{paymentId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() &&
+        request.resource.data.keys().hasAll([
+          "salaryId", "labourId", "labourName", "payrollMonth", "site",
+          "amount", "paymentDate", "paymentMode", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.salaryId is string && request.resource.data.salaryId.size() > 0 &&
+        request.resource.data.labourId is string && request.resource.data.labourId.size() > 0 &&
+        request.resource.data.labourName is string && request.resource.data.labourName.size() > 0 &&
+        request.resource.data.payrollMonth is string && request.resource.data.payrollMonth.size() == 7 &&
+        request.resource.data.site is string && request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        request.resource.data.paymentDate is string && request.resource.data.paymentDate.size() > 0 &&
+        request.resource.data.paymentMode is string && request.resource.data.paymentMode.size() > 0 &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time &&
+        isLinkedSalaryPayment();
+      allow update, delete: if false;
+    }
+
+    // Advances retain their original issue record. Only manager/admin recovery
+    // state may change; field roles receive no read access to payroll data.
+    match /labourAdvances/{advanceId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() &&
+        request.resource.data.keys().hasAll([
+          "labourId", "labourName", "site", "date", "amount", "recoveredAmount",
+          "recoveryStatus", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.labourId is string && request.resource.data.labourId.size() > 0 &&
+        request.resource.data.labourName is string && request.resource.data.labourName.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.date is string && request.resource.data.date.size() > 0 &&
+        request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        request.resource.data.recoveredAmount is number && request.resource.data.recoveredAmount >= 0 &&
+        request.resource.data.recoveredAmount <= request.resource.data.amount &&
+        request.resource.data.recoveryStatus in ["Pending", "Partial", "Recovered"] &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.amount == resource.data.amount &&
+        request.resource.data.labourId == resource.data.labourId &&
+        request.resource.data.recoveredAmount is number && request.resource.data.recoveredAmount >= resource.data.recoveredAmount &&
+        request.resource.data.recoveredAmount <= resource.data.amount &&
+        request.resource.data.recoveryStatus in ["Pending", "Partial", "Recovered"] &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
 
     match /vehicles/{document=**} {

@@ -44,6 +44,21 @@
     background:#1d4ed8;
 }
 
+.payroll-preview{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px 22px;
+    margin-top:18px;
+    padding:14px;
+    border:1px solid #dbeafe;
+    border-radius:10px;
+    background:#f8fbff;
+    color:#334155;
+}
+
+.payroll-preview span{ font-size:14px; }
+.payroll-preview strong{ color:#0f172a; }
+
 .table-card{
     background:#ffffff;
     border-radius:15px;

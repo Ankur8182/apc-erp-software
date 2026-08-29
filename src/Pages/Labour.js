@@ -3,6 +3,7 @@ import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { useAuth } from "../auth/AuthProvider";
 import "../Styles/Labour.css";
 
 import { db } from "../firebase";
@@ -11,7 +12,6 @@ import {
   collection,
   addDoc,
   onSnapshot,
-  deleteDoc,
   updateDoc,
   doc,
   serverTimestamp
@@ -19,6 +19,8 @@ import {
 
 
 function Labour() {
+  const { role } = useAuth();
+  const canWrite = ["admin", "manager"].includes(role);
 
   // =========================
   // STATES
@@ -35,6 +37,11 @@ function Labour() {
   const [work, setWork] = useState("");
   const [site, setSite] = useState("");
   const [wage, setWage] = useState("");
+  const [payType, setPayType] = useState("daily");
+  const [monthlySalary, setMonthlySalary] = useState("");
+  const [active, setActive] = useState(true);
+  const [contractor, setContractor] = useState("");
+  const [notes, setNotes] = useState("");
   const [joiningDate, setJoiningDate] = useState("");
 
   const [editId, setEditId] = useState(null);
@@ -88,6 +95,11 @@ function Labour() {
     setWork("");
     setSite("");
     setWage("");
+    setPayType("daily");
+    setMonthlySalary("");
+    setActive(true);
+    setContractor("");
+    setNotes("");
     setJoiningDate("");
 
     setEditId(null);
@@ -102,18 +114,19 @@ function Labour() {
   const saveLabour = async () => {
 
     const cleanMobile = mobile.trim();
-    const wageAmount = Number(wage);
+    const wageAmount = Number(wage || 0);
+    const monthlySalaryAmount = Number(monthlySalary || 0);
 
     if (
       name.trim() === "" ||
       cleanMobile === "" ||
       work.trim() === "" ||
       site.trim() === "" ||
-      wage === ""
+      (payType === "daily" ? wage === "" : monthlySalary === "")
     ) {
 
       alert(
-        "Labour Name, Mobile Number, Work Type, Site aur Wage bharna zaroori hai."
+        "Labour Name, Mobile Number, Work Type, Site aur selected pay rate bharna zaroori hai."
       );
 
       return;
@@ -124,8 +137,9 @@ function Labour() {
       return;
     }
 
-    if (!Number.isFinite(wageAmount) || wageAmount <= 0) {
-      alert("Wage 0 se zyada hona chahiye.");
+    if ((payType === "daily" && (!Number.isFinite(wageAmount) || wageAmount <= 0)) ||
+      (payType === "monthly" && (!Number.isFinite(monthlySalaryAmount) || monthlySalaryAmount <= 0))) {
+      alert("Pay rate 0 se zyada hona chahiye.");
       return;
     }
 
@@ -137,7 +151,15 @@ function Labour() {
       aadhaar: aadhaar.trim(),
       work: work.trim(),
       site: site.trim(),
-      wage: wageAmount,
+      // `wage` remains for legacy attendance fallback. Only daily workers
+      // use it; payroll records remain the canonical financial expense.
+      wage: payType === "daily" ? wageAmount : 0,
+      dailyWage: payType === "daily" ? wageAmount : 0,
+      monthlySalary: payType === "monthly" ? monthlySalaryAmount : 0,
+      payType,
+      active,
+      contractor: contractor.trim(),
+      notes: notes.trim(),
       joiningDate: joiningDate,
       updatedAt: serverTimestamp()
 
@@ -237,7 +259,13 @@ function Labour() {
     setAadhaar(item.aadhaar || "");
     setWork(item.work || "");
     setSite(item.site || "");
-    setWage(item.wage || "");
+    const nextPayType = item.payType || item.salaryType || (Number(item.monthlySalary) > 0 ? "monthly" : "daily");
+    setPayType(nextPayType);
+    setWage(item.dailyWage ?? item.wage ?? "");
+    setMonthlySalary(item.monthlySalary ?? "");
+    setActive(item.active !== false && String(item.status || "").toLowerCase() !== "inactive");
+    setContractor(item.contractor || item.vendor || "");
+    setNotes(item.notes || "");
     setJoiningDate(item.joiningDate || "");
 
     setEditId(item.id);
@@ -257,7 +285,7 @@ function Labour() {
   const deleteLabour = async (id, record = {}) => {
 
     const confirmDelete = window.confirm(
-      "Kya aap is Labour ko delete karna chahte hain?"
+      "Deactivate this labour record? Historical attendance and payroll will be preserved."
     );
 
     if (!confirmDelete) {
@@ -267,21 +295,23 @@ function Labour() {
 
     try {
 
-      await deleteDoc(
-        doc(db, "labours", id)
-      );
+      await updateDoc(doc(db, "labours", id), {
+        active: false,
+        status: "Inactive",
+        updatedAt: serverTimestamp(),
+      });
 
       const auditResult = await logAuditEvent({
-        action: "delete",
+        action: "update",
         module: "labour",
         recordId: id,
         recordLabel: record.name,
-        details: "Labour record deleted.",
+        details: "Labour record deactivated; historical records were preserved.",
         site: record.site,
       });
       if (!auditResult.success) alert(getAuditFailureMessage());
 
-      alert("Labour successfully deleted.");
+      alert("Labour deactivated. Historical records are preserved.");
 
     }
 
@@ -289,9 +319,7 @@ function Labour() {
 
       console.error("Delete Labour Error:", error);
 
-      alert(
-        "Labour delete nahi hua. Firebase connection/rules check karein."
-      );
+      alert("Labour status update nahi hua. Firebase connection/rules check karein.");
 
     }
 
@@ -304,7 +332,7 @@ function Labour() {
 
   const filteredLabours = labours.filter((item) => {
     const searchText = search.toLowerCase();
-    const searchMatched = [item.name, item.mobile, item.work, item.site]
+    const searchMatched = [item.name, item.mobile, item.work, item.site, item.contractor, item.payType]
       .some((value) => String(value || "").toLowerCase().includes(searchText));
 
     return searchMatched &&
@@ -317,7 +345,7 @@ function Labour() {
       { value: "name", label: "Name", getValue: (item) => item.name },
       { value: "site", label: "Site", getValue: (item) => item.site },
       { value: "work", label: "Work type", getValue: (item) => item.work },
-      { value: "wage", label: "Daily wage", getValue: (item) => item.wage },
+      { value: "wage", label: "Pay rate", getValue: (item) => item.monthlySalary || item.dailyWage || item.wage },
       { value: "date", label: "Joining date", getValue: (item) => item.joiningDate },
     ],
     []
@@ -411,12 +439,33 @@ function Labour() {
 
             <input
               type="number"
-              placeholder="Daily Wage *"
+              min="0"
+              placeholder={payType === "monthly" ? "Daily Wage (optional)" : "Daily Wage *"}
               value={wage}
               onChange={(e) =>
                 setWage(e.target.value)
               }
             />
+
+            <select value={payType} onChange={(e) => setPayType(e.target.value)}>
+              <option value="daily">Daily Wage Labour</option>
+              <option value="monthly">Monthly Salary Worker</option>
+            </select>
+
+            <input
+              type="number"
+              min="0"
+              placeholder={payType === "monthly" ? "Monthly Salary *" : "Monthly Salary (optional)"}
+              value={monthlySalary}
+              onChange={(e) => setMonthlySalary(e.target.value)}
+            />
+
+            <input type="text" placeholder="Contractor / Vendor" value={contractor} onChange={(e) => setContractor(e.target.value)} />
+            <select value={active ? "active" : "inactive"} onChange={(e) => setActive(e.target.value === "active")}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <input type="text" placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
 
 
             <input
@@ -435,10 +484,10 @@ function Labour() {
           <button
             className="save-btn"
             onClick={saveLabour}
-            disabled={loading}
+            disabled={loading || !canWrite}
           >
 
-            {loading
+            {!canWrite ? "Read-only access" : loading
               ? "⏳ Saving..."
               : editId
               ? "✏️ Update Labour"
@@ -518,7 +567,9 @@ function Labour() {
 
                 <th>Site</th>
 
-                <th>Daily Wage</th>
+                <th>Pay Type / Rate</th>
+
+                <th>Status</th>
 
                 <th>Joining Date</th>
 
@@ -536,7 +587,7 @@ function Labour() {
                 <tr>
 
                   <td
-                    colSpan="9"
+                    colSpan="10"
                     style={{
                       textAlign: "center",
                       padding: "25px"
@@ -587,8 +638,12 @@ function Labour() {
 
 
                       <td>
-                        ₹ {item.wage || "0"}
+                        {item.payType === "monthly" || Number(item.monthlySalary) > 0
+                          ? `Monthly ₹ ${item.monthlySalary || "0"}`
+                          : `Daily ₹ ${item.dailyWage ?? item.wage ?? "0"}`}
                       </td>
+
+                      <td>{item.active === false || String(item.status || "").toLowerCase() === "inactive" ? "Inactive" : "Active"}</td>
 
 
                       <td>
@@ -598,24 +653,25 @@ function Labour() {
 
                       <td>
 
-                        <button
+                        {canWrite && <button
                           className="edit-btn"
                           onClick={() =>
                             editLabour(item)
                           }
                         >
                           ✏️ Edit
-                        </button>
+                        </button>}
 
 
-                        <button
+                        {canWrite && <button
                           className="delete-btn"
                           onClick={() =>
                             deleteLabour(item.id, item)
                           }
                         >
-                          🗑️ Delete
+                          ⏸ Deactivate
                         </button>
+                        }
 
                       </td>
 

@@ -59,6 +59,8 @@ test("rejects unsupported actions and modules", () => {
   expect(() => normaliseAuditModule("secrets")).toThrow("Unsupported audit module");
   expect(normaliseAuditModule("user")).toBe("users");
   expect(normaliseAuditModule("Goods Receipts")).toBe("goodsReceipts");
+  expect(normaliseAuditModule("salary-payments")).toBe("salaryPayments");
+  expect(normaliseAuditModule("labour advances")).toBe("labourAdvances");
 });
 
 test("records a successful activity after the caller provides the authenticated actor", async () => {

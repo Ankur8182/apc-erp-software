@@ -150,6 +150,18 @@ test("never treats labour master values as direct expenses", () => {
   expect(summary.labourExpense).toBe(1000);
 });
 
+test("uses the payroll net salary once and never treats its payment ledger as a second expense", () => {
+  const summary = calculateFinancialSummary({
+    labours: [{ id: "labour-1", site: "LKO", name: "Amit", dailyWage: 500 }],
+    attendance: [{ labourId: "labour-1", site: "LKO", date: "2026-08-01", status: "Present" }],
+    salaries: [{ labourId: "labour-1", site: "LKO", month: "2026-08", grossPay: 500, netSalary: 450, salary: 500, paidAmount: 450 }],
+  });
+
+  expect(summary.salaryExpense).toBe(450);
+  expect(summary.attendanceExpense).toBe(0);
+  expect(summary.labourExpense).toBe(450);
+});
+
 test("counts a material or vehicle record only once when legacy amount aliases coexist", () => {
   const summary = calculateFinancialSummary({
     materials: [
