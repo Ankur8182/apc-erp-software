@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Labour.css";
 
 import { db } from "../firebase";
@@ -23,6 +25,8 @@ function Labour() {
 
   const [labours, setLabours] = useState([]);
   const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [workFilter, setWorkFilter] = useState("");
 
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
@@ -268,36 +272,32 @@ function Labour() {
   // =========================
 
   const filteredLabours = labours.filter((item) => {
-
     const searchText = search.toLowerCase();
+    const searchMatched = [item.name, item.mobile, item.work, item.site]
+      .some((value) => String(value || "").toLowerCase().includes(searchText));
 
-    return (
-
-      (item.name || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.mobile || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.work || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.site || "")
-        .toLowerCase()
-        .includes(searchText)
-
-    );
-
+    return searchMatched &&
+      (!siteFilter || item.site === siteFilter) &&
+      (!workFilter || item.work === workFilter);
   });
+
+  const labourSortOptions = useMemo(
+    () => [
+      { value: "name", label: "Name", getValue: (item) => item.name },
+      { value: "site", label: "Site", getValue: (item) => item.site },
+      { value: "work", label: "Work type", getValue: (item) => item.work },
+      { value: "wage", label: "Daily wage", getValue: (item) => item.wage },
+      { value: "date", label: "Joining date", getValue: (item) => item.joiningDate },
+    ],
+    []
+  );
+  const labourTable = useDataTable(filteredLabours, {
+    sortOptions: labourSortOptions,
+    defaultSortBy: "name",
+    resetKey: `${search}|${siteFilter}|${workFilter}`,
+  });
+  const labourSites = useMemo(() => getDistinctValues(labours, (item) => item.site), [labours]);
+  const labourWorkTypes = useMemo(() => getDistinctValues(labours, (item) => item.work), [labours]);
 
 
   // =========================
@@ -308,7 +308,7 @@ function Labour() {
 
     <Layout title="👷 Labour Management">
 
-      <div className="labour-page">
+      <div className="data-page labour-page">
 
 
         {/* =========================
@@ -320,17 +320,7 @@ function Labour() {
           <h2>
             👷 {editId ? "Update Labour" : "Add New Labour"}
           </h2>
-
-
-          {/* SEARCH */}
-
-          <input
-            type="text"
-            className="search-box"
-            placeholder="🔍 Search Labour..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <p className="form-helper">Fields marked with * are required.</p>
 
 
           {/* FORM */}
@@ -456,7 +446,29 @@ function Labour() {
             📋 Labour List
           </h2>
 
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search name, mobile, work or site..."
+            table={labourTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {labourSites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Work type</span>
+              <select value={workFilter} onChange={(event) => setWorkFilter(event.target.value)}>
+                <option value="">All work types</option>
+                {labourWorkTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
 
+          <div className="table-responsive">
           <table className="labour-table">
 
             <thead>
@@ -488,7 +500,7 @@ function Labour() {
 
             <tbody>
 
-              {filteredLabours.length === 0 ? (
+              {labourTable.count === 0 ? (
 
                 <tr>
 
@@ -508,13 +520,13 @@ function Labour() {
 
               ) : (
 
-                filteredLabours.map(
+                labourTable.rows.map(
                   (item, index) => (
 
                     <tr key={item.id}>
 
                       <td>
-                        {index + 1}
+                        {labourTable.startIndex + index + 1}
                       </td>
 
 
@@ -586,6 +598,8 @@ function Labour() {
             </tbody>
 
           </table>
+          </div>
+          <DataTablePagination table={labourTable} />
 
         </div>
 

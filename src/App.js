@@ -22,6 +22,7 @@ import {
   FIELD_UPDATE_ROLES,
   STANDARD_ERP_ROLES,
 } from "./auth/authorization";
+import "./Styles/ProfessionalDataPages.css";
 
 const protectedPage = (page, allowedRoles = STANDARD_ERP_ROLES) => (
   <ProtectedRoute allowedRoles={allowedRoles}>{page}</ProtectedRoute>

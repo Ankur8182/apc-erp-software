@@ -1,0 +1,132 @@
+.data-page {
+  color: #1e293b;
+}
+
+.data-page .page-card,
+.data-page .table-card,
+.data-page .material-form-card,
+.data-page .material-table-card,
+.data-page .dpr-form-card,
+.data-page .dpr-table-card {
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.data-page .page-card h2,
+.data-page .table-card h2,
+.data-page .material-form-card h2,
+.data-page .material-table-card h2,
+.data-page .dpr-form-card h2,
+.data-page .dpr-table-card h2 {
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.form-helper {
+  margin: 0.35rem 0 1rem !important;
+  color: #64748b !important;
+  font-size: 0.85rem !important;
+}
+
+.data-page :is(.form-grid, .material-form-grid, .dpr-form-grid) :is(input, select, textarea) {
+  min-height: 2.7rem;
+  box-sizing: border-box;
+  border-color: #cbd5e1;
+  box-shadow: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.data-page :is(.form-grid, .material-form-grid, .dpr-form-grid) textarea { min-height: 5.8rem; }
+
+.data-page :is(.form-grid, .material-form-grid, .dpr-form-grid) :is(input, select, textarea):focus {
+  outline: 3px solid rgba(37, 99, 235, 0.16);
+  border-color: #2563eb;
+}
+
+.data-page .form-group label {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.data-page :is(.save-btn, .material-save-btn, .dpr-save-btn),
+.data-page :is(.cancel-btn, .material-cancel-btn, .dpr-cancel-btn),
+.data-page :is(.edit-btn, .material-edit-btn, .dpr-edit-btn, .view-btn, .dpr-view-btn),
+.data-page :is(.delete-btn, .material-delete-btn, .dpr-delete-btn) {
+  min-height: 2.5rem;
+  border-radius: 0.6rem;
+  font-weight: 700;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.data-page button:not(:disabled):hover { transform: translateY(-1px); }
+.data-page button:disabled { cursor: not-allowed; opacity: 0.65; }
+
+.data-page .table-responsive,
+.data-page .material-table-wrapper,
+.data-page .dpr-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+}
+
+.data-page :is(.labour-table, .site-table, .material-table, .expense-table, .attendance-table, .salary-table, .vehicle-table, .invoice-table, .dpr-table) {
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-page :is(.labour-table, .site-table, .material-table, .expense-table, .attendance-table, .salary-table, .vehicle-table, .invoice-table, .dpr-table) th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.85rem 0.9rem;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.data-page :is(.labour-table, .site-table, .material-table, .expense-table, .attendance-table, .salary-table, .vehicle-table, .invoice-table, .dpr-table) td {
+  padding: 0.8rem 0.9rem;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.data-page :is(.labour-table, .site-table, .material-table, .expense-table, .attendance-table, .salary-table, .vehicle-table, .invoice-table, .dpr-table) tbody tr:hover {
+  background: #f8fbff;
+}
+
+.data-page :is(.no-record, .no-material-data, .no-dpr-data, .dashboard-table-empty) {
+  padding: 2rem !important;
+  color: #64748b !important;
+  font-weight: 600;
+}
+
+.read-only-notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  color: #1e40af;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+:is(.layout, .site-shell)[data-write-access="false"] .data-page :is(.save-btn, .material-save-btn, .dpr-save-btn, .edit-btn, .material-edit-btn, .dpr-edit-btn, .delete-btn, .material-delete-btn, .dpr-delete-btn) {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .data-page .page-card,
+  .data-page .table-card,
+  .data-page .material-form-card,
+  .data-page .material-table-card,
+  .data-page .dpr-form-card,
+  .data-page .dpr-table-card { padding: 1rem; border-radius: 0.85rem; }
+
+  .data-page :is(.labour-table, .site-table, .material-table, .expense-table, .attendance-table, .salary-table, .vehicle-table, .invoice-table, .dpr-table) { min-width: 680px; }
+}

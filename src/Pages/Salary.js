@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Salary.css";
 
 import { db } from "../firebase";
@@ -23,6 +25,8 @@ function Salary() {
 
   const [salaries, setSalaries] = useState([]);
   const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [employeeName, setEmployeeName] = useState("");
   const [site, setSite] = useState("");
@@ -314,39 +318,34 @@ function Salary() {
   // SEARCH
   // =========================
 
-  const filteredSalaries =
-    salaries.filter((item) => {
+  const filteredSalaries = salaries.filter((item) => {
+    const text = search.toLowerCase();
+    const searchMatched = [item.employeeName, item.site, item.month, item.status]
+      .some((value) => String(value || "").toLowerCase().includes(text));
 
-      const text =
-        search.toLowerCase();
+    return searchMatched &&
+      (!siteFilter || item.site === siteFilter) &&
+      (!statusFilter || item.status === statusFilter);
+  });
 
-      return (
-
-        (item.employeeName || "")
-          .toLowerCase()
-          .includes(text)
-
-        ||
-
-        (item.site || "")
-          .toLowerCase()
-          .includes(text)
-
-        ||
-
-        (item.month || "")
-          .toLowerCase()
-          .includes(text)
-
-        ||
-
-        (item.status || "")
-          .toLowerCase()
-          .includes(text)
-
-      );
-
-    });
+  const salarySortOptions = useMemo(
+    () => [
+      { value: "month", label: "Salary month", getValue: (item) => item.month },
+      { value: "employee", label: "Employee", getValue: (item) => item.employeeName },
+      { value: "site", label: "Site", getValue: (item) => item.site },
+      { value: "salary", label: "Salary", getValue: (item) => item.salary },
+      { value: "status", label: "Status", getValue: (item) => item.status },
+    ],
+    []
+  );
+  const salaryTable = useDataTable(filteredSalaries, {
+    sortOptions: salarySortOptions,
+    defaultSortBy: "month",
+    defaultSortDirection: "desc",
+    resetKey: `${search}|${siteFilter}|${statusFilter}`,
+  });
+  const salarySites = useMemo(() => getDistinctValues(salaries, (item) => item.site), [salaries]);
+  const salaryStatuses = useMemo(() => getDistinctValues(salaries, (item) => item.status), [salaries]);
 
 
   // =========================
@@ -381,7 +380,7 @@ function Salary() {
 
     <Layout title="💵 Salary Management">
 
-      <div className="salary-page">
+      <div className="data-page salary-page">
 
 
         {/* =========================
@@ -395,19 +394,7 @@ function Salary() {
               ? "Update Salary"
               : "Add Salary"}
           </h2>
-
-
-          {/* SEARCH */}
-
-          <input
-            type="text"
-            className="search-box"
-            placeholder="🔍 Search Employee..."
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-          />
+          <p className="form-helper">Fields marked with * are required.</p>
 
 
           {/* FORM */}
@@ -619,7 +606,29 @@ function Salary() {
             📋 Salary Records
           </h2>
 
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search employee, site, month or status..."
+            table={salaryTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {salarySites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">All statuses</option>
+                {salaryStatuses.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
 
+          <div className="table-responsive">
           <table className="salary-table">
 
             <thead>
@@ -644,7 +653,7 @@ function Salary() {
 
             <tbody>
 
-              {filteredSalaries.length === 0 ? (
+              {salaryTable.count === 0 ? (
 
                 <tr>
 
@@ -662,13 +671,13 @@ function Salary() {
 
               ) : (
 
-                filteredSalaries.map(
+                salaryTable.rows.map(
                   (item, index) => (
 
                     <tr key={item.id}>
 
                       <td>
-                        {index + 1}
+                        {salaryTable.startIndex + index + 1}
                       </td>
 
                       <td>
@@ -736,6 +745,8 @@ function Salary() {
             </tbody>
 
           </table>
+          </div>
+          <DataTablePagination table={salaryTable} />
 
         </div>
 

@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Attendance.css";
 
 import { db } from "../firebase";
@@ -18,6 +20,8 @@ function Attendance() {
 
   const [attendance, setAttendance] = useState([]);
   const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [employeeName, setEmployeeName] = useState("");
   const [site, setSite] = useState("");
@@ -274,39 +278,33 @@ function Attendance() {
   // SEARCH
   // =========================
 
-  const filteredAttendance =
-    attendance.filter((item) => {
+  const filteredAttendance = attendance.filter((item) => {
+    const text = search.toLowerCase();
+    const searchMatched = [item.employeeName, item.site, item.status, item.workType]
+      .some((value) => String(value || "").toLowerCase().includes(text));
 
-      const text =
-        search.toLowerCase();
+    return searchMatched &&
+      (!siteFilter || item.site === siteFilter) &&
+      (!statusFilter || item.status === statusFilter);
+  });
 
-      return (
-
-        (item.employeeName || "")
-          .toLowerCase()
-          .includes(text)
-
-        ||
-
-        (item.site || "")
-          .toLowerCase()
-          .includes(text)
-
-        ||
-
-        (item.status || "")
-          .toLowerCase()
-          .includes(text)
-
-        ||
-
-        (item.workType || "")
-          .toLowerCase()
-          .includes(text)
-
-      );
-
-    });
+  const attendanceSortOptions = useMemo(
+    () => [
+      { value: "date", label: "Date", getValue: (item) => item.date },
+      { value: "employee", label: "Employee", getValue: (item) => item.employeeName },
+      { value: "site", label: "Site", getValue: (item) => item.site },
+      { value: "status", label: "Status", getValue: (item) => item.status },
+    ],
+    []
+  );
+  const attendanceTable = useDataTable(filteredAttendance, {
+    sortOptions: attendanceSortOptions,
+    defaultSortBy: "date",
+    defaultSortDirection: "desc",
+    resetKey: `${search}|${siteFilter}|${statusFilter}`,
+  });
+  const attendanceSites = useMemo(() => getDistinctValues(attendance, (item) => item.site), [attendance]);
+  const attendanceStatuses = useMemo(() => getDistinctValues(attendance, (item) => item.status), [attendance]);
 
 
   // =========================
@@ -337,7 +335,7 @@ function Attendance() {
 
     <Layout title="📋 Attendance Management">
 
-      <div className="attendance-page">
+      <div className="data-page attendance-page">
 
 
         {/* FORM */}
@@ -349,19 +347,7 @@ function Attendance() {
               ? "Update Attendance"
               : "Mark Attendance"}
           </h2>
-
-
-          {/* SEARCH */}
-
-          <input
-            type="text"
-            className="search-box"
-            placeholder="🔍 Search Employee..."
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-          />
+          <p className="form-helper">Fields marked with * are required.</p>
 
 
           <div className="form-grid">
@@ -561,7 +547,29 @@ function Attendance() {
             📊 Attendance Records
           </h2>
 
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search employee, site, status or work..."
+            table={attendanceTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {attendanceSites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">All statuses</option>
+                {attendanceStatuses.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
 
+          <div className="table-responsive">
           <table className="attendance-table">
 
             <thead>
@@ -584,7 +592,7 @@ function Attendance() {
 
             <tbody>
 
-              {filteredAttendance.length === 0 ? (
+              {attendanceTable.count === 0 ? (
 
                 <tr>
 
@@ -602,13 +610,13 @@ function Attendance() {
 
               ) : (
 
-                filteredAttendance.map(
+                attendanceTable.rows.map(
                   (item, index) => (
 
                     <tr key={item.id}>
 
                       <td>
-                        {index + 1}
+                        {attendanceTable.startIndex + index + 1}
                       </td>
 
                       <td>
@@ -670,6 +678,8 @@ function Attendance() {
             </tbody>
 
           </table>
+          </div>
+          <DataTablePagination table={attendanceTable} />
 
         </div>
 

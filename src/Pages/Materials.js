@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Materials.css";
 
 import {
@@ -19,6 +21,8 @@ function Materials() {
   const [sites, setSites] = useState([]);
 
   const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [editId, setEditId] = useState(null);
 
@@ -273,10 +277,6 @@ function Materials() {
   const filteredMaterials = useMemo(() => {
     const searchText = search.toLowerCase().trim();
 
-    if (!searchText) {
-      return materials;
-    }
-
     return materials.filter((item) => {
       const materialName =
         item.materialName || item.name || "";
@@ -286,15 +286,38 @@ function Materials() {
       const supplier = item.supplier || "";
       const billNo = item.billNo || "";
 
-      return (
+      const searchMatched = !searchText || (
         materialName.toLowerCase().includes(searchText) ||
         category.toLowerCase().includes(searchText) ||
         site.toLowerCase().includes(searchText) ||
         supplier.toLowerCase().includes(searchText) ||
         billNo.toLowerCase().includes(searchText)
       );
+
+      return searchMatched &&
+        (!siteFilter || getSiteName(site) === siteFilter) &&
+        (!categoryFilter || category === categoryFilter);
     });
-  }, [materials, search]);
+  }, [materials, search, siteFilter, categoryFilter]);
+
+  const materialSortOptions = useMemo(
+    () => [
+      { value: "date", label: "Date", getValue: (item) => item.date },
+      { value: "material", label: "Material", getValue: (item) => item.materialName || item.name },
+      { value: "site", label: "Site", getValue: (item) => getSiteName(item.site) },
+      { value: "supplier", label: "Supplier", getValue: (item) => item.supplier },
+      { value: "amount", label: "Amount", getValue: (item) => item.totalAmount ?? item.amount ?? item.expenseAmount ?? (Number(item.quantity) || 0) * (Number(item.rate) || 0) },
+    ],
+    []
+  );
+  const materialTable = useDataTable(filteredMaterials, {
+    sortOptions: materialSortOptions,
+    defaultSortBy: "date",
+    defaultSortDirection: "desc",
+    resetKey: `${search}|${siteFilter}|${categoryFilter}`,
+  });
+  const materialSites = useMemo(() => getDistinctValues(materials, (item) => getSiteName(item.site)), [materials]);
+  const materialCategories = useMemo(() => getDistinctValues(materials, (item) => item.category), [materials]);
 
   // ==============================
   // TOTAL MATERIAL EXPENSE
@@ -318,7 +341,7 @@ function Materials() {
   // ==============================
   // SITE NAME HELPER
   // ==============================
-  const getSiteName = (site) => {
+  function getSiteName(site) {
     if (typeof site === "string") return site;
 
     if (site && typeof site === "object") {
@@ -331,11 +354,11 @@ function Materials() {
     }
 
     return "";
-  };
+  }
 
   return (
     <Layout>
-      <div className="materials-page">
+      <div className="data-page materials-page">
 
         {/* =========================
             PAGE HEADER
@@ -559,17 +582,29 @@ function Materials() {
 
           <div className="material-table-header">
             <h2>📋 Material Records</h2>
-
-            <input
-              type="text"
-              placeholder="Search material, site, supplier..."
-              value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
-              }
-              className="material-search"
-            />
           </div>
+
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search material, site, supplier..."
+            table={materialTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {materialSites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Category</span>
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                <option value="">All categories</option>
+                {materialCategories.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
 
           <div className="material-table-wrapper">
             <table className="material-table">
@@ -592,8 +627,8 @@ function Materials() {
 
               <tbody>
 
-                {filteredMaterials.length > 0 ? (
-                  filteredMaterials.map(
+                {materialTable.count > 0 ? (
+                  materialTable.rows.map(
                     (item, index) => {
                       const quantity =
                         Number(item.quantity) || 0;
@@ -612,7 +647,7 @@ function Materials() {
                       return (
                         <tr key={item.id}>
 
-                          <td>{index + 1}</td>
+                          <td>{materialTable.startIndex + index + 1}</td>
 
                           <td>
                             {item.materialName ||
@@ -700,6 +735,7 @@ function Materials() {
 
             </table>
           </div>
+          <DataTablePagination table={materialTable} />
         </div>
 
       </div>

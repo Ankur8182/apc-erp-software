@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Vehicle.css";
 
 import { auth, db } from "../firebase";
@@ -35,6 +37,8 @@ function Vehicle() {
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
   const [search, setSearch] = useState("");
+  const [vehicleSiteFilter, setVehicleSiteFilter] = useState("");
+  const [vehicleStatusFilter, setVehicleStatusFilter] = useState("");
 
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [vehicleType, setVehicleType] = useState("");
@@ -59,6 +63,7 @@ function Vehicle() {
   const [historyVehicleFilter, setHistoryVehicleFilter] = useState("all");
   const [historySiteFilter, setHistorySiteFilter] = useState("all");
   const [historyTypeFilter, setHistoryTypeFilter] = useState("all");
+  const [historySearch, setHistorySearch] = useState("");
   const [historyFromDate, setHistoryFromDate] = useState("");
   const [historyToDate, setHistoryToDate] = useState("");
 
@@ -402,32 +407,12 @@ function Vehicle() {
 
   const filteredVehicles = vehicles.filter((item) => {
     const text = search.toLowerCase().trim();
+    const searchMatched = [item.vehicleNumber, item.vehicleType, item.driverName, item.mobile, item.site, item.status]
+      .some((value) => String(value || "").toLowerCase().includes(text));
 
-    return (
-      (item.vehicleNumber || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.vehicleType || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.driverName || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.mobile || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.site || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.status || "")
-        .toLowerCase()
-        .includes(text)
-    );
+    return searchMatched &&
+      (!vehicleSiteFilter || item.site === vehicleSiteFilter) &&
+      (!vehicleStatusFilter || item.status === vehicleStatusFilter);
   });
 
   const expenseSites = Array.from(
@@ -440,6 +425,7 @@ function Vehicle() {
 
   const filteredVehicleExpenses = vehicleExpenses
     .filter((item) => {
+      const historySearchText = historySearch.toLowerCase().trim();
       const selectedVehicle = vehicles.find(
         (vehicle) => vehicle.id === historyVehicleFilter
       );
@@ -454,17 +440,51 @@ function Vehicle() {
         getSiteName(item).toLowerCase() === historySiteFilter.toLowerCase();
       const typeMatched =
         historyTypeFilter === "all" || item.expenseType === historyTypeFilter;
+      const searchMatched = [item.vehicleNumber, item.vehicleName, getSiteName(item), item.expenseType, item.remarks]
+        .some((value) => String(value || "").toLowerCase().includes(historySearchText));
 
       return (
         vehicleMatched &&
         siteMatched &&
         typeMatched &&
+        searchMatched &&
         isDateInRange(item, historyFromDate, historyToDate)
       );
-    })
-    .sort((first, second) =>
-      normaliseDate(second.date).localeCompare(normaliseDate(first.date))
-    );
+    });
+
+  const vehicleSortOptions = useMemo(
+    () => [
+      { value: "number", label: "Vehicle number", getValue: (item) => item.vehicleNumber },
+      { value: "type", label: "Vehicle type", getValue: (item) => item.vehicleType },
+      { value: "site", label: "Site", getValue: (item) => item.site },
+      { value: "fuel", label: "Fuel / day", getValue: (item) => item.fuel },
+      { value: "status", label: "Status", getValue: (item) => item.status },
+    ],
+    []
+  );
+  const vehicleTable = useDataTable(filteredVehicles, {
+    sortOptions: vehicleSortOptions,
+    defaultSortBy: "number",
+    resetKey: `${search}|${vehicleSiteFilter}|${vehicleStatusFilter}`,
+  });
+  const vehicleExpenseSortOptions = useMemo(
+    () => [
+      { value: "date", label: "Date", getValue: (item) => normaliseDate(item.date) },
+      { value: "vehicle", label: "Vehicle", getValue: (item) => item.vehicleNumber || item.vehicleName },
+      { value: "site", label: "Site", getValue: (item) => getSiteName(item) },
+      { value: "type", label: "Expense type", getValue: (item) => item.expenseType },
+      { value: "amount", label: "Amount", getValue: (item) => normaliseMoney(item.amount) },
+    ],
+    []
+  );
+  const vehicleExpenseTable = useDataTable(filteredVehicleExpenses, {
+    sortOptions: vehicleExpenseSortOptions,
+    defaultSortBy: "date",
+    defaultSortDirection: "desc",
+    resetKey: `${historySearch}|${historyVehicleFilter}|${historySiteFilter}|${historyTypeFilter}|${historyFromDate}|${historyToDate}`,
+  });
+  const vehicleSites = useMemo(() => getDistinctValues(vehicles, (item) => item.site), [vehicles]);
+  const vehicleStatuses = useMemo(() => getDistinctValues(vehicles, (item) => item.status), [vehicles]);
 
   // =========================
   // SUMMARY
@@ -503,7 +523,7 @@ function Vehicle() {
   return (
     <Layout title="🚚 Vehicle Management">
 
-      <div className="vehicle-page">
+      <div className="data-page vehicle-page">
 
         {/* ========================= */}
         {/* FORM */}
@@ -522,6 +542,7 @@ function Vehicle() {
               <p>
                 Vehicle details aur daily fuel information manage karein
               </p>
+              <p className="form-helper">Fields marked with * are required.</p>
             </div>
 
             {editId && (
@@ -688,6 +709,7 @@ function Vehicle() {
               <p>
                 Fuel aur vehicle costs ko date ke saath record karein
               </p>
+              <p className="form-helper">Fields marked with * are required.</p>
             </div>
 
             {expenseEditId && (
@@ -821,7 +843,7 @@ function Vehicle() {
             </div>
 
             <span className="record-count">
-              {filteredVehicleExpenses.length} Records
+              {vehicleExpenseTable.count} Records
             </span>
           </div>
 
@@ -898,6 +920,13 @@ function Vehicle() {
             </div>
           </div>
 
+          <DataTableToolbar
+            search={historySearch}
+            onSearchChange={setHistorySearch}
+            searchPlaceholder="Search vehicle, site, type or remarks..."
+            table={vehicleExpenseTable}
+          />
+
           <div className="table-responsive">
             <table className="vehicle-table">
               <thead>
@@ -914,16 +943,16 @@ function Vehicle() {
               </thead>
 
               <tbody>
-                {filteredVehicleExpenses.length === 0 ? (
+                {vehicleExpenseTable.count === 0 ? (
                   <tr>
                     <td colSpan="8" className="no-record">
                       No Vehicle Expense Record Found
                     </td>
                   </tr>
                 ) : (
-                  filteredVehicleExpenses.map((item, index) => (
+                  vehicleExpenseTable.rows.map((item, index) => (
                     <tr key={item.id}>
-                      <td>{index + 1}</td>
+                      <td>{vehicleExpenseTable.startIndex + index + 1}</td>
                       <td>{normaliseDate(item.date) || "-"}</td>
                       <td>{item.vehicleNumber || item.vehicleName || "-"}</td>
                       <td>{getSiteName(item) || "-"}</td>
@@ -952,6 +981,7 @@ function Vehicle() {
               </tbody>
             </table>
           </div>
+          <DataTablePagination table={vehicleExpenseTable} />
         </div>
 
 
@@ -961,18 +991,30 @@ function Vehicle() {
 
         <div className="page-card search-card">
 
-          <input
-            type="text"
-            className="search-box"
-            placeholder="🔍 Search Vehicle Number, Driver, Site..."
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-          />
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search vehicle number, driver, site..."
+            table={vehicleTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={vehicleSiteFilter} onChange={(event) => setVehicleSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {vehicleSites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={vehicleStatusFilter} onChange={(event) => setVehicleStatusFilter(event.target.value)}>
+                <option value="">All statuses</option>
+                {vehicleStatuses.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
 
           <div className="search-result">
-            Showing {filteredVehicles.length} of {totalVehicles}
+            Showing {vehicleTable.count} of {totalVehicles}
           </div>
 
         </div>
@@ -1044,7 +1086,7 @@ function Vehicle() {
             </div>
 
             <span className="record-count">
-              {filteredVehicles.length} Records
+              {vehicleTable.count} Records
             </span>
           </div>
 
@@ -1068,7 +1110,7 @@ function Vehicle() {
 
               <tbody>
 
-                {filteredVehicles.length === 0 ? (
+                {vehicleTable.count === 0 ? (
 
                   <tr>
                     <td
@@ -1081,13 +1123,13 @@ function Vehicle() {
 
                 ) : (
 
-                  filteredVehicles.map(
+                  vehicleTable.rows.map(
                     (item, index) => (
 
                       <tr key={item.id}>
 
                         <td>
-                          {index + 1}
+                          {vehicleTable.startIndex + index + 1}
                         </td>
 
                         <td className="vehicle-number">
@@ -1161,6 +1203,8 @@ function Vehicle() {
             </table>
 
           </div>
+
+          <DataTablePagination table={vehicleTable} />
 
         </div>
 

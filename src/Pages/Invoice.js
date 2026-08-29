@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Invoice.css";
 
 import { db } from "../firebase";
@@ -22,6 +24,8 @@ function Invoice() {
   const [invoices, setInvoices] = useState([]);
   const [sites, setSites] = useState([]);
   const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [invoiceNo, setInvoiceNo] = useState("");
   const [site, setSite] = useState("");
@@ -256,25 +260,32 @@ function Invoice() {
 
   const filteredInvoices = invoices.filter((item) => {
     const text = search.toLowerCase();
+    const searchMatched = [item.invoiceNo, item.site, item.clientName, item.status]
+      .some((value) => String(value || "").toLowerCase().includes(text));
 
-    return (
-      (item.invoiceNo || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.site || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.clientName || "")
-        .toLowerCase()
-        .includes(text) ||
-
-      (item.status || "")
-        .toLowerCase()
-        .includes(text)
-    );
+    return searchMatched &&
+      (!siteFilter || item.site === siteFilter) &&
+      (!statusFilter || item.status === statusFilter);
   });
+
+  const invoiceSortOptions = useMemo(
+    () => [
+      { value: "date", label: "Invoice date", getValue: (item) => item.invoiceDate },
+      { value: "invoice", label: "Invoice number", getValue: (item) => item.invoiceNo },
+      { value: "site", label: "Site", getValue: (item) => item.site },
+      { value: "total", label: "Invoice amount", getValue: (item) => item.totalAmount ?? item.amount },
+      { value: "pending", label: "Pending amount", getValue: (item) => item.pendingAmount ?? Number(item.totalAmount ?? item.amount ?? 0) - Number(item.paidAmount ?? 0) },
+    ],
+    []
+  );
+  const invoiceTable = useDataTable(filteredInvoices, {
+    sortOptions: invoiceSortOptions,
+    defaultSortBy: "date",
+    defaultSortDirection: "desc",
+    resetKey: `${search}|${siteFilter}|${statusFilter}`,
+  });
+  const invoiceSites = useMemo(() => getDistinctValues(invoices, (item) => item.site), [invoices]);
+  const invoiceStatuses = useMemo(() => getDistinctValues(invoices, (item) => item.status), [invoices]);
 
   // =========================
   // SUMMARY
@@ -330,7 +341,7 @@ function Invoice() {
 
   return (
     <Layout title="🧾 Invoice Management">
-      <div className="invoice-page">
+      <div className="data-page invoice-page">
 
         {/* =========================
             SUMMARY CARDS
@@ -413,16 +424,7 @@ function Invoice() {
               ? "Update Invoice"
               : "Create New Invoice"}
           </h2>
-
-          <input
-            type="text"
-            className="search-box"
-            placeholder="🔍 Search Invoice, Site, Client..."
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-          />
+          <p className="form-helper">Fields marked with * are required.</p>
 
           <div className="form-grid">
 
@@ -598,6 +600,28 @@ function Invoice() {
             📋 Invoice List
           </h2>
 
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search invoice, site, client or status..."
+            table={invoiceTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {invoiceSites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Payment status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">All statuses</option>
+                {invoiceStatuses.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
+
           <div className="table-responsive">
 
             <table className="invoice-table">
@@ -619,7 +643,7 @@ function Invoice() {
 
               <tbody>
 
-                {filteredInvoices.length === 0 ? (
+                {invoiceTable.count === 0 ? (
                   <tr>
                     <td
                       colSpan="10"
@@ -632,7 +656,7 @@ function Invoice() {
                     </td>
                   </tr>
                 ) : (
-                  filteredInvoices.map(
+                  invoiceTable.rows.map(
                     (item, index) => {
                       const total = Number(
                         item.totalAmount ??
@@ -659,7 +683,7 @@ function Invoice() {
                         <tr key={item.id}>
 
                           <td>
-                            {index + 1}
+                            {invoiceTable.startIndex + index + 1}
                           </td>
 
                           <td>
@@ -739,6 +763,8 @@ function Invoice() {
             </table>
 
           </div>
+
+          <DataTablePagination table={invoiceTable} />
 
         </div>
 

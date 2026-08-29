@@ -9,15 +9,17 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { auth, db } from "../firebase";
 import { useAuth } from "../auth/AuthProvider";
 import {
   createInitialDprForm,
   DPR_UNITS,
   filterDailyProgressReports,
-  sortDailyProgressReports,
+  getDprUsageValues,
   validateDailyProgressReport,
 } from "../utils/dailyProgressReporting";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getSiteName, normaliseDate } from "../utils/financialReporting";
 import "../Styles/DailyProgressReport.css";
 
@@ -37,6 +39,7 @@ function DailyProgressReport() {
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [workActivityFilter, setWorkActivityFilter] = useState("");
 
   const canManage = role === "admin" || role === "manager";
 
@@ -141,15 +144,35 @@ function DailyProgressReport() {
 
   const filteredReports = useMemo(
     () =>
-      sortDailyProgressReports(
-        filterDailyProgressReports(reports, {
-          search,
-          site: selectedSite,
-          fromDate,
-          toDate,
-        })
-      ),
-    [reports, search, selectedSite, fromDate, toDate]
+      filterDailyProgressReports(reports, {
+        search,
+        site: selectedSite,
+        fromDate,
+        toDate,
+        workActivity: workActivityFilter,
+      }),
+    [reports, search, selectedSite, fromDate, toDate, workActivityFilter]
+  );
+
+  const reportSortOptions = useMemo(
+    () => [
+      { value: "date", label: "Date", getValue: (report) => normaliseDate(report.date) },
+      { value: "site", label: "Site", getValue: (report) => getSiteName(report) },
+      { value: "activity", label: "Work activity", getValue: (report) => report.workActivity },
+      { value: "manpower", label: "Manpower", getValue: (report) => report.manpowerCount },
+      { value: "quantity", label: "Quantity", getValue: (report) => report.quantity },
+    ],
+    []
+  );
+  const reportTable = useDataTable(filteredReports, {
+    sortOptions: reportSortOptions,
+    defaultSortBy: "date",
+    defaultSortDirection: "desc",
+    resetKey: `${search}|${selectedSite}|${fromDate}|${toDate}|${workActivityFilter}`,
+  });
+  const workActivities = useMemo(
+    () => getDistinctValues(reports, (report) => report.workActivity),
+    [reports]
   );
 
   const resetForm = () => {
@@ -249,10 +272,11 @@ function DailyProgressReport() {
 
   return (
     <Layout title="📋 Daily Progress Report">
-      <div className="dpr-page">
+      <div className="data-page dpr-page">
         {canManage && (
           <div className="dpr-form-card">
             <h2>{editId ? "✏️ Edit Daily Progress Report" : "➕ Add Daily Progress Report"}</h2>
+            <p className="form-helper">Fields marked with * are required.</p>
 
             <form onSubmit={saveReport}>
               <div className="dpr-form-grid">
@@ -347,8 +371,8 @@ function DailyProgressReport() {
               <p><strong>Location:</strong> {viewReport.workLocation || "-"}</p>
               <p><strong>Quantity:</strong> {viewReport.quantity ?? "-"} {viewReport.unit || ""}</p>
               <p><strong>Manpower:</strong> {viewReport.manpowerCount ?? "-"}</p>
-              <p><strong>Materials:</strong> {viewReport.materialsUsed || "-"}</p>
-              <p><strong>Equipment:</strong> {viewReport.equipmentUsed || "-"}</p>
+              <p><strong>Materials:</strong> {getDprUsageValues(viewReport.materialsUsed).join(", ") || "-"}</p>
+              <p><strong>Equipment:</strong> {getDprUsageValues(viewReport.equipmentUsed).join(", ") || "-"}</p>
               <p className="dpr-full-width"><strong>Remarks:</strong> {viewReport.remarks || "-"}</p>
             </div>
           </div>
@@ -363,11 +387,17 @@ function DailyProgressReport() {
                   ? "Loading reports..."
                   : reportsError
                     ? "Reports unavailable"
-                    : `${filteredReports.length} of ${reports.length} reports`}
+                    : `${reportTable.count} of ${reports.length} reports`}
               </p>
             </div>
-            <input className="dpr-search" type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search work, location, material..." />
           </div>
+
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search work, location, material or equipment..."
+            table={reportTable}
+          />
 
           <div className="dpr-filter-grid">
             <select value={selectedSite} onChange={(event) => setSelectedSite(event.target.value)}>
@@ -376,6 +406,10 @@ function DailyProgressReport() {
             </select>
             <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} aria-label="DPR From Date" />
             <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} aria-label="DPR To Date" />
+            <select value={workActivityFilter} onChange={(event) => setWorkActivityFilter(event.target.value)}>
+              <option value="">All Work Activities</option>
+              {workActivities.map((activity) => <option key={activity} value={activity}>{activity}</option>)}
+            </select>
           </div>
 
           <div className="dpr-table-wrapper">
@@ -399,20 +433,20 @@ function DailyProgressReport() {
                   <tr><td colSpan="10" className="no-dpr-data">Loading Daily Progress Reports...</td></tr>
                 ) : reportsError ? (
                   <tr><td colSpan="10" className="no-dpr-data dpr-data-error">{reportsError}</td></tr>
-                ) : filteredReports.length === 0 ? (
+                ) : reportTable.count === 0 ? (
                   <tr><td colSpan="10" className="no-dpr-data">No Daily Progress Report Found</td></tr>
                 ) : (
-                  filteredReports.map((report, index) => (
+                  reportTable.rows.map((report, index) => (
                     <tr key={report.id}>
-                      <td>{index + 1}</td>
+                      <td>{reportTable.startIndex + index + 1}</td>
                       <td>{normaliseDate(report.date) || "-"}</td>
                       <td>{getSiteName(report) || "-"}</td>
                       <td>{report.workActivity || "-"}</td>
                       <td>{report.workLocation || "-"}</td>
                       <td>{report.quantity ?? "-"} {report.unit || ""}</td>
                       <td>{report.manpowerCount ?? "-"}</td>
-                      <td>{report.materialsUsed || "-"}</td>
-                      <td>{report.equipmentUsed || "-"}</td>
+                      <td>{getDprUsageValues(report.materialsUsed).join(", ") || "-"}</td>
+                      <td>{getDprUsageValues(report.equipmentUsed).join(", ") || "-"}</td>
                       <td className="dpr-action-cell">
                         <button className="dpr-view-btn" onClick={() => setViewReport(report)}>👁️ View</button>
                         {canManage && (
@@ -428,6 +462,7 @@ function DailyProgressReport() {
               </tbody>
             </table>
           </div>
+          {!reportsLoading && !reportsError && <DataTablePagination table={reportTable} />}
         </div>
       </div>
     </Layout>

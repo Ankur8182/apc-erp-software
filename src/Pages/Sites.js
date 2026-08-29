@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Sidebar from "../Components/Sidebar";
 import Header from "../Components/Header";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { useAuth } from "../auth/AuthProvider";
 
 import "../Styles/Sites.css";
 
@@ -19,6 +22,8 @@ import {
 
 function Sites() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const canWrite = role === "admin" || role === "manager";
 
   // =========================
   // STATES
@@ -32,10 +37,12 @@ function Sites() {
   const [status, setStatus] = useState("");
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const [editId, setEditId] = useState(null);
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // =========================
   // FIRESTORE - LIVE DATA
@@ -87,6 +94,8 @@ function Sites() {
   // =========================
 
   const saveSite = async () => {
+    if (saving) return;
+
     if (siteName.trim() === "" || location.trim() === "") {
       alert("Site Name aur Location bharna zaroori hai.");
       return;
@@ -100,6 +109,7 @@ function Sites() {
     };
 
     try {
+      setSaving(true);
       // UPDATE EXISTING SITE
       if (editId) {
         await updateDoc(
@@ -129,6 +139,8 @@ function Sites() {
         "❌ Site save/update nahi ho payi.\n\n" +
         error.message
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -198,38 +210,34 @@ function Sites() {
 
   const filteredSites = sites.filter((item) => {
     const searchText = search.toLowerCase();
+    const searchMatched = [item.siteName, item.location, item.engineer, item.status]
+      .some((value) => String(value || "").toLowerCase().includes(searchText));
 
-    return (
-      (item.siteName || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.location || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.engineer || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.status || "")
-        .toLowerCase()
-        .includes(searchText)
-    );
+    return searchMatched && (!statusFilter || item.status === statusFilter);
   });
+
+  const siteSortOptions = useMemo(
+    () => [
+      { value: "name", label: "Site name", getValue: (item) => item.siteName },
+      { value: "location", label: "Location", getValue: (item) => item.location },
+      { value: "engineer", label: "Engineer", getValue: (item) => item.engineer },
+      { value: "status", label: "Status", getValue: (item) => item.status },
+    ],
+    []
+  );
+  const siteTable = useDataTable(filteredSites, {
+    sortOptions: siteSortOptions,
+    defaultSortBy: "name",
+    resetKey: `${search}|${statusFilter}`,
+  });
+  const siteStatuses = useMemo(() => getDistinctValues(sites, (item) => item.status), [sites]);
 
   // =========================
   // PAGE
   // =========================
 
   return (
-    <div style={{ display: "flex" }}>
+    <div className="site-shell" data-write-access={canWrite} style={{ display: "flex" }}>
 
       <Sidebar />
 
@@ -246,7 +254,13 @@ function Sites() {
 
         <Header />
 
-        <div className="site-page">
+        {!canWrite && (
+          <p className="read-only-notice" role="status">
+            Viewer access: records can be viewed and filtered, but changes are unavailable.
+          </p>
+        )}
+
+        <div className="data-page site-page">
 
           {/* =========================
               TITLE
@@ -267,6 +281,7 @@ function Sites() {
                 ? "✏️ Update Site"
                 : "➕ Add New Site"}
             </h2>
+            <p className="form-helper">Fields marked with * are required.</p>
 
             <div className="form-grid">
 
@@ -344,8 +359,11 @@ function Sites() {
               <button
                 className="save-btn"
                 onClick={saveSite}
+                disabled={saving}
               >
-                {editId
+                {saving
+                  ? "⏳ Saving..."
+                  : editId
                   ? "✏️ Update Site"
                   : "💾 Save Site"}
               </button>
@@ -375,24 +393,6 @@ function Sites() {
           </div>
 
           {/* =========================
-              SEARCH
-          ========================= */}
-
-          <div className="page-card">
-
-            <input
-              type="text"
-              className="search-box"
-              placeholder="🔍 Search Site, Location, Engineer..."
-              value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
-              }
-            />
-
-          </div>
-
-          {/* =========================
               TABLE
           ========================= */}
 
@@ -401,6 +401,21 @@ function Sites() {
             <h2 style={{ marginBottom: "20px" }}>
               📋 Site List
             </h2>
+
+            <DataTableToolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search site, location, engineer..."
+              table={siteTable}
+            >
+              <label>
+                <span>Status</span>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="">All statuses</option>
+                  {siteStatuses.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </label>
+            </DataTableToolbar>
 
             {loading ? (
 
@@ -414,12 +429,8 @@ function Sites() {
               </p>
 
             ) : (
-
-              <div
-                style={{
-                  overflowX: "auto",
-                }}
-              >
+              <>
+              <div className="table-responsive">
 
                 <table className="site-table">
 
@@ -438,7 +449,7 @@ function Sites() {
 
                   <tbody>
 
-                    {filteredSites.length === 0 ? (
+                    {siteTable.count === 0 ? (
 
                       <tr>
 
@@ -456,13 +467,13 @@ function Sites() {
 
                     ) : (
 
-                      filteredSites.map(
+                      siteTable.rows.map(
                         (item, index) => (
 
                           <tr key={item.id}>
 
                             <td>
-                              {index + 1}
+                              {siteTable.startIndex + index + 1}
                             </td>
 
                             <td>
@@ -543,6 +554,9 @@ function Sites() {
 
               </div>
 
+              <DataTablePagination table={siteTable} />
+
+              </>
             )}
 
           </div>

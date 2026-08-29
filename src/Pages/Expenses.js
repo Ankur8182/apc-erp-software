@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
+import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import "../Styles/Expenses.css";
 
 import { db } from "../firebase";
@@ -23,6 +25,8 @@ function Expenses() {
 
   const [expenses, setExpenses] = useState([]);
   const [search, setSearch] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
 
   const [site, setSite] = useState("");
   const [expenseType, setExpenseType] = useState("");
@@ -260,36 +264,33 @@ function Expenses() {
   // =========================
 
   const filteredExpenses = expenses.filter((item) => {
-
     const searchText = search.toLowerCase();
+    const searchMatched = [item.site, item.expenseType, item.paidTo, item.description]
+      .some((value) => String(value || "").toLowerCase().includes(searchText));
 
-    return (
-
-      (item.site || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.expenseType || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.paidTo || "")
-        .toLowerCase()
-        .includes(searchText)
-
-      ||
-
-      (item.description || "")
-        .toLowerCase()
-        .includes(searchText)
-
-    );
-
+    return searchMatched &&
+      (!siteFilter || item.site === siteFilter) &&
+      (!typeFilter || item.expenseType === typeFilter);
   });
+
+  const expenseSortOptions = useMemo(
+    () => [
+      { value: "date", label: "Date", getValue: (item) => item.date },
+      { value: "site", label: "Site", getValue: (item) => item.site },
+      { value: "type", label: "Expense type", getValue: (item) => item.expenseType },
+      { value: "amount", label: "Amount", getValue: (item) => item.amount },
+      { value: "paidTo", label: "Paid to", getValue: (item) => item.paidTo },
+    ],
+    []
+  );
+  const expenseTable = useDataTable(filteredExpenses, {
+    sortOptions: expenseSortOptions,
+    defaultSortBy: "date",
+    defaultSortDirection: "desc",
+    resetKey: `${search}|${siteFilter}|${typeFilter}`,
+  });
+  const expenseSites = useMemo(() => getDistinctValues(expenses, (item) => item.site), [expenses]);
+  const expenseTypes = useMemo(() => getDistinctValues(expenses, (item) => item.expenseType), [expenses]);
 
 
   // =========================
@@ -311,7 +312,7 @@ function Expenses() {
 
     <Layout title="💰 Expense Management">
 
-      <div className="expenses-page">
+      <div className="data-page expenses-page">
 
 
         {/* =========================
@@ -325,19 +326,7 @@ function Expenses() {
               ? "Update Expense"
               : "Add New Expense"}
           </h2>
-
-
-          {/* SEARCH */}
-
-          <input
-            type="text"
-            className="search-box"
-            placeholder="🔍 Search Expense..."
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-          />
+          <p className="form-helper">Fields marked with * are required.</p>
 
 
           {/* FORM */}
@@ -506,7 +495,29 @@ function Expenses() {
             📋 Expense List
           </h2>
 
+          <DataTableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search site, type, paid to or details..."
+            table={expenseTable}
+          >
+            <label>
+              <span>Site</span>
+              <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
+                <option value="">All sites</option>
+                {expenseSites.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Expense type</span>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="">All types</option>
+                {expenseTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+          </DataTableToolbar>
 
+          <div className="table-responsive">
           <table className="expense-table">
 
             <thead>
@@ -536,7 +547,7 @@ function Expenses() {
 
             <tbody>
 
-              {filteredExpenses.length === 0 ? (
+              {expenseTable.count === 0 ? (
 
                 <tr>
 
@@ -554,13 +565,13 @@ function Expenses() {
 
               ) : (
 
-                filteredExpenses.map(
+                expenseTable.rows.map(
                   (item, index) => (
 
                     <tr key={item.id}>
 
                       <td>
-                        {index + 1}
+                        {expenseTable.startIndex + index + 1}
                       </td>
 
 
@@ -627,6 +638,8 @@ function Expenses() {
             </tbody>
 
           </table>
+          </div>
+          <DataTablePagination table={expenseTable} />
 
         </div>
 
