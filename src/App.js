@@ -13,6 +13,7 @@ import Salary from "./Pages/Salary";
 import Vehicle from "./Pages/Vehicle";
 import Invoice from "./Pages/Invoice";
 import Reports from "./Pages/Reports";
+import DailyProgressReport from "./Pages/DailyProgressReport";
 import { AuthProvider } from "./auth/AuthProvider";
 import ProtectedRoute, { PublicOnlyRoute } from "./auth/ProtectedRoute";
 
@@ -51,6 +52,8 @@ function App() {
           <Route path="/invoice" element={protectedPage(<Invoice />)} />
 
           <Route path="/reports" element={protectedPage(<Reports />)} />
+
+          <Route path="/daily-progress-report" element={protectedPage(<DailyProgressReport />)} />
 
         </Routes>
       </AuthProvider>

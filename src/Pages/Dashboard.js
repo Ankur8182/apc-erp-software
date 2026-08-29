@@ -13,6 +13,10 @@ import {
   normaliseStatus,
   toNumber,
 } from "../utils/financialReporting";
+import {
+  getDailyProgressOperationalSummary,
+  getDprTodayDate,
+} from "../utils/dailyProgressReporting";
 
 function Dashboard() {
   const [sites, setSites] = useState([]);
@@ -24,6 +28,9 @@ function Dashboard() {
   const [salaries, setSalaries] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
+  const [dailyProgressReports, setDailyProgressReports] = useState([]);
+  const [dprLoading, setDprLoading] = useState(true);
+  const [dprError, setDprError] = useState("");
 
   // =========================
   // LOAD ALL FIREBASE DATA
@@ -165,6 +172,25 @@ function Dashboard() {
       }
     );
 
+    const unsubscribeDailyProgressReports = onSnapshot(
+      collection(db, "dailyProgressReports"),
+      (snapshot) => {
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }));
+
+        setDailyProgressReports(data);
+        setDprError("");
+        setDprLoading(false);
+      },
+      (error) => {
+        console.error("Daily progress report Error:", error);
+        setDprError("Daily progress reports could not be loaded.");
+        setDprLoading(false);
+      }
+    );
+
     return () => {
       unsubscribeSites();
       unsubscribeInvoices();
@@ -175,6 +201,7 @@ function Dashboard() {
       unsubscribeSalaries();
       unsubscribeVehicles();
       unsubscribeVehicleExpenses();
+      unsubscribeDailyProgressReports();
     };
   }, []);
 
@@ -213,6 +240,32 @@ function Dashboard() {
       vehicleExpenses,
     ]
   );
+
+  const todayDprSummary = useMemo(
+    () =>
+      getDailyProgressOperationalSummary(dailyProgressReports, {
+        date: getDprTodayDate(),
+      }),
+    [dailyProgressReports]
+  );
+
+  const sitesWithoutDprToday = useMemo(() => {
+    const seenSites = new Set();
+
+    return sites.reduce((count, site) => {
+      const siteName = getSiteName(site);
+      const siteKey = siteName.toLowerCase();
+
+      if (!siteName || seenSites.has(siteKey)) return count;
+
+      seenSites.add(siteKey);
+      const hasDpr = todayDprSummary.submittedSites.some((submittedSite) =>
+        isSameSite({ site: submittedSite }, siteName)
+      );
+
+      return count + (hasDpr ? 0 : 1);
+    }, 0);
+  }, [sites, todayDprSummary.submittedSites]);
 
   // =========================
   // SITE SUMMARY
@@ -607,6 +660,76 @@ function Dashboard() {
               )}
             </p>
           </div>
+
+        </div>
+
+
+        {/* =========================
+            TODAY'S DPR OVERVIEW
+        ========================= */}
+
+        <h2 className="dashboard-heading">
+          📋 Today&apos;s Site Progress
+        </h2>
+
+        <div className="dashboard-card-grid dpr-dashboard-grid">
+
+          <div className="dashboard-card">
+            <h3>📋 DPR Submitted</h3>
+            <p>{todayDprSummary.todayCount}</p>
+          </div>
+
+          <div className="dashboard-card">
+            <h3>👷 Manpower Reported</h3>
+            <p>{todayDprSummary.totalManpower}</p>
+          </div>
+
+          <div className="dashboard-card">
+            <h3>🏗️ Sites Submitted</h3>
+            <p>{todayDprSummary.submittedSites.length}</p>
+          </div>
+
+          <div className="dashboard-card">
+            <h3>⏳ Sites Without DPR</h3>
+            <p>{sitesWithoutDprToday}</p>
+          </div>
+
+        </div>
+
+        <div className="dashboard-dpr-activity-card">
+
+          <h2>🛠️ Recent DPR Activity</h2>
+
+          {dprLoading ? (
+            <p className="empty-text">Loading daily progress reports...</p>
+          ) : dprError ? (
+            <p className="dashboard-dpr-error">{dprError}</p>
+          ) : todayDprSummary.recentReports.length === 0 ? (
+            <p className="empty-text">No daily progress reports available yet.</p>
+          ) : (
+            <div className="dashboard-dpr-list">
+              {todayDprSummary.recentReports.map((report, index) => (
+                <div
+                  className="dashboard-dpr-item"
+                  key={report.id || `${report.date || "legacy"}-${index}`}
+                >
+                  <div>
+                    <strong>{report.workActivity || "Work activity not recorded"}</strong>
+                    <p>
+                      {getSiteName(report) || "Site not recorded"} · {report.date || "Date not recorded"}
+                    </p>
+                  </div>
+
+                  <span>
+                    {report.quantity || "-"} {report.unit || ""}
+                    {report.manpowerCount !== undefined && report.manpowerCount !== ""
+                      ? ` · ${report.manpowerCount} manpower`
+                      : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
         </div>
 

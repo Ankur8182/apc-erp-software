@@ -65,6 +65,11 @@ service cloud.firestore {
       allow create, update, delete: if canWriteErpData();
     }
 
+    match /dailyProgressReports/{document=**} {
+      allow read: if isAuthorizedErpUser();
+      allow create, update, delete: if canWriteErpData();
+    }
+
     match /invoices/{document=**} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();

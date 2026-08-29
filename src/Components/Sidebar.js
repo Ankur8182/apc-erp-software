@@ -15,6 +15,7 @@ function Sidebar() {
     { path: "/salary", icon: "💵", label: "Salary" },
     { path: "/vehicle", icon: "🚚", label: "Vehicle" },
     { path: "/invoice", icon: "📜", label: "Invoice" },
+    { path: "/daily-progress-report", icon: "📋", label: "Daily Progress" },
     { path: "/reports", icon: "📊", label: "Reports" },
   ];
 

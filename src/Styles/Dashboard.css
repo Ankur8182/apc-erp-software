@@ -229,6 +229,69 @@
 }
 
 /* =================================
+   DAILY PROGRESS REPORT
+================================= */
+
+.dashboard-dpr-activity-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 22px;
+  margin: -8px 0 30px;
+  box-sizing: border-box;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+}
+
+.dashboard-dpr-activity-card h2 {
+  margin: 0 0 18px;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.dashboard-dpr-list {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-dpr-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dashboard-dpr-item:last-child {
+  border-bottom: none;
+}
+
+.dashboard-dpr-item strong {
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.dashboard-dpr-item p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.dashboard-dpr-item span {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.dashboard-dpr-error {
+  margin: 0;
+  padding: 16px 10px;
+  color: #b91c1c;
+  text-align: center;
+}
+
+/* =================================
    ALERT ITEM
 ================================= */
 
@@ -316,8 +379,23 @@
     padding: 18px 15px;
   }
 
+  .dashboard-dpr-activity-card {
+    padding: 18px 15px;
+  }
+
+  .dashboard-dpr-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .dashboard-dpr-item span {
+    text-align: left;
+  }
+
   .dashboard-table-card h2,
-  .dashboard-alert-card h2 {
+  .dashboard-alert-card h2,
+  .dashboard-dpr-activity-card h2 {
     font-size: 19px;
   }
 }

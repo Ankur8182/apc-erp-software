@@ -7,9 +7,14 @@ import "../Styles/SiteDetails.css";
 import { db } from "../firebase";
 import {
   calculateFinancialSummary,
+  getRecordDate,
   getSiteName,
   isSameSite,
 } from "../utils/financialReporting";
+import {
+  getDailyProgressOperationalSummary,
+  getDprTodayDate,
+} from "../utils/dailyProgressReporting";
 
 import {
   collection,
@@ -29,6 +34,9 @@ function SiteDetails() {
   const [expenses, setExpenses] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
+  const [dailyProgressReports, setDailyProgressReports] = useState([]);
+  const [dprLoading, setDprLoading] = useState(true);
+  const [dprError, setDprError] = useState("");
 
   const [selectedSite, setSelectedSite] = useState("");
 
@@ -67,6 +75,7 @@ function SiteDetails() {
       expenses,
       vehicles,
       vehicleExpenses,
+      dailyProgressReports,
     ].forEach((records) => records.forEach(addSite));
 
     return Array.from(siteMap.values()).sort((first, second) =>
@@ -82,6 +91,7 @@ function SiteDetails() {
     expenses,
     vehicles,
     vehicleExpenses,
+    dailyProgressReports,
   ]);
 
   // =========================
@@ -129,6 +139,36 @@ function SiteDetails() {
       },
       (error) => {
         console.error("Attendance error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+
+  }, []);
+
+  // =========================
+  // DAILY PROGRESS REPORTS
+  // =========================
+
+  useEffect(() => {
+
+    const unsubscribe = onSnapshot(
+      collection(db, "dailyProgressReports"),
+      (snapshot) => {
+
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data()
+        }));
+
+        setDailyProgressReports(data);
+        setDprError("");
+        setDprLoading(false);
+      },
+      (error) => {
+        console.error("Daily progress report error:", error);
+        setDprError("Daily progress reports could not be loaded.");
+        setDprLoading(false);
       }
     );
 
@@ -417,6 +457,20 @@ function SiteDetails() {
     vehicleExpenses
 
   ]);
+
+
+  // =========================
+  // SITE DPR OPERATIONAL SUMMARY
+  // =========================
+
+  const siteDprSummary = useMemo(
+    () =>
+      getDailyProgressOperationalSummary(dailyProgressReports, {
+        date: getDprTodayDate(),
+        site: selectedSite,
+      }),
+    [dailyProgressReports, selectedSite]
+  );
 
 
   // =========================
@@ -904,6 +958,154 @@ function SiteDetails() {
                 </table>
 
               </div>
+
+
+              {/* =========================
+                  DAILY PROGRESS REPORT
+              ========================= */}
+
+              <section className="site-dpr-section">
+
+                <div className="site-dpr-heading">
+                  <div>
+                    <h2>📋 Daily Progress Report</h2>
+                    <p>Operational progress only — not included in financial expenses.</p>
+                  </div>
+                </div>
+
+                {dprLoading ? (
+                  <p className="site-dpr-state">Loading daily progress reports...</p>
+                ) : dprError ? (
+                  <p className="site-dpr-state site-dpr-error">{dprError}</p>
+                ) : (
+                  <>
+
+                    <div className="site-dpr-summary-grid">
+
+                      <div className="site-dpr-summary-card">
+                        <h3>Today&apos;s DPR</h3>
+                        <p>{siteDprSummary.todayCount}</p>
+                      </div>
+
+                      <div className="site-dpr-summary-card">
+                        <h3>Today&apos;s Manpower</h3>
+                        <p>{siteDprSummary.totalManpower}</p>
+                      </div>
+
+                      <div className="site-dpr-summary-card">
+                        <h3>Output Units</h3>
+                        <p>{siteDprSummary.outputByUnit.length}</p>
+                      </div>
+
+                    </div>
+
+                    <div className="site-dpr-detail-grid">
+
+                      <div className="site-dpr-detail-card">
+                        <h3>🛠️ Today&apos;s Work / Activity</h3>
+
+                        {siteDprSummary.todayReports.length === 0 ? (
+                          <p className="site-dpr-empty">No DPR submitted for this site today.</p>
+                        ) : (
+                          <ul className="site-dpr-list">
+                            {siteDprSummary.todayReports.map((report, index) => (
+                              <li key={report.id || `today-${index}`}>
+                                <strong>{report.workActivity || "Work activity not recorded"}</strong>
+                                <span>{report.workLocation || "Location not recorded"}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="site-dpr-detail-card">
+                        <h3>📐 Today&apos;s Output by Unit</h3>
+
+                        {siteDprSummary.outputByUnit.length === 0 ? (
+                          <p className="site-dpr-empty">No valid output quantity reported today.</p>
+                        ) : (
+                          <ul className="site-dpr-list site-dpr-output-list">
+                            {siteDprSummary.outputByUnit.map((output) => (
+                              <li key={output.unit}>
+                                <strong>{output.unit}</strong>
+                                <span>{output.quantity}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="site-dpr-detail-card">
+                        <h3>📦 Materials Used Today</h3>
+
+                        {siteDprSummary.materialsUsed.length === 0 ? (
+                          <p className="site-dpr-empty">No materials recorded today.</p>
+                        ) : (
+                          <ul className="site-dpr-list">
+                            {siteDprSummary.materialsUsed.map((material) => (
+                              <li key={material}>{material}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="site-dpr-detail-card">
+                        <h3>🚚 Equipment / Vehicles Used Today</h3>
+
+                        {siteDprSummary.equipmentUsed.length === 0 ? (
+                          <p className="site-dpr-empty">No equipment or vehicles recorded today.</p>
+                        ) : (
+                          <ul className="site-dpr-list">
+                            {siteDprSummary.equipmentUsed.map((equipment) => (
+                              <li key={equipment}>{equipment}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                    </div>
+
+                    <div className="site-dpr-history-card">
+                      <h3>🕘 Recent DPR History</h3>
+
+                      {siteDprSummary.recentReports.length === 0 ? (
+                        <p className="site-dpr-empty">No DPR history available for this site.</p>
+                      ) : (
+                        <div className="site-dpr-table-responsive">
+                          <table className="site-dpr-table">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Work Activity</th>
+                                <th>Location</th>
+                                <th>Output</th>
+                                <th>Manpower</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {siteDprSummary.recentReports.map((report, index) => (
+                                <tr key={report.id || `history-${index}`}>
+                                  <td>{getRecordDate(report) || "Date not recorded"}</td>
+                                  <td>{report.workActivity || "Not recorded"}</td>
+                                  <td>{report.workLocation || "Not recorded"}</td>
+                                  <td>{report.quantity || "-"} {report.unit || ""}</td>
+                                  <td>
+                                    {report.manpowerCount === undefined || report.manpowerCount === ""
+                                      ? "-"
+                                      : report.manpowerCount}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                  </>
+                )}
+
+              </section>
 
 
             </>
