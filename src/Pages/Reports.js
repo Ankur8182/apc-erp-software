@@ -1,24 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import ReportExportActions from "../Components/ReportExportActions";
 import "../Styles/Reports.css";
 import { db } from "../firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import {
   calculateFinancialSummary,
+  getExpenseAmount,
+  getRecordDate,
   getSiteName,
   isDateInRange,
   isSameSite,
   toNumber,
 } from "../utils/financialReporting";
 import {
+  getDprUsageValues,
   summariseDailyProgressReports,
 } from "../utils/dailyProgressReporting";
+import { printReport } from "../utils/reportExporting";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
     maximumFractionDigits: 2,
   })}`;
 };
+
+const formatExportMoney = (amount) =>
+  `INR ${toNumber(amount).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`;
 
 /* =========================================
    REPORTS COMPONENT
@@ -413,14 +423,6 @@ function Reports() {
   };
 
   /* =========================================
-     PRINT
-  ========================================= */
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  /* =========================================
      FINANCIAL CARDS
   ========================================= */
 
@@ -486,6 +488,150 @@ function Reports() {
           : "loss-card",
     },
   ];
+
+  const baseExportFilters = [
+    { label: "Site", value: selectedSite === "all" ? "All Sites" : selectedSite },
+    { label: "From Date", value: fromDate || "All Dates" },
+    { label: "To Date", value: toDate || "All Dates" },
+  ];
+  const dprExportFilters = [
+    ...baseExportFilters,
+    { label: "Work Activity", value: workActivity || "All Activities" },
+  ];
+
+  const financialSummaryExport = {
+    title: "Financial Summary",
+    filters: baseExportFilters,
+    summary: financialCards.map((card) => ({
+      label: card.title,
+      value: formatExportMoney(card.value),
+    })),
+    columns: [
+      { key: "metric", label: "Metric", width: 1.6 },
+      { key: "amount", label: "Amount (INR)", format: formatExportMoney },
+    ],
+    rows: financialCards.map((card) => ({
+      metric: card.title,
+      amount: card.value,
+    })),
+  };
+
+  const siteFinancialExport = {
+    title: "Site-wise Financial Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Sites", value: reportRows.length },
+      { label: "Total Income", value: formatExportMoney(financialSummary.income) },
+      { label: "Total Received", value: formatExportMoney(financialSummary.received) },
+      { label: "Total Expense", value: formatExportMoney(financialSummary.totalExpense) },
+      { label: financialSummary.profit >= 0 ? "Net Profit" : "Net Loss", value: formatExportMoney(Math.abs(financialSummary.profit)) },
+    ],
+    columns: [
+      { key: "siteName", label: "Site", width: 1.5 },
+      { key: "income", label: "Income (INR)", format: formatExportMoney },
+      { key: "received", label: "Received (INR)", format: formatExportMoney },
+      { key: "expense", label: "Expense (INR)", format: formatExportMoney },
+      { key: "profit", label: "Profit / Loss (INR)", format: formatExportMoney },
+    ],
+    rows: reportRows,
+  };
+
+  const dprExport = {
+    title: "Daily Progress Report",
+    filters: dprExportFilters,
+    summary: [
+      { label: "DPR Count", value: dprSummary.reportCount },
+      { label: "Total Manpower", value: dprSummary.manpowerTotal },
+      { label: "Sites Reported", value: dprSummary.submittedSites.length },
+      { label: "Output by Unit", value: dprSummary.outputByUnit.map((item) => `${item.quantity} ${item.unit}`).join("; ") || "No output reported" },
+    ],
+    columns: [
+      { key: "date", label: "Date" },
+      { key: "site", label: "Site" },
+      { key: "activity", label: "Activity" },
+      { key: "location", label: "Location" },
+      { key: "manpower", label: "Manpower" },
+      { key: "output", label: "Output Quantity / Unit", width: 1.2 },
+      { key: "materials", label: "Materials Used", width: 1.4 },
+      { key: "equipment", label: "Equipment / Vehicles", width: 1.4 },
+    ],
+    rows: dprSummary.reports.map((report) => ({
+      date: getRecordDate(report) || "-",
+      site: getSiteName(report) || "-",
+      activity: report.workActivity || "-",
+      location: report.workLocation || "-",
+      manpower: report.manpowerCount ?? 0,
+      output: `${report.quantity ?? 0} ${report.unit || ""}`.trim(),
+      materials: getDprUsageValues(report.materialsUsed).join(", ") || "-",
+      equipment: getDprUsageValues(report.equipmentUsed).join(", ") || "-",
+    })),
+  };
+
+  const listedExpenseTotal =
+    financialSummary.materialExpenseFromExpenses +
+    financialSummary.labourExpenseFromExpenses +
+    financialSummary.otherExpenseFromExpenses;
+  const expensesExport = {
+    title: "Expenses Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Expense Records", value: filteredExpenses.length },
+      { label: "Listed Expense Total", value: formatExportMoney(listedExpenseTotal) },
+    ],
+    columns: [
+      { key: "date", label: "Date" },
+      { key: "site", label: "Site" },
+      { key: "type", label: "Expense Type" },
+      { key: "paidTo", label: "Paid To" },
+      { key: "description", label: "Description", width: 1.4 },
+      { key: "amount", label: "Amount (INR)", format: formatExportMoney },
+    ],
+    rows: filteredExpenses.map((expense) => ({
+      date: getRecordDate(expense) || "-",
+      site: getSiteName(expense) || "-",
+      type: expense.expenseType || expense.category || expense.type || "-",
+      paidTo: expense.paidTo || expense.vendor || "-",
+      description: expense.description || expense.remarks || "-",
+      amount: getExpenseAmount(expense),
+    })),
+  };
+
+  const attendanceStatusCounts = filteredAttendance.reduce(
+    (counts, entry) => {
+      const status = String(entry.status || "Not recorded").trim() || "Not recorded";
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    },
+    {}
+  );
+  const attendanceExport = {
+    title: "Attendance Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Attendance Records", value: filteredAttendance.length },
+      ...Object.entries(attendanceStatusCounts).map(([label, value]) => ({ label, value })),
+    ],
+    columns: [
+      { key: "date", label: "Date" },
+      { key: "site", label: "Site" },
+      { key: "employee", label: "Employee / Labour" },
+      { key: "status", label: "Status" },
+      { key: "workType", label: "Work Type" },
+      { key: "remarks", label: "Remarks", width: 1.5 },
+    ],
+    rows: filteredAttendance.map((entry) => ({
+      date: getRecordDate(entry) || "-",
+      site: getSiteName(entry) || "-",
+      employee: entry.employeeName || entry.labourName || entry.name || "-",
+      status: entry.status || "-",
+      workType: entry.workType || "-",
+      remarks: entry.remarks || "-",
+    })),
+  };
+
+  const handlePrint = () => {
+    printReport(financialSummaryExport);
+  };
 
   /* =========================================
      PAGE
@@ -609,6 +755,20 @@ function Reports() {
 
           </div>
         </div>
+
+        <section className="report-export-section" aria-labelledby="filtered-report-exports">
+          <div>
+            <h2 id="filtered-report-exports">Export Filtered Reports</h2>
+            <p>Each export uses only the records matching the filters above.</p>
+          </div>
+          <div className="report-export-grid">
+            <ReportExportActions report={financialSummaryExport} disabled={loading} />
+            <ReportExportActions report={siteFinancialExport} disabled={loading} />
+            <ReportExportActions report={dprExport} disabled={loading || Boolean(dprError)} />
+            <ReportExportActions report={expensesExport} disabled={loading} />
+            <ReportExportActions report={attendanceExport} disabled={loading} />
+          </div>
+        </section>
 
         {/* LOADING */}
 

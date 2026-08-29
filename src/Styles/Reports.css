@@ -256,6 +256,30 @@
   border-left-color: #dc2626;
 }
 
+.report-export-section {
+  margin: 0 0 1.8rem;
+}
+
+.report-export-section > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.report-export-section h2 {
+  margin: 0;
+  color: #26364a;
+  font-size: 1.15rem;
+}
+
+.report-export-section p {
+  margin: 0.3rem 0 0;
+  color: #667085;
+  font-size: 0.88rem;
+}
+
 /* =========================================
    DAILY PROGRESS REPORT
 ========================================= */
@@ -492,6 +516,11 @@
 
   .report-buttons {
     justify-content: flex-start;
+  }
+
+  .report-export-section > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .dpr-report-detail-grid {
