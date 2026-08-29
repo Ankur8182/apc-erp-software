@@ -10,6 +10,9 @@ import {
   isSameSite,
   toNumber,
 } from "../utils/financialReporting";
+import {
+  summariseDailyProgressReports,
+} from "../utils/dailyProgressReporting";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -31,12 +34,15 @@ function Reports() {
   const [attendance, setAttendance] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
+  const [dailyProgressReports, setDailyProgressReports] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [workActivity, setWorkActivity] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [dprError, setDprError] = useState("");
 
   /* =========================================
      LOAD FIREBASE DATA
@@ -45,7 +51,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 9;
+    const totalCollections = 10;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -57,7 +63,8 @@ function Reports() {
 
     const loadCollection = (
       collectionName,
-      setData
+      setData,
+      setCollectionError
     ) => {
       const unsubscribe = onSnapshot(
         collection(db, collectionName),
@@ -69,6 +76,7 @@ function Reports() {
           }));
 
           setData(data);
+          if (setCollectionError) setCollectionError("");
 
           markCollectionComplete(collectionName);
         },
@@ -80,6 +88,9 @@ function Reports() {
           );
 
           setData([]);
+          if (setCollectionError) {
+            setCollectionError("Daily progress reports could not be loaded.");
+          }
 
           markCollectionComplete(collectionName);
         }
@@ -97,6 +108,11 @@ function Reports() {
     loadCollection("attendance", setAttendance);
     loadCollection("vehicles", setVehicles);
     loadCollection("vehicleExpenses", setVehicleExpenses);
+    loadCollection(
+      "dailyProgressReports",
+      setDailyProgressReports,
+      setDprError
+    );
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -179,6 +195,25 @@ function Reports() {
     vehicleExpenses,
   ]);
 
+  const reportSiteNames = useMemo(() => {
+    const siteMap = new Map();
+
+    [...allSiteNames, ...dailyProgressReports.map(getSiteName)].forEach(
+      (siteName) => {
+        const cleanName = String(siteName || "").trim();
+        const siteKey = cleanName.toLowerCase();
+
+        if (cleanName && !siteMap.has(siteKey)) {
+          siteMap.set(siteKey, cleanName);
+        }
+      }
+    );
+
+    return Array.from(siteMap.values()).sort((first, second) =>
+      first.localeCompare(second)
+    );
+  }, [allSiteNames, dailyProgressReports]);
+
   /* =========================================
      COMMON FILTER
   ========================================= */
@@ -257,6 +292,17 @@ function Reports() {
   const filteredVehicleExpenses = useMemo(
     () => filterRecords(vehicleExpenses),
     [vehicleExpenses, filterRecords]
+  );
+
+  const dprSummary = useMemo(
+    () =>
+      summariseDailyProgressReports(dailyProgressReports, {
+        site: selectedSite,
+        fromDate,
+        toDate,
+        workActivity,
+      }),
+    [dailyProgressReports, selectedSite, fromDate, toDate, workActivity]
   );
 
   const vehicleExpenseCoverage = useMemo(
@@ -363,6 +409,7 @@ function Reports() {
     setSelectedSite("all");
     setFromDate("");
     setToDate("");
+    setWorkActivity("");
   };
 
   /* =========================================
@@ -480,7 +527,7 @@ function Reports() {
                   All Sites
                 </option>
 
-                {allSiteNames.map(
+                {reportSiteNames.map(
                   (siteName) => (
                     <option
                       key={siteName}
@@ -522,6 +569,23 @@ function Reports() {
                     event.target.value
                   )
                 }
+              />
+            </div>
+
+            <div className="filter-group">
+              <label>
+                Work Activity (DPR)
+              </label>
+
+              <input
+                type="text"
+                value={workActivity}
+                onChange={(event) =>
+                  setWorkActivity(
+                    event.target.value
+                  )
+                }
+                placeholder="e.g. Excavation"
               />
             </div>
 
@@ -583,6 +647,94 @@ function Reports() {
                 </div>
               ))}
             </div>
+
+            {/* DAILY PROGRESS REPORT */}
+
+            <div className="report-section-title">
+              <h2>
+                📋 Daily Progress Report
+              </h2>
+            </div>
+
+            {dprError ? (
+              <div className="dpr-report-state dpr-report-error">
+                {dprError}
+              </div>
+            ) : (
+              <>
+                <div className="dpr-report-summary-grid">
+                  <div className="dpr-report-summary-card">
+                    <span>📋 DPR Count</span>
+                    <h3>{dprSummary.reportCount}</h3>
+                  </div>
+
+                  <div className="dpr-report-summary-card">
+                    <span>👷 Total Manpower</span>
+                    <h3>{dprSummary.manpowerTotal}</h3>
+                  </div>
+
+                  <div className="dpr-report-summary-card">
+                    <span>🏗️ Sites Reported</span>
+                    <h3>{dprSummary.submittedSites.length}</h3>
+                  </div>
+                </div>
+
+                {dprSummary.reportCount === 0 ? (
+                  <div className="dpr-report-state">
+                    No Daily Progress Report data matches the selected filters.
+                  </div>
+                ) : (
+                  <div className="dpr-report-details-card">
+                    <div className="dpr-report-detail-grid">
+                      <div className="dpr-report-detail">
+                        <h3>📐 Work Output by Unit</h3>
+
+                        {dprSummary.outputByUnit.length === 0 ? (
+                          <p>No valid output quantities reported.</p>
+                        ) : (
+                          <ul className="dpr-report-list">
+                            {dprSummary.outputByUnit.map((output) => (
+                              <li key={output.unit}>
+                                <strong>{output.unit}</strong>
+                                <span>{output.quantity}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="dpr-report-detail">
+                        <h3>📦 Materials Used</h3>
+
+                        {dprSummary.materialsUsed.length === 0 ? (
+                          <p>No materials recorded.</p>
+                        ) : (
+                          <ul className="dpr-report-list">
+                            {dprSummary.materialsUsed.map((material) => (
+                              <li key={material}>{material}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="dpr-report-detail">
+                        <h3>🚚 Equipment / Vehicle Usage</h3>
+
+                        {dprSummary.equipmentUsed.length === 0 ? (
+                          <p>No equipment or vehicles recorded.</p>
+                        ) : (
+                          <ul className="dpr-report-list">
+                            {dprSummary.equipmentUsed.map((equipment) => (
+                              <li key={equipment}>{equipment}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* PROJECT PERFORMANCE */}
 
@@ -695,6 +847,10 @@ function Reports() {
 
               <span>
                 Salaries: {salaries.length}
+              </span>
+
+              <span>
+                DPR: {dailyProgressReports.length}
               </span>
             </div>
 

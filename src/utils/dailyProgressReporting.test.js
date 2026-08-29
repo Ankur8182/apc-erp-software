@@ -2,6 +2,7 @@ import {
   createInitialDprForm,
   filterDailyProgressReports,
   getDailyProgressOperationalSummary,
+  summariseDailyProgressReports,
   sortDailyProgressReports,
   validateDailyProgressReport,
 } from "./dailyProgressReporting";
@@ -193,4 +194,114 @@ test("keeps malformed and legacy DPR dates out of date-filtered totals", () => {
     "today",
     "legacy",
   ]);
+});
+
+test("filters DPR reports by inclusive date range, canonical site, and activity", () => {
+  const reports = [
+    {
+      id: "outside-range",
+      date: "2026-09-01",
+      site: "LKO Site",
+      workActivity: "PCC",
+    },
+    {
+      id: "matches",
+      date: "2026-09-02",
+      site: "  lko   site ",
+      workActivity: "PCC foundation",
+    },
+    {
+      id: "wrong-activity",
+      date: "2026-09-03",
+      site: "LKO Site",
+      workActivity: "Excavation",
+    },
+    {
+      id: "invalid-date",
+      date: "invalid-date",
+      site: "LKO Site",
+      workActivity: "PCC",
+    },
+  ];
+
+  const filtered = filterDailyProgressReports(reports, {
+    site: "LKO Site",
+    fromDate: "2026-09-02",
+    toDate: "2026-09-03",
+    workActivity: "pcc",
+  });
+
+  expect(filtered.map((report) => report.id)).toEqual(["matches"]);
+});
+
+test("summarises filtered DPR operational values without combining units", () => {
+  const reports = [
+    {
+      id: "pcc-m3",
+      date: "2026-09-02",
+      site: "Civil",
+      workActivity: "PCC",
+      quantity: 12,
+      unit: "m³",
+      manpowerCount: 8,
+      materialsUsed: "Cement",
+      equipmentUsed: "Mixer",
+    },
+    {
+      id: "pcc-m",
+      date: "2026-09-03",
+      siteName: "civil",
+      workActivity: "PCC slab",
+      quantity: 5,
+      unit: "m",
+      manpowerCount: 4,
+      materialsUsed: "Steel",
+      equipmentUsed: "Vibrator",
+    },
+    {
+      id: "pcc-m3",
+      date: "2026-09-02",
+      site: "Civil",
+      workActivity: "PCC",
+      quantity: 12,
+      unit: "m³",
+      manpowerCount: 8,
+    },
+    {
+      id: "bad-values",
+      date: "2026-09-03",
+      site: "Civil",
+      workActivity: "PCC",
+      quantity: "invalid",
+      unit: "m³",
+      manpowerCount: -2,
+    },
+  ];
+
+  const summary = summariseDailyProgressReports(reports, {
+    site: "CIVIL",
+    fromDate: "2026-09-02",
+    toDate: "2026-09-03",
+    workActivity: "pcc",
+  });
+
+  expect(summary.reportCount).toBe(3);
+  expect(summary.manpowerTotal).toBe(12);
+  expect(summary.outputByUnit).toEqual([
+    { unit: "m", quantity: 5 },
+    { unit: "m³", quantity: 12 },
+  ]);
+  expect(summary.materialsUsed).toEqual(["Cement", "Steel"]);
+  expect(summary.equipmentUsed).toEqual(["Mixer", "Vibrator"]);
+});
+
+test("returns a safe empty DPR summary for empty datasets", () => {
+  expect(summariseDailyProgressReports([], {})).toMatchObject({
+    reportCount: 0,
+    manpowerTotal: 0,
+    outputByUnit: [],
+    materialsUsed: [],
+    equipmentUsed: [],
+    submittedSites: [],
+  });
 });

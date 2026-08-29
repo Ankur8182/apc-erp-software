@@ -156,6 +156,7 @@
 .dpr-table tbody tr:hover { background: #f8fafc; }
 .dpr-action-cell { white-space: nowrap; }
 .no-dpr-data { text-align: center; padding: 35px !important; color: #667085; }
+.dpr-data-error { color: #b91c1c; }
 
 @media (max-width: 1100px) {
   .dpr-form-grid,

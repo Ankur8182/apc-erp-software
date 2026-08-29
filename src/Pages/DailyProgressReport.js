@@ -31,6 +31,8 @@ function DailyProgressReport() {
   const [editId, setEditId] = useState(null);
   const [viewReport, setViewReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState("");
   const [search, setSearch] = useState("");
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -43,10 +45,14 @@ function DailyProgressReport() {
       collection(db, "dailyProgressReports"),
       (snapshot) => {
         setReports(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        setReportsError("");
+        setReportsLoading(false);
       },
       (error) => {
         console.error("DPR load error:", error);
-        alert("Daily Progress Report data load nahi ho saka.");
+        setReports([]);
+        setReportsError("Daily Progress Report data could not be loaded.");
+        setReportsLoading(false);
       }
     );
 
@@ -90,12 +96,22 @@ function DailyProgressReport() {
   }, []);
 
   const siteNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          [...sites, ...reports].map((item) => getSiteName(item)).filter(Boolean)
-        )
-      ).sort((first, second) => first.localeCompare(second)),
+    () => {
+      const siteMap = new Map();
+
+      [...sites, ...reports].forEach((item) => {
+        const siteName = getSiteName(item);
+        const siteKey = siteName.toLowerCase();
+
+        if (siteName && !siteMap.has(siteKey)) {
+          siteMap.set(siteKey, siteName);
+        }
+      });
+
+      return Array.from(siteMap.values()).sort((first, second) =>
+        first.localeCompare(second)
+      );
+    },
     [sites, reports]
   );
 
@@ -342,7 +358,13 @@ function DailyProgressReport() {
           <div className="dpr-table-header">
             <div>
               <h2>📚 DPR Register</h2>
-              <p>{filteredReports.length} of {reports.length} reports</p>
+              <p>
+                {reportsLoading
+                  ? "Loading reports..."
+                  : reportsError
+                    ? "Reports unavailable"
+                    : `${filteredReports.length} of ${reports.length} reports`}
+              </p>
             </div>
             <input className="dpr-search" type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search work, location, material..." />
           </div>
@@ -373,7 +395,11 @@ function DailyProgressReport() {
                 </tr>
               </thead>
               <tbody>
-                {filteredReports.length === 0 ? (
+                {reportsLoading ? (
+                  <tr><td colSpan="10" className="no-dpr-data">Loading Daily Progress Reports...</td></tr>
+                ) : reportsError ? (
+                  <tr><td colSpan="10" className="no-dpr-data dpr-data-error">{reportsError}</td></tr>
+                ) : filteredReports.length === 0 ? (
                   <tr><td colSpan="10" className="no-dpr-data">No Daily Progress Report Found</td></tr>
                 ) : (
                   filteredReports.map((report, index) => (

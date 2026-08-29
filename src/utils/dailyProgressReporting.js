@@ -90,15 +90,26 @@ export const validateDailyProgressReport = (form = {}) => {
 
 export const filterDailyProgressReports = (
   reports = [],
-  { search = "", site = "all", fromDate = "", toDate = "" } = {}
+  {
+    search = "",
+    site = "all",
+    fromDate = "",
+    toDate = "",
+    workActivity = "",
+  } = {}
 ) => {
   const searchText = normaliseText(search).toLowerCase();
+  const activityText = normaliseText(workActivity).toLowerCase();
 
-  return reports.filter((report) => {
-    const siteMatched = site === "all" || isSameSite(report, site);
+  return dedupeDailyProgressReports(reports).filter((report) => {
+    const siteMatched =
+      site === "all" || !normaliseText(site) || isSameSite(report, site);
     const dateMatched = isDateInRange(report, fromDate, toDate);
+    const activityMatched =
+      !activityText ||
+      normaliseText(report.workActivity).toLowerCase().includes(activityText);
 
-    if (!siteMatched || !dateMatched) return false;
+    if (!siteMatched || !dateMatched || !activityMatched) return false;
     if (!searchText) return true;
 
     return [
@@ -178,24 +189,26 @@ const getUniqueTextValues = (reports, field) => {
 
 export const getDprTodayDate = (date = new Date()) => normaliseDate(date);
 
-export const getDailyProgressOperationalSummary = (
+export const summariseDailyProgressReports = (
   reports = [],
-  { date = getDprTodayDate(), site = "", recentLimit = 5 } = {}
+  {
+    site = "all",
+    fromDate = "",
+    toDate = "",
+    workActivity = "",
+    recentLimit = 5,
+  } = {}
 ) => {
-  const selectedDate = normaliseDate(date);
-  const uniqueReports = dedupeDailyProgressReports(reports);
-  const siteReports = site
-    ? uniqueReports.filter((report) => isSameSite(report, site))
-    : uniqueReports;
-  const todayReports = selectedDate
-    ? siteReports.filter((report) =>
-        isDateInRange(report, selectedDate, selectedDate)
-      )
-    : [];
+  const filteredReports = filterDailyProgressReports(reports, {
+    site,
+    fromDate,
+    toDate,
+    workActivity,
+  });
   const outputByUnit = new Map();
   const submittedSites = new Map();
 
-  todayReports.forEach((report) => {
+  filteredReports.forEach((report) => {
     const siteName = getSiteName(report);
     const siteKey = normaliseText(siteName).toLowerCase();
 
@@ -216,9 +229,9 @@ export const getDailyProgressOperationalSummary = (
   });
 
   return {
-    todayCount: todayReports.length,
-    todayReports,
-    totalManpower: todayReports.reduce(
+    reports: filteredReports,
+    reportCount: filteredReports.length,
+    manpowerTotal: filteredReports.reduce(
       (total, report) => total + getSafeNonNegativeNumber(report.manpowerCount),
       0
     ),
@@ -228,8 +241,33 @@ export const getDailyProgressOperationalSummary = (
     submittedSites: Array.from(submittedSites.values()).sort((first, second) =>
       first.localeCompare(second)
     ),
-    materialsUsed: getUniqueTextValues(todayReports, "materialsUsed"),
-    equipmentUsed: getUniqueTextValues(todayReports, "equipmentUsed"),
-    recentReports: sortDailyProgressReports(siteReports).slice(0, recentLimit),
+    materialsUsed: getUniqueTextValues(filteredReports, "materialsUsed"),
+    equipmentUsed: getUniqueTextValues(filteredReports, "equipmentUsed"),
+    recentReports: sortDailyProgressReports(filteredReports).slice(0, recentLimit),
+  };
+};
+
+export const getDailyProgressOperationalSummary = (
+  reports = [],
+  { date = getDprTodayDate(), site = "", recentLimit = 5 } = {}
+) => {
+  const selectedDate = normaliseDate(date);
+  const todaySummary = summariseDailyProgressReports(reports, {
+    site: site || "all",
+    fromDate: selectedDate,
+    toDate: selectedDate,
+    recentLimit,
+  });
+  const historySummary = summariseDailyProgressReports(reports, {
+    site: site || "all",
+    recentLimit,
+  });
+
+  return {
+    ...todaySummary,
+    recentReports: historySummary.recentReports,
+    todayCount: todaySummary.reportCount,
+    todayReports: todaySummary.reports,
+    totalManpower: todaySummary.manpowerTotal,
   };
 };

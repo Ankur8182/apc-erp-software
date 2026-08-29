@@ -51,6 +51,7 @@
     minmax(180px, 1fr)
     minmax(180px, 1fr)
     minmax(180px, 1fr)
+    minmax(180px, 1fr)
     auto;
   gap: 16px;
   align-items: end;
@@ -256,6 +257,125 @@
 }
 
 /* =========================================
+   DAILY PROGRESS REPORT
+========================================= */
+
+.dpr-report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.dpr-report-summary-card,
+.dpr-report-details-card,
+.dpr-report-state {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow:
+    0 8px 24px
+    rgba(0, 0, 0, 0.07);
+}
+
+.dpr-report-summary-card {
+  min-height: 110px;
+  padding: 20px;
+  box-sizing: border-box;
+  border-left: 5px solid #2563eb;
+}
+
+.dpr-report-summary-card:nth-child(2) {
+  border-left-color: #0891b2;
+}
+
+.dpr-report-summary-card:nth-child(3) {
+  border-left-color: #7c3aed;
+}
+
+.dpr-report-summary-card span {
+  display: block;
+  color: #667085;
+  font-size: 14px;
+}
+
+.dpr-report-summary-card h3 {
+  margin: 10px 0 0;
+  color: #26364a;
+  font-size: 26px;
+}
+
+.dpr-report-details-card {
+  margin-top: 18px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.dpr-report-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.dpr-report-detail {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.dpr-report-detail h3 {
+  margin: 0;
+  color: #26364a;
+  font-size: 16px;
+}
+
+.dpr-report-detail p {
+  margin: 14px 0 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.dpr-report-list {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dpr-report-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  color: #344054;
+  font-size: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dpr-report-list li:last-child {
+  border-bottom: none;
+}
+
+.dpr-report-list strong,
+.dpr-report-list span {
+  color: #26364a;
+}
+
+.dpr-report-list span {
+  font-weight: 700;
+}
+
+.dpr-report-state {
+  margin-top: 18px;
+  padding: 26px 20px;
+  color: #667085;
+  text-align: center;
+}
+
+.dpr-report-error {
+  color: #b91c1c;
+}
+
+/* =========================================
    REPORT TABLE
 ========================================= */
 
@@ -373,6 +493,10 @@
   .report-buttons {
     justify-content: flex-start;
   }
+
+  .dpr-report-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* =========================================
@@ -405,6 +529,11 @@
   }
 
   .financial-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .dpr-report-summary-grid,
+  .dpr-report-detail-grid {
     grid-template-columns: 1fr;
   }
 
