@@ -262,6 +262,141 @@
   background: #fef2f2;
 }
 
+/* ================================
+   BUDGET & COST CONTROL
+================================ */
+
+.site-budget-section {
+  margin-top: 25px;
+  padding: 25px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+}
+
+.site-budget-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.site-budget-heading h2 {
+  margin: 0;
+  color: #1f2f46;
+}
+
+.site-budget-heading p {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.site-budget-status {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.site-budget-status-on-track {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.site-budget-status-warning {
+  background: #fef3c7;
+  color: #a16207;
+}
+
+.site-budget-status-critical,
+.site-budget-status-over-budget {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.site-budget-empty {
+  margin: 0;
+  padding: 24px 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  color: #64748b;
+  text-align: center;
+}
+
+.site-budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.site-budget-summary-card {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.site-budget-summary-card span,
+.site-budget-summary-card strong,
+.site-budget-summary-card small {
+  display: block;
+}
+
+.site-budget-summary-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.site-budget-summary-card strong {
+  margin: 7px 0 5px;
+  color: #1f2f46;
+  font-size: 21px;
+}
+
+.site-budget-summary-card small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.site-budget-over-text {
+  color: #b91c1c !important;
+}
+
+.site-budget-table-responsive {
+  overflow-x: auto;
+}
+
+.site-budget-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+}
+
+.site-budget-table th {
+  padding: 12px;
+  background: #172033;
+  color: #ffffff;
+  font-size: 13px;
+  text-align: left;
+}
+
+.site-budget-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e4e8ee;
+  color: #26364b;
+  font-size: 13px;
+}
+
+.site-budget-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 
 /* ================================
    EMPTY MESSAGE
@@ -433,12 +568,28 @@
   .site-summary-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .site-budget-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 700px) {
 
   .site-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .site-budget-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-budget-section {
+    padding: 18px 14px;
+  }
+
+  .site-budget-heading {
+    flex-direction: column;
   }
 
   .site-dpr-summary-grid,

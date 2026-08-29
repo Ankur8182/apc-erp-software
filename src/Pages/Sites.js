@@ -6,6 +6,14 @@ import Header from "../Components/Header";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import {
+  canManageSiteBudgets,
+  createEmptySiteBudgetForm,
+  getSiteBudget,
+  getSiteBudgetFormValues,
+  SITE_BUDGET_FIELDS,
+  validateSiteBudget,
+} from "../utils/siteBudget";
 import { useAuth } from "../auth/AuthProvider";
 
 import "../Styles/Sites.css";
@@ -14,28 +22,30 @@ import { db } from "../firebase";
 
 import {
   collection,
-  addDoc,
   onSnapshot,
   deleteDoc,
-  updateDoc,
   doc,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 function Sites() {
   const navigate = useNavigate();
   const { role } = useAuth();
-  const canWrite = role === "admin" || role === "manager";
+  const canWrite = canManageSiteBudgets(role);
 
   // =========================
   // STATES
   // =========================
 
   const [sites, setSites] = useState([]);
+  const [siteBudgets, setSiteBudgets] = useState([]);
 
   const [siteName, setSiteName] = useState("");
   const [location, setLocation] = useState("");
   const [engineer, setEngineer] = useState("");
   const [status, setStatus] = useState("");
+  const [budgetForm, setBudgetForm] = useState(createEmptySiteBudgetForm);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -78,6 +88,28 @@ function Sites() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "siteBudgets"),
+      (snapshot) => {
+        setSiteBudgets(snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        })));
+      },
+      (error) => {
+        console.error("Site budget load error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const siteBudgetBySiteId = useMemo(
+    () => new Map(siteBudgets.map((budget) => [budget.siteId || budget.id, budget])),
+    [siteBudgets]
+  );
+
   // =========================
   // CLEAR FORM
   // =========================
@@ -87,6 +119,7 @@ function Sites() {
     setLocation("");
     setEngineer("");
     setStatus("");
+    setBudgetForm(createEmptySiteBudgetForm());
     setEditId(null);
   };
 
@@ -102,21 +135,44 @@ function Sites() {
       return;
     }
 
+    const budgetValidation = validateSiteBudget(budgetForm);
+    if (!budgetValidation.isValid) {
+      alert(budgetValidation.error);
+      return;
+    }
+
     const siteData = {
       siteName: siteName.trim(),
       location: location.trim(),
       engineer: engineer.trim(),
       status: status || "Pending",
     };
+    const hasBudgetValues = Object.keys(budgetValidation.value).length > 0;
 
     try {
       setSaving(true);
       // UPDATE EXISTING SITE
       if (editId) {
-        await updateDoc(
-          doc(db, "sites", editId),
-          siteData
-        );
+        const batch = writeBatch(db);
+        const existingBudget = siteBudgetBySiteId.get(editId);
+
+        batch.update(doc(db, "sites", editId), siteData);
+
+        if (hasBudgetValues || existingBudget) {
+          batch.set(
+            doc(db, "siteBudgets", editId),
+            {
+              siteId: editId,
+              siteName: siteData.siteName,
+              budget: budgetValidation.value,
+              updatedAt: serverTimestamp(),
+              ...(existingBudget ? {} : { createdAt: serverTimestamp() }),
+            },
+            { merge: true }
+          );
+        }
+
+        await batch.commit();
 
         const auditResult = await logAuditEvent({
           action: "update",
@@ -133,10 +189,21 @@ function Sites() {
 
       // ADD NEW SITE
       else {
-        const siteReference = await addDoc(
-          collection(db, "sites"),
-          siteData
-        );
+        const siteReference = doc(collection(db, "sites"));
+        const batch = writeBatch(db);
+
+        batch.set(siteReference, siteData);
+        if (hasBudgetValues) {
+          batch.set(doc(db, "siteBudgets", siteReference.id), {
+            siteId: siteReference.id,
+            siteName: siteData.siteName,
+            budget: budgetValidation.value,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        await batch.commit();
 
         const auditResult = await logAuditEvent({
           action: "create",
@@ -174,6 +241,7 @@ function Sites() {
     setLocation(item.location || "");
     setEngineer(item.engineer || "");
     setStatus(item.status || "");
+    setBudgetForm(getSiteBudgetFormValues(siteBudgetBySiteId.get(item.id) || item));
 
     setEditId(item.id);
 
@@ -322,6 +390,7 @@ function Sites() {
                 type="text"
                 placeholder="Site Name *"
                 value={siteName}
+                disabled={!canWrite || saving}
                 onChange={(e) =>
                   setSiteName(e.target.value)
                 }
@@ -333,6 +402,7 @@ function Sites() {
                 type="text"
                 placeholder="Location *"
                 value={location}
+                disabled={!canWrite || saving}
                 onChange={(e) =>
                   setLocation(e.target.value)
                 }
@@ -344,6 +414,7 @@ function Sites() {
                 type="text"
                 placeholder="Site Engineer"
                 value={engineer}
+                disabled={!canWrite || saving}
                 onChange={(e) =>
                   setEngineer(e.target.value)
                 }
@@ -353,6 +424,7 @@ function Sites() {
 
               <select
                 value={status}
+                disabled={!canWrite || saving}
                 onChange={(e) =>
                   setStatus(e.target.value)
                 }
@@ -377,6 +449,34 @@ function Sites() {
 
             </div>
 
+            <section className="site-budget-form-section" aria-labelledby="site-budget-form-title">
+              <div>
+                <h3 id="site-budget-form-title">💰 Budget Planning</h3>
+                <p>Optional. Leave fields blank when a site budget has not been approved yet.</p>
+              </div>
+
+              <div className="form-grid site-budget-form-grid">
+                {SITE_BUDGET_FIELDS.map((field) => (
+                  <label className="site-budget-field" key={field.key}>
+                    <span>{field.label}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder={`${field.label} (₹)`}
+                      value={budgetForm[field.key]}
+                      disabled={!canWrite || saving}
+                      onChange={(event) => setBudgetForm((current) => ({
+                        ...current,
+                        [field.key]: event.target.value,
+                      }))}
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+
             {/* BUTTONS */}
 
             <div
@@ -387,19 +487,21 @@ function Sites() {
               }}
             >
 
-              <button
-                className="save-btn"
-                onClick={saveSite}
-                disabled={saving}
-              >
-                {saving
-                  ? "⏳ Saving..."
-                  : editId
-                  ? "✏️ Update Site"
-                  : "💾 Save Site"}
-              </button>
+              {canWrite && (
+                <button
+                  className="save-btn"
+                  onClick={saveSite}
+                  disabled={saving}
+                >
+                  {saving
+                    ? "⏳ Saving..."
+                    : editId
+                    ? "✏️ Update Site"
+                    : "💾 Save Site"}
+                </button>
+              )}
 
-              {editId && (
+              {editId && canWrite && (
 
                 <button
                   type="button"
@@ -473,6 +575,7 @@ function Sites() {
                       <th>Location</th>
                       <th>Engineer</th>
                       <th>Status</th>
+                      <th>Project Budget</th>
                       <th>Action</th>
                     </tr>
 
@@ -485,7 +588,7 @@ function Sites() {
                       <tr>
 
                         <td
-                          colSpan="6"
+                          colSpan="7"
                           style={{
                             textAlign: "center",
                             padding: "30px",
@@ -535,6 +638,12 @@ function Sites() {
 
                             </td>
 
+                            <td>
+                              {getSiteBudget(siteBudgetBySiteId.get(item.id) || item).hasBudget
+                                ? `₹ ${getSiteBudget(siteBudgetBySiteId.get(item.id) || item).totalBudget.toLocaleString("en-IN")}`
+                                : "Not set"}
+                            </td>
+
                             {/* ACTION BUTTONS */}
 
                             <td
@@ -553,22 +662,26 @@ function Sites() {
                                 👁️ View
                               </button>
 
-                              <button
-                                className="edit-btn"
-                                onClick={() => editSite(item)}
-                                style={{
-                                  marginRight: "6px",
-                                }}
-                              >
-                                ✏️ Edit
-                              </button>
+                              {canWrite && (
+                                <>
+                                  <button
+                                    className="edit-btn"
+                                    onClick={() => editSite(item)}
+                                    style={{
+                                      marginRight: "6px",
+                                    }}
+                                  >
+                                    ✏️ Edit
+                                  </button>
 
-                              <button
-                                className="delete-btn"
-                                onClick={() => deleteSite(item.id, item)}
-                              >
-                                🗑 Delete
-                              </button>
+                                  <button
+                                    className="delete-btn"
+                                    onClick={() => deleteSite(item.id, item)}
+                                  >
+                                    🗑 Delete
+                                  </button>
+                                </>
+                              )}
 
                             </td>
 

@@ -30,11 +30,16 @@ import {
   getDailyProgressOperationalSummary,
   getDprTodayDate,
 } from "../utils/dailyProgressReporting";
+import {
+  calculateSiteBudgetSummary,
+  formatBudgetUsagePercent,
+} from "../utils/siteBudget";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
 function Dashboard() {
   const [sites, setSites] = useState([]);
+  const [siteBudgets, setSiteBudgets] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -79,6 +84,19 @@ function Dashboard() {
       },
       (error) => {
         console.error("Invoice Error:", error);
+      }
+    );
+
+    const unsubscribeSiteBudgets = onSnapshot(
+      collection(db, "siteBudgets"),
+      (snapshot) => {
+        setSiteBudgets(snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        })));
+      },
+      (error) => {
+        console.error("Site budget Error:", error);
       }
     );
 
@@ -208,6 +226,7 @@ function Dashboard() {
 
     return () => {
       unsubscribeSites();
+      unsubscribeSiteBudgets();
       unsubscribeInvoices();
       unsubscribeExpenses();
       unsubscribeMaterials();
@@ -227,6 +246,11 @@ function Dashboard() {
   const formatMoney = (amount) => {
     return `₹ ${toNumber(amount).toLocaleString("en-IN")}`;
   };
+
+  const siteBudgetBySiteId = useMemo(
+    () => new Map(siteBudgets.map((budget) => [budget.siteId || budget.id, budget])),
+    [siteBudgets]
+  );
 
   // =========================
   // DASHBOARD SUMMARY
@@ -316,7 +340,7 @@ function Dashboard() {
 
     return Array.from(siteMap.values()).map((siteItem) => {
       const siteName = getSiteName(siteItem) || "Unnamed Site";
-      const siteSummary = calculateFinancialSummary({
+      const siteFinancialSummary = calculateFinancialSummary({
         invoices: invoices.filter((item) => isSameSite(item, siteName)),
         expenses: expenses.filter((item) => isSameSite(item, siteName)),
         materials: materials.filter((item) => isSameSite(item, siteName)),
@@ -328,6 +352,10 @@ function Dashboard() {
           isSameSite(item, siteName)
         ),
       });
+      const budgetSummary = calculateSiteBudgetSummary(
+        siteBudgetBySiteId.get(siteItem.id) || siteItem,
+        siteFinancialSummary
+      );
 
       return {
         id: siteItem.id,
@@ -338,12 +366,13 @@ function Dashboard() {
         status:
           siteItem.status ||
           "Running",
-        income: siteSummary.income,
-        otherExpense: siteSummary.otherExpense,
-        materialExpense: siteSummary.materialExpense,
-        salaryExpense: siteSummary.labourExpense,
-        totalExpense: siteSummary.totalExpense,
-        profit: siteSummary.profit,
+        income: siteFinancialSummary.income,
+        otherExpense: siteFinancialSummary.otherExpense,
+        materialExpense: siteFinancialSummary.materialExpense,
+        salaryExpense: siteFinancialSummary.labourExpense,
+        totalExpense: siteFinancialSummary.totalExpense,
+        profit: siteFinancialSummary.profit,
+        budgetSummary,
       };
     });
   }, [
@@ -356,6 +385,7 @@ function Dashboard() {
     attendance,
     vehicles,
     vehicleExpenses,
+    siteBudgetBySiteId,
   ]);
 
   // =========================
@@ -372,6 +402,13 @@ function Dashboard() {
 
   const pendingSites = sites.filter(
     (item) => normaliseStatus(item.status) === "pending"
+  ).length;
+
+  const sitesWithBudget = siteSummary.filter(
+    (site) => site.budgetSummary.hasBudget
+  ).length;
+  const sitesWithBudgetAlerts = siteSummary.filter((site) =>
+    ["warning", "critical", "over-budget"].includes(site.budgetSummary.status)
   ).length;
 
   // =========================
@@ -536,7 +573,7 @@ function Dashboard() {
               <h2 id="site-overview">🏗️ Site Overview</h2>
             </div>
           </div>
-          <div className="dashboard-status-grid">
+          <div className="dashboard-status-grid dashboard-site-overview-grid">
             <article className="dashboard-status-card status-running">
               <span>🟢 Running</span>
               <strong>{runningSites}</strong>
@@ -551,6 +588,11 @@ function Dashboard() {
               <span>⏳ Pending</span>
               <strong>{pendingSites}</strong>
               <small>Sites awaiting work</small>
+            </article>
+            <article className="dashboard-status-card status-budget">
+              <span>⚠️ Budget Alerts</span>
+              <strong>{sitesWithBudgetAlerts}</strong>
+              <small>{sitesWithBudget} sites have approved budgets</small>
             </article>
           </div>
         </section>
@@ -576,13 +618,16 @@ function Dashboard() {
                   <th>Other Expense</th>
                   <th>Labour</th>
                   <th>Total Expense</th>
+                  <th>Budget</th>
+                  <th>Budget Used</th>
+                  <th>Remaining</th>
                   <th>Profit/Loss</th>
                 </tr>
               </thead>
               <tbody>
                 {siteSummary.length === 0 ? (
                   <tr>
-                    <td className="dashboard-table-empty" colSpan="10">No site financial records are available yet.</td>
+                    <td className="dashboard-table-empty" colSpan="13">No site financial records are available yet.</td>
                   </tr>
                 ) : (
                   siteSummary.map((item, index) => {
@@ -604,6 +649,23 @@ function Dashboard() {
                         <td>{formatMoney(item.otherExpense)}</td>
                         <td>{formatMoney(item.salaryExpense)}</td>
                         <td><strong>{formatMoney(item.totalExpense)}</strong></td>
+                        <td>
+                          {item.budgetSummary.hasBudget
+                            ? formatMoney(item.budgetSummary.totalBudget)
+                            : "Not set"}
+                        </td>
+                        <td>
+                          {item.budgetSummary.hasBudget
+                            ? formatBudgetUsagePercent(item.budgetSummary.usagePercent)
+                            : "Not set"}
+                        </td>
+                        <td>
+                          {item.budgetSummary.hasBudget ? (
+                            <strong className={item.budgetSummary.overBudgetAmount > 0 ? "loss-text" : ""}>
+                              {formatMoney(item.budgetSummary.remainingBudget)}
+                            </strong>
+                          ) : "Not set"}
+                        </td>
                         <td>
                           <strong className={item.profit >= 0 ? "profit-text" : "loss-text"}>
                             {formatMoney(item.profit)}

@@ -85,6 +85,44 @@
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
 }
 
+.site-budget-form-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.site-budget-form-section h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 17px;
+}
+
+.site-budget-form-section p {
+  margin: 5px 0 16px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.site-budget-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.site-budget-field {
+  display: grid;
+  gap: 7px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.site-budget-field input:disabled,
+.form-grid input:disabled,
+.form-grid select:disabled {
+  cursor: not-allowed;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 
 /* =========================================
    SEARCH
@@ -273,6 +311,10 @@
 @media (max-width: 1100px) {
 
   .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .site-budget-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

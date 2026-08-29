@@ -16,6 +16,10 @@ import {
   getDprTodayDate,
   getDprUsageValues,
 } from "../utils/dailyProgressReporting";
+import {
+  calculateSiteBudgetSummary,
+  formatBudgetUsagePercent,
+} from "../utils/siteBudget";
 
 import {
   collection,
@@ -27,6 +31,7 @@ function SiteDetails() {
   const { id } = useParams();
 
   const [sites, setSites] = useState([]);
+  const [siteBudgets, setSiteBudgets] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [labours, setLabours] = useState([]);
@@ -119,6 +124,23 @@ function SiteDetails() {
 
     return () => unsubscribe();
 
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "siteBudgets"),
+      (snapshot) => {
+        setSiteBudgets(snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        })));
+      },
+      (error) => {
+        console.error("Site budget error:", error);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   // =========================
@@ -384,7 +406,8 @@ function SiteDetails() {
         invoiceCount: 0,
         materialCount: 0,
         expenseCount: 0,
-        salaryCount: 0
+        salaryCount: 0,
+        financialSummary: {}
       };
     }
 
@@ -434,7 +457,8 @@ function SiteDetails() {
       invoiceCount: siteInvoices.length,
       materialCount: siteMaterials.length,
       expenseCount: siteExpenses.length,
-      salaryCount: siteSalaries.length
+      salaryCount: siteSalaries.length,
+      financialSummary: summary
     };
 
   }, [
@@ -458,6 +482,28 @@ function SiteDetails() {
     vehicleExpenses
 
   ]);
+
+  const selectedSiteRecord = useMemo(
+    () =>
+      sites.find((site) => isSameSite(site, selectedSite)) || {
+        siteName: selectedSite,
+      },
+    [sites, selectedSite]
+  );
+
+  const selectedSiteBudgetRecord = useMemo(
+    () =>
+      siteBudgets.find((budget) =>
+        budget.siteId === selectedSiteRecord.id ||
+        budget.id === selectedSiteRecord.id
+      ) || selectedSiteRecord,
+    [siteBudgets, selectedSiteRecord]
+  );
+
+  const siteBudgetSummary = useMemo(
+    () => calculateSiteBudgetSummary(selectedSiteBudgetRecord, siteReport.financialSummary),
+    [selectedSiteBudgetRecord, siteReport.financialSummary]
+  );
 
 
   // =========================
@@ -959,6 +1005,100 @@ function SiteDetails() {
                 </table>
 
               </div>
+
+
+              {/* =========================
+                  BUDGET & COST CONTROL
+              ========================= */}
+
+              <section className="site-budget-section" aria-labelledby="site-budget-title">
+                <div className="site-budget-heading">
+                  <div>
+                    <h2 id="site-budget-title">💰 Budget &amp; Cost Control</h2>
+                    <p>Actuals reuse the financial summary above. DPR quantities are not treated as expenses.</p>
+                  </div>
+                  {siteBudgetSummary.hasBudget && (
+                    <span className={`site-budget-status site-budget-status-${siteBudgetSummary.status}`}>
+                      {siteBudgetSummary.status === "over-budget"
+                        ? "Over budget"
+                        : siteBudgetSummary.status === "critical"
+                          ? "90% used"
+                          : siteBudgetSummary.status === "warning"
+                            ? "80% used"
+                            : "On track"}
+                    </span>
+                  )}
+                </div>
+
+                {!siteBudgetSummary.hasBudget ? (
+                  <p className="site-budget-empty">
+                    No approved budget is recorded for this site yet. Admin or manager can add one from Site Management.
+                  </p>
+                ) : (
+                  <>
+                    <div className="site-budget-summary-grid">
+                      <article className="site-budget-summary-card">
+                        <span>Total Budget</span>
+                        <strong>{formatMoney(siteBudgetSummary.totalBudget)}</strong>
+                        {siteBudgetSummary.contingencyBudget > 0 && (
+                          <small>Includes {formatMoney(siteBudgetSummary.contingencyBudget)} contingency</small>
+                        )}
+                      </article>
+                      <article className="site-budget-summary-card">
+                        <span>Actual Cost</span>
+                        <strong>{formatMoney(siteBudgetSummary.actualCost)}</strong>
+                        <small>Recorded materials, labour, vehicle and other costs</small>
+                      </article>
+                      <article className="site-budget-summary-card">
+                        <span>Remaining Budget</span>
+                        <strong className={siteBudgetSummary.overBudgetAmount > 0 ? "site-budget-over-text" : ""}>
+                          {formatMoney(siteBudgetSummary.remainingBudget)}
+                        </strong>
+                        {siteBudgetSummary.overBudgetAmount > 0 && (
+                          <small>Over by {formatMoney(siteBudgetSummary.overBudgetAmount)}</small>
+                        )}
+                      </article>
+                      <article className="site-budget-summary-card">
+                        <span>Budget Used</span>
+                        <strong>{formatBudgetUsagePercent(siteBudgetSummary.usagePercent)}</strong>
+                        <small>Income: {formatMoney(siteReport.income)} · {siteReport.profitLoss >= 0 ? "Profit" : "Loss"}: {formatMoney(Math.abs(siteReport.profitLoss))}</small>
+                      </article>
+                    </div>
+
+                    <div className="site-budget-table-responsive">
+                      <table className="site-budget-table">
+                        <thead>
+                          <tr>
+                            <th>Category</th>
+                            <th>Budget</th>
+                            <th>Actual</th>
+                            <th>Remaining</th>
+                            <th>Usage</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            ["Material", siteBudgetSummary.categories.material],
+                            ["Labour / Salary", siteBudgetSummary.categories.labour],
+                            ["Vehicle / Equipment", siteBudgetSummary.categories.vehicle],
+                            ["Other Expense", siteBudgetSummary.categories.other],
+                          ].map(([label, category]) => (
+                            <tr key={label}>
+                              <td>{label}</td>
+                              <td>{category.hasBudget ? formatMoney(category.budget) : "Not set"}</td>
+                              <td>{formatMoney(category.actual)}</td>
+                              <td className={category.remaining !== null && category.remaining < 0 ? "site-budget-over-text" : ""}>
+                                {category.hasBudget ? formatMoney(category.remaining) : "Not set"}
+                              </td>
+                              <td>{formatBudgetUsagePercent(category.usagePercent)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </section>
 
 
               {/* =========================

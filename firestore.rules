@@ -145,6 +145,48 @@ service cloud.firestore {
             request.resource.data.action == "create"));
     }
 
+    function hasValidSiteBudgetData(siteId) {
+      return request.resource.data.keys().hasAll(["siteId", "siteName", "budget"]) &&
+        request.resource.data.keys().hasOnly([
+          "siteId",
+          "siteName",
+          "budget",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        request.resource.data.siteId == siteId &&
+        request.resource.data.siteName is string &&
+        request.resource.data.siteName.size() > 0 &&
+        request.resource.data.siteName.size() <= 200 &&
+        request.resource.data.budget is map &&
+        request.resource.data.budget.keys().hasOnly([
+          "totalProjectBudget",
+          "materialBudget",
+          "labourBudget",
+          "vehicleBudget",
+          "otherExpenseBudget",
+          "contingencyBudget"
+        ]) &&
+        (!request.resource.data.budget.keys().hasAll(["totalProjectBudget"]) ||
+          (request.resource.data.budget.totalProjectBudget is number &&
+            request.resource.data.budget.totalProjectBudget >= 0)) &&
+        (!request.resource.data.budget.keys().hasAll(["materialBudget"]) ||
+          (request.resource.data.budget.materialBudget is number &&
+            request.resource.data.budget.materialBudget >= 0)) &&
+        (!request.resource.data.budget.keys().hasAll(["labourBudget"]) ||
+          (request.resource.data.budget.labourBudget is number &&
+            request.resource.data.budget.labourBudget >= 0)) &&
+        (!request.resource.data.budget.keys().hasAll(["vehicleBudget"]) ||
+          (request.resource.data.budget.vehicleBudget is number &&
+            request.resource.data.budget.vehicleBudget >= 0)) &&
+        (!request.resource.data.budget.keys().hasAll(["otherExpenseBudget"]) ||
+          (request.resource.data.budget.otherExpenseBudget is number &&
+            request.resource.data.budget.otherExpenseBudget >= 0)) &&
+        (!request.resource.data.budget.keys().hasAll(["contingencyBudget"]) ||
+          (request.resource.data.budget.contingencyBudget is number &&
+            request.resource.data.budget.contingencyBudget >= 0));
+    }
+
     // Users may read only their own authorization profile. Roles can only be
     // assigned or changed from the Firebase Console/Admin SDK, never by a client.
     match /users/{userId} {
@@ -155,6 +197,20 @@ service cloud.firestore {
     match /sites/{document=**} {
       allow read: if isAuthorizedErpUser() || isFieldUser();
       allow create, update, delete: if canWriteErpData();
+    }
+
+    // Budget documents are separated from site reference records so field
+    // users can select a site for DPR entry without receiving finance data.
+    match /siteBudgets/{siteId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidSiteBudgetData(siteId) &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidSiteBudgetData(siteId) &&
+        request.resource.data.siteId == resource.data.siteId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
 
     match /labours/{document=**} {

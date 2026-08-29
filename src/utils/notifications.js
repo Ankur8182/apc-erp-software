@@ -1,4 +1,5 @@
 import {
+  calculateFinancialSummary,
   getInvoiceSummary,
   getRecordDate,
   getSiteName,
@@ -14,6 +15,7 @@ import {
   summariseDailyProgressReports,
 } from "./dailyProgressReporting";
 import { FIELD_USER_ROLES, STANDARD_ERP_ROLES } from "../auth/authorization";
+import { calculateSiteBudgetSummary } from "./siteBudget";
 
 export const NOTIFICATION_SEVERITIES = {
   info: "info",
@@ -97,11 +99,15 @@ const orderAlerts = (alerts) => {
 const createCoreAlerts = ({
   today,
   invoices = [],
+  expenses = [],
   materials = [],
   sites = [],
+  siteBudgets = [],
+  labours = [],
   attendance = [],
   salaries = [],
   vehicles = [],
+  vehicleExpenses = [],
   dailyProgressReports = [],
 }) => {
   const alerts = [];
@@ -184,6 +190,63 @@ const createCoreAlerts = ({
       date: today,
       href: "/daily-progress-report",
       module: "Daily Progress Report",
+      site: siteName,
+    });
+  });
+
+  sites.forEach((site) => {
+    if (!site || typeof site !== "object") return;
+
+    const siteName = getSiteName(site) || cleanText(site.name);
+    if (!siteName) return;
+
+    // Actual cost always comes from the canonical financial summary. This
+    // keeps a budget alert aligned with Dashboard, Reports, and SiteDetails.
+    const financialSummary = calculateFinancialSummary({
+      invoices: invoices.filter((item) => isSameSite(item, siteName)),
+      expenses: expenses.filter((item) => isSameSite(item, siteName)),
+      materials: materials.filter((item) => isSameSite(item, siteName)),
+      labours: labours.filter((item) => isSameSite(item, siteName)),
+      salaries: salaries.filter((item) => isSameSite(item, siteName)),
+      attendance: attendance.filter((item) => isSameSite(item, siteName)),
+      vehicles: vehicles.filter((item) => isSameSite(item, siteName)),
+      vehicleExpenses: vehicleExpenses.filter((item) => isSameSite(item, siteName)),
+    });
+    const budgetRecord = siteBudgets.find((budget) =>
+      budget?.siteId === site.id || budget?.id === site.id
+    );
+    const budgetSummary = calculateSiteBudgetSummary(
+      budgetRecord || site,
+      financialSummary
+    );
+
+    if (!budgetSummary.hasBudget || budgetSummary.actualCost <= 0) return;
+
+    let title = "";
+    let severity = NOTIFICATION_SEVERITIES.warning;
+    if (budgetSummary.status === "over-budget") {
+      title = "Site budget exceeded";
+      severity = NOTIFICATION_SEVERITIES.critical;
+    } else if (budgetSummary.status === "critical") {
+      title = "Site budget is 90% used";
+      severity = NOTIFICATION_SEVERITIES.critical;
+    } else if (budgetSummary.status === "warning") {
+      title = "Site budget is 80% used";
+    } else {
+      return;
+    }
+
+    addAlert(alerts, {
+      id: `site-budget-${budgetSummary.status}-${normaliseId(site.id || siteName)}`,
+      severity,
+      title,
+      message:
+        budgetSummary.status === "over-budget"
+          ? `${siteName} is over budget by ${formatMoney(budgetSummary.overBudgetAmount)}.`
+          : `${siteName} has used ${formatMoney(budgetSummary.actualCost)} of ${formatMoney(budgetSummary.totalBudget)}.`,
+      date: today,
+      href: site.id ? `/site-details/${site.id}` : "/sites",
+      module: "Site Budget",
       site: siteName,
     });
   });
@@ -271,8 +334,11 @@ export const generateNotifications = ({
   userId = "",
   today = getDprTodayDate(),
   invoices = [],
+  expenses = [],
   materials = [],
   sites = [],
+  siteBudgets = [],
+  labours = [],
   attendance = [],
   salaries = [],
   vehicles = [],
@@ -311,20 +377,19 @@ export const generateNotifications = ({
 
   if (!STANDARD_ERP_ROLES.includes(normalisedRole)) return [];
 
-  // vehicleExpenses is intentionally accepted here so callers can pass the
-  // complete dashboard dataset. Expense reminders are emitted only when a
-  // vehicle has an explicit maintenance status or due-date field.
-  void vehicleExpenses;
-
   return orderAlerts(
     createCoreAlerts({
       today: currentDate,
       invoices,
+      expenses,
       materials,
       sites,
+      siteBudgets,
+      labours,
       attendance,
       salaries,
       vehicles,
+      vehicleExpenses,
       dailyProgressReports: reports,
     })
   );

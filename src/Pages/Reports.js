@@ -18,6 +18,10 @@ import {
   summariseDailyProgressReports,
 } from "../utils/dailyProgressReporting";
 import { printReport } from "../utils/reportExporting";
+import {
+  calculateSiteBudgetSummary,
+  formatBudgetUsagePercent,
+} from "../utils/siteBudget";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -36,6 +40,7 @@ const formatExportMoney = (amount) =>
 
 function Reports() {
   const [sites, setSites] = useState([]);
+  const [siteBudgets, setSiteBudgets] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -61,7 +66,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 10;
+    const totalCollections = 11;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -110,6 +115,7 @@ function Reports() {
     };
 
     loadCollection("sites", setSites);
+    loadCollection("siteBudgets", setSiteBudgets);
     loadCollection("invoices", setInvoices);
     loadCollection("expenses", setExpenses);
     loadCollection("materials", setMaterials);
@@ -377,6 +383,16 @@ function Reports() {
           ),
         };
         const summary = calculateFinancialSummary(siteRecords);
+        const siteRecord = sites.find((item) => isSameSite(item, siteName)) || {
+          siteName,
+        };
+        const budgetRecord = siteBudgets.find((item) =>
+          item.siteId === siteRecord.id || item.id === siteRecord.id
+        );
+        const budgetSummary = calculateSiteBudgetSummary(
+          budgetRecord || siteRecord,
+          summary
+        );
 
         return {
           siteName,
@@ -384,6 +400,7 @@ function Reports() {
           received: summary.received,
           expense: summary.totalExpense,
           profit: summary.profit,
+          budgetSummary,
         };
       })
       .filter((item) => {
@@ -408,6 +425,8 @@ function Reports() {
     filteredVehicleExpenses,
     salaries,
     vehicleExpenses,
+    sites,
+    siteBudgets,
     selectedSite,
   ]);
 
@@ -531,9 +550,23 @@ function Reports() {
       { key: "income", label: "Income (INR)", format: formatExportMoney },
       { key: "received", label: "Received (INR)", format: formatExportMoney },
       { key: "expense", label: "Expense (INR)", format: formatExportMoney },
+      { key: "budget", label: "Budget", width: 1.1 },
+      { key: "budgetUsed", label: "Budget Used" },
+      { key: "remainingBudget", label: "Remaining Budget", width: 1.15 },
       { key: "profit", label: "Profit / Loss (INR)", format: formatExportMoney },
     ],
-    rows: reportRows,
+    rows: reportRows.map((row) => ({
+      ...row,
+      budget: row.budgetSummary.hasBudget
+        ? formatExportMoney(row.budgetSummary.totalBudget)
+        : "Not set",
+      budgetUsed: row.budgetSummary.hasBudget
+        ? formatBudgetUsagePercent(row.budgetSummary.usagePercent)
+        : "Not set",
+      remainingBudget: row.budgetSummary.hasBudget
+        ? formatExportMoney(row.budgetSummary.remainingBudget)
+        : "Not set",
+    })),
   };
 
   const dprExport = {
@@ -914,6 +947,9 @@ function Reports() {
                       <th>Total Income</th>
                       <th>Received</th>
                       <th>Total Expense</th>
+                      <th>Budget</th>
+                      <th>Budget Used</th>
+                      <th>Remaining</th>
                       <th>Profit / Loss</th>
                     </tr>
                   </thead>
@@ -922,7 +958,7 @@ function Reports() {
                     {reportRows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="6"
+                          colSpan="9"
                           className="no-report-data"
                         >
                           No report data found.
@@ -952,6 +988,24 @@ function Reports() {
 
                             <td>
                               {formatMoney(row.expense)}
+                            </td>
+
+                            <td>
+                              {row.budgetSummary.hasBudget
+                                ? formatMoney(row.budgetSummary.totalBudget)
+                                : "Not set"}
+                            </td>
+
+                            <td>
+                              {row.budgetSummary.hasBudget
+                                ? formatBudgetUsagePercent(row.budgetSummary.usagePercent)
+                                : "Not set"}
+                            </td>
+
+                            <td className={row.budgetSummary.overBudgetAmount > 0 ? "loss-text" : ""}>
+                              {row.budgetSummary.hasBudget
+                                ? formatMoney(row.budgetSummary.remainingBudget)
+                                : "Not set"}
                             </td>
 
                             <td

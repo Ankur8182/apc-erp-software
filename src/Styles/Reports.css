@@ -425,7 +425,7 @@
 .reports-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 850px;
+  min-width: 1180px;
 }
 
 .reports-table thead {

@@ -66,6 +66,23 @@ describe("notification generation", () => {
     expect(alerts.find((alert) => alert.title === "Today’s DPR is pending")).toBeUndefined();
   });
 
+  it("adds the highest applicable budget alert using canonical site financial data", () => {
+    const alerts = generateNotifications({
+      role: "admin",
+      today: TODAY,
+      sites: [{ id: "site-1", siteName: "River View", budget: { totalProjectBudget: 1000 } }],
+      materials: [{ site: "river view", amount: 600 }],
+      expenses: [{ site: "River View", amount: 350, expenseType: "Other" }],
+    });
+
+    const budgetAlert = alerts.find((alert) => alert.module === "Site Budget");
+    expect(budgetAlert).toMatchObject({
+      title: "Site budget is 90% used",
+      severity: "critical",
+      href: "/site-details/site-1",
+    });
+  });
+
   it("keeps field users on their own operational DPR alert only", () => {
     const alerts = generateNotifications({
       role: "supervisor",

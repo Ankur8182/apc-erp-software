@@ -154,6 +154,7 @@
 }
 
 .dashboard-dpr-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dashboard-site-overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .dashboard-attendance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .dashboard-status-card {
@@ -170,6 +171,7 @@
 .status-running { border-left: 4px solid #16a34a; }
 .status-completed { border-left: 4px solid #2563eb; }
 .status-pending { border-left: 4px solid #d97706; }
+.status-budget { border-left: 4px solid #9333ea; }
 .status-dpr { border-left: 4px solid #4f46e5; }
 .status-manpower { border-left: 4px solid #0891b2; }
 .status-sites { border-left: 4px solid #7c3aed; }
@@ -199,7 +201,7 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.dashboard-table { width: 100%; min-width: 1200px; border-collapse: collapse; }
+.dashboard-table { width: 100%; min-width: 1440px; border-collapse: collapse; }
 .dashboard-table th {
   padding: 14px 13px;
   background: #172033;
@@ -325,6 +327,7 @@
 
 @media (max-width: 1120px) {
   .dashboard-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-site-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-dpr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

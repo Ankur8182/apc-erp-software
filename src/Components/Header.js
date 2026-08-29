@@ -17,8 +17,11 @@ import {
 
 const CORE_NOTIFICATION_COLLECTIONS = [
   "invoices",
+  "expenses",
   "materials",
   "sites",
+  "siteBudgets",
+  "labours",
   "attendance",
   "salaries",
   "vehicles",
@@ -28,8 +31,11 @@ const CORE_NOTIFICATION_COLLECTIONS = [
 
 const EMPTY_NOTIFICATION_DATA = {
   invoices: [],
+  expenses: [],
   materials: [],
   sites: [],
+  siteBudgets: [],
+  labours: [],
   attendance: [],
   salaries: [],
   vehicles: [],
