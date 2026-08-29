@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Labour.css";
 
 import { db } from "../firebase";
@@ -162,6 +163,16 @@ function Labour() {
           labourData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "labour",
+          recordId: editId,
+          recordLabel: labourData.name,
+          details: "Labour record updated.",
+          site: labourData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert("Labour successfully updated.");
 
       }
@@ -169,13 +180,23 @@ function Labour() {
       // ADD NEW
       else {
 
-        await addDoc(
+        const labourReference = await addDoc(
           collection(db, "labours"),
           {
             ...labourData,
             createdAt: serverTimestamp()
           }
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "labour",
+          recordId: labourReference.id,
+          recordLabel: labourData.name,
+          details: "Labour record created.",
+          site: labourData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert("Labour successfully saved.");
 
@@ -233,7 +254,7 @@ function Labour() {
   // DELETE LABOUR
   // =========================
 
-  const deleteLabour = async (id) => {
+  const deleteLabour = async (id, record = {}) => {
 
     const confirmDelete = window.confirm(
       "Kya aap is Labour ko delete karna chahte hain?"
@@ -249,6 +270,16 @@ function Labour() {
       await deleteDoc(
         doc(db, "labours", id)
       );
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "labour",
+        recordId: id,
+        recordLabel: record.name,
+        details: "Labour record deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert("Labour successfully deleted.");
 
@@ -580,7 +611,7 @@ function Labour() {
                         <button
                           className="delete-btn"
                           onClick={() =>
-                            deleteLabour(item.id)
+                            deleteLabour(item.id, item)
                           }
                         >
                           🗑️ Delete

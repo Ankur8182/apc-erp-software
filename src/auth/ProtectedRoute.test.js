@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import ProtectedRoute, { PublicOnlyRoute } from "./ProtectedRoute";
 import { useAuth } from "./AuthProvider";
-import { FIELD_UPDATE_ROLES, STANDARD_ERP_ROLES } from "./authorization";
+import { ADMIN_ROLES, FIELD_UPDATE_ROLES, STANDARD_ERP_ROLES } from "./authorization";
 
 jest.mock("./AuthProvider", () => ({
   useAuth: jest.fn(),
@@ -100,6 +100,32 @@ describe("route authorization", () => {
       expect(screen.getByText(`${role} ERP data`)).toBeInTheDocument();
       unmount();
     });
+  });
+
+  test("allows an admin to open audit-log routes", () => {
+    useAuth.mockReturnValue({ loading: false, isAuthorized: true, role: "admin" });
+
+    render(
+      <ProtectedRoute allowedRoles={ADMIN_ROLES}><div>Audit history</div></ProtectedRoute>
+    );
+
+    expect(screen.getByText("Audit history")).toBeInTheDocument();
+  });
+
+  test.each([
+    ["manager", "/dashboard"],
+    ["viewer", "/dashboard"],
+    ["supervisor", "/field-dashboard"],
+    ["engineer", "/field-dashboard"],
+  ])("denies %s access to admin-only routes", (role, redirectPath) => {
+    useAuth.mockReturnValue({ loading: false, isAuthorized: true, role });
+
+    render(
+      <ProtectedRoute allowedRoles={ADMIN_ROLES}><div>Audit history</div></ProtectedRoute>
+    );
+
+    expect(screen.getByTestId("redirect")).toHaveTextContent(redirectPath);
+    expect(screen.queryByText("Audit history")).not.toBeInTheDocument();
   });
 
   test("shows a safe loading state while the user role is being checked", () => {

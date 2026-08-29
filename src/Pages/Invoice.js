@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Invoice.css";
 
 import { db } from "../firebase";
@@ -177,15 +178,35 @@ function Invoice() {
           invoiceData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "invoices",
+          recordId: editId,
+          recordLabel: invoiceData.invoiceNo,
+          details: "Invoice record updated.",
+          site: invoiceData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert("Invoice successfully updated.");
       } else {
-        await addDoc(
+        const invoiceReference = await addDoc(
           collection(db, "invoices"),
           {
             ...invoiceData,
             createdAt: serverTimestamp(),
           }
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "invoices",
+          recordId: invoiceReference.id,
+          recordLabel: invoiceData.invoiceNo,
+          details: "Invoice record created.",
+          site: invoiceData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert("Invoice successfully saved.");
       }
@@ -236,7 +257,7 @@ function Invoice() {
   // DELETE
   // =========================
 
-  const deleteInvoice = async (id) => {
+  const deleteInvoice = async (id, record = {}) => {
     const confirmDelete = window.confirm(
       "Kya aap is Invoice ko delete karna chahte hain?"
     );
@@ -245,6 +266,16 @@ function Invoice() {
 
     try {
       await deleteDoc(doc(db, "invoices", id));
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "invoices",
+        recordId: id,
+        recordLabel: record.invoiceNo,
+        details: "Invoice record deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert("Invoice successfully deleted.");
     } catch (error) {
@@ -744,7 +775,7 @@ function Invoice() {
                             <button
                               className="delete-btn"
                               onClick={() =>
-                                deleteInvoice(item.id)
+                                deleteInvoice(item.id, item)
                               }
                             >
                               🗑️ Delete

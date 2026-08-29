@@ -16,6 +16,7 @@ import {
   ref,
   uploadBytesResumable,
 } from "firebase/storage";
+import { logAuditEvent } from "../utils/auditLogging";
 
 const mockUser = { uid: "supervisor-1", email: "supervisor@example.com" };
 
@@ -28,6 +29,11 @@ jest.mock("../auth/AuthProvider", () => ({
 jest.mock("../firebase", () => ({
   db: {},
   storage: {},
+}));
+
+jest.mock("../utils/auditLogging", () => ({
+  getAuditFailureMessage: () => "The record was saved, but its audit entry could not be recorded. Please contact an administrator.",
+  logAuditEvent: jest.fn(() => Promise.resolve({ success: true })),
 }));
 
 jest.mock("firebase/firestore", () => ({
@@ -99,6 +105,7 @@ describe("FieldUpdate submission", () => {
     serverTimestamp.mockReturnValue("SERVER_TIMESTAMP");
     where.mockReturnValue({});
     setDoc.mockResolvedValue();
+    logAuditEvent.mockResolvedValue({ success: true });
     ref.mockImplementation((storage, path) => ({ path }));
     deleteObject.mockResolvedValue();
     getDownloadURL.mockResolvedValue("https://example.com/photo");

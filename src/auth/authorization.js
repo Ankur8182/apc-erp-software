@@ -1,4 +1,5 @@
 export const STANDARD_ERP_ROLES = ["admin", "manager", "viewer"];
+export const ADMIN_ROLES = ["admin"];
 export const FIELD_UPDATE_ROLES = [
   "admin",
   "manager",
@@ -38,6 +39,9 @@ export const getDprReadScope = (role, userId = "") => {
 
 export const canReadFieldReferenceData = (role) =>
   ERP_ROLES.has(String(role || "").trim().toLowerCase());
+
+export const canReadAuditLogs = (role) =>
+  ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
 
 export const getAuthorizedRole = (profile = {}) => {
   const role = String(profile?.role || "").trim().toLowerCase();

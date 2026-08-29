@@ -18,6 +18,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "manager"];
     }
 
+    function isAdmin() {
+      return isAuthorizedErpUser() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
     function isFieldUser() {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -82,6 +87,64 @@ service cloud.firestore {
         hasValidFieldDailyProgressReport();
     }
 
+    function hasValidAuditLogData() {
+      return request.resource.data.keys().hasAll([
+          "userId",
+          "userEmail",
+          "userRole",
+          "action",
+          "module",
+          "recordId",
+          "timestamp",
+          "details",
+          "site"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "userId",
+          "userEmail",
+          "userRole",
+          "action",
+          "module",
+          "recordId",
+          "recordLabel",
+          "timestamp",
+          "details",
+          "site"
+        ]) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userEmail is string && request.resource.data.userEmail.size() <= 320 &&
+        request.resource.data.userRole == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role &&
+        request.resource.data.userRole in ["admin", "manager", "supervisor", "engineer"] &&
+        request.resource.data.action in ["create", "update", "delete"] &&
+        request.resource.data.module in [
+          "labour",
+          "sites",
+          "materials",
+          "expenses",
+          "attendance",
+          "salary",
+          "vehicle",
+          "vehicleExpenses",
+          "invoices",
+          "dailyProgressReports"
+        ] &&
+        request.resource.data.recordId is string &&
+          request.resource.data.recordId.size() > 0 && request.resource.data.recordId.size() <= 200 &&
+        (!request.resource.data.keys().hasAll(["recordLabel"]) ||
+          (request.resource.data.recordLabel is string && request.resource.data.recordLabel.size() <= 250)) &&
+        request.resource.data.details is string && request.resource.data.details.size() <= 1000 &&
+        request.resource.data.site is string && request.resource.data.site.size() <= 200 &&
+        request.resource.data.timestamp == request.time;
+    }
+
+    function canCreateAuditLog() {
+      return hasValidAuditLogData() &&
+        (canWriteErpData() ||
+          (isFieldUser() &&
+            request.resource.data.module == "dailyProgressReports" &&
+            request.resource.data.action == "create"));
+    }
+
     // Users may read only their own authorization profile. Roles can only be
     // assigned or changed from the Firebase Console/Admin SDK, never by a client.
     match /users/{userId} {
@@ -133,6 +196,14 @@ service cloud.firestore {
       allow read: if canReadDailyProgressReport();
       allow create: if canWriteErpData() || canCreateFieldDailyProgressReport();
       allow update, delete: if canWriteErpData();
+    }
+
+    // Audit entries are immutable. The client can append an identity-validated
+    // entry after a successful action, but only an active administrator can read it.
+    match /auditLogs/{documentId} {
+      allow read: if isAdmin();
+      allow create: if canCreateAuditLog();
+      allow update, delete: if false;
     }
 
     match /invoices/{document=**} {

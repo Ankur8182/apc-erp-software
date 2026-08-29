@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Expenses.css";
 
 import { db } from "../firebase";
@@ -155,6 +156,16 @@ function Expenses() {
           expenseData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "expenses",
+          recordId: editId,
+          recordLabel: expenseData.expenseType,
+          details: "Expense record updated.",
+          site: expenseData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert("Expense successfully updated.");
 
       }
@@ -162,13 +173,23 @@ function Expenses() {
       // ADD NEW
       else {
 
-        await addDoc(
+        const expenseReference = await addDoc(
           collection(db, "expenses"),
           {
             ...expenseData,
             createdAt: serverTimestamp()
           }
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "expenses",
+          recordId: expenseReference.id,
+          recordLabel: expenseData.expenseType,
+          details: "Expense record created.",
+          site: expenseData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert("Expense successfully saved.");
 
@@ -225,7 +246,7 @@ function Expenses() {
   // DELETE EXPENSE
   // =========================
 
-  const deleteExpense = async (id) => {
+  const deleteExpense = async (id, record = {}) => {
 
     const confirmDelete = window.confirm(
       "Kya aap is Expense ko delete karna chahte hain?"
@@ -241,6 +262,16 @@ function Expenses() {
       await deleteDoc(
         doc(db, "expenses", id)
       );
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "expenses",
+        recordId: id,
+        recordLabel: record.expenseType,
+        details: "Expense record deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert("Expense successfully deleted.");
 
@@ -620,7 +651,7 @@ function Expenses() {
                         <button
                           className="delete-btn"
                           onClick={() =>
-                            deleteExpense(item.id)
+                            deleteExpense(item.id, item)
                           }
                         >
                           🗑️ Delete

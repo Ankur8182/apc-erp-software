@@ -20,6 +20,7 @@ import {
   validateDailyProgressReport,
 } from "../utils/dailyProgressReporting";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getSiteName, normaliseDate } from "../utils/financialReporting";
 import "../Styles/DailyProgressReport.css";
 
@@ -211,15 +212,33 @@ function DailyProgressReport() {
 
       if (editId) {
         await updateDoc(doc(db, "dailyProgressReports", editId), reportData);
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "dailyProgressReports",
+          recordId: editId,
+          recordLabel: reportData.workActivity,
+          details: "Daily Progress Report updated.",
+          site: reportData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
         alert("Daily Progress Report successfully updated.");
       } else {
         const createdBy = auth.currentUser?.uid;
 
-        await addDoc(collection(db, "dailyProgressReports"), {
+        const reportReference = await addDoc(collection(db, "dailyProgressReports"), {
           ...reportData,
           ...(createdBy ? { createdBy } : {}),
           createdAt: serverTimestamp(),
         });
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "dailyProgressReports",
+          recordId: reportReference.id,
+          recordLabel: reportData.workActivity,
+          details: "Daily Progress Report created.",
+          site: reportData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
         alert("Daily Progress Report successfully saved.");
       }
 
@@ -251,7 +270,7 @@ function DailyProgressReport() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const deleteReport = async (id) => {
+  const deleteReport = async (id, report = {}) => {
     if (!canManage) return;
 
     if (!window.confirm("Kya aap is Daily Progress Report ko delete karna chahte hain?")) {
@@ -260,6 +279,15 @@ function DailyProgressReport() {
 
     try {
       await deleteDoc(doc(db, "dailyProgressReports", id));
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "dailyProgressReports",
+        recordId: id,
+        recordLabel: report.workActivity,
+        details: "Daily Progress Report deleted.",
+        site: getSiteName(report),
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
       alert("Daily Progress Report successfully deleted.");
 
       if (editId === id) resetForm();
@@ -452,7 +480,7 @@ function DailyProgressReport() {
                         {canManage && (
                           <>
                             <button className="dpr-edit-btn" onClick={() => editReport(report)}>✏️ Edit</button>
-                            <button className="dpr-delete-btn" onClick={() => deleteReport(report.id)}>🗑️ Delete</button>
+                            <button className="dpr-delete-btn" onClick={() => deleteReport(report.id, report)}>🗑️ Delete</button>
                           </>
                         )}
                       </td>

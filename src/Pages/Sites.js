@@ -5,6 +5,7 @@ import Sidebar from "../Components/Sidebar";
 import Header from "../Components/Header";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { useAuth } from "../auth/AuthProvider";
 
 import "../Styles/Sites.css";
@@ -117,15 +118,35 @@ function Sites() {
           siteData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "sites",
+          recordId: editId,
+          recordLabel: siteData.siteName,
+          details: "Site record updated.",
+          site: siteData.siteName,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert("✅ Site successfully updated.");
       }
 
       // ADD NEW SITE
       else {
-        await addDoc(
+        const siteReference = await addDoc(
           collection(db, "sites"),
           siteData
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "sites",
+          recordId: siteReference.id,
+          recordLabel: siteData.siteName,
+          details: "Site record created.",
+          site: siteData.siteName,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert("✅ Site successfully saved.");
       }
@@ -174,7 +195,7 @@ function Sites() {
   // DELETE SITE
   // =========================
 
-  const deleteSite = async (id) => {
+  const deleteSite = async (id, record = {}) => {
     const confirmDelete = window.confirm(
       "Kya aap is Site ko delete karna chahte hain?"
     );
@@ -187,6 +208,16 @@ function Sites() {
       await deleteDoc(
         doc(db, "sites", id)
       );
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "sites",
+        recordId: id,
+        recordLabel: record.siteName,
+        details: "Site record deleted.",
+        site: record.siteName,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert("🗑 Site successfully deleted.");
 
@@ -534,7 +565,7 @@ function Sites() {
 
                               <button
                                 className="delete-btn"
-                                onClick={() => deleteSite(item.id)}
+                                onClick={() => deleteSite(item.id, item)}
                               >
                                 🗑 Delete
                               </button>

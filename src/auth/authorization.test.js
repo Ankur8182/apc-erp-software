@@ -1,5 +1,6 @@
 import {
   canSubmitFieldUpdate,
+  canReadAuditLogs,
   canReadFieldReferenceData,
   FIELD_REFERENCE_COLLECTIONS,
   getDprReadScope,
@@ -64,4 +65,11 @@ test("uses the correct landing page for field-only and ERP roles", () => {
   expect(getRoleLandingPath("supervisor")).toBe("/field-dashboard");
   expect(getRoleLandingPath("admin")).toBe("/dashboard");
   expect(getRoleLandingPath("viewer")).toBe("/dashboard");
+});
+
+test("limits audit-log access to active admin role handling", () => {
+  expect(canReadAuditLogs("admin")).toBe(true);
+  expect(canReadAuditLogs("manager")).toBe(false);
+  expect(canReadAuditLogs("viewer")).toBe(false);
+  expect(canReadAuditLogs("engineer")).toBe(false);
 });

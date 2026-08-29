@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Attendance.css";
 
 import { db } from "../firebase";
@@ -140,6 +141,16 @@ function Attendance() {
           attendanceData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "attendance",
+          recordId: editId,
+          recordLabel: attendanceData.employeeName,
+          details: "Attendance record updated.",
+          site: attendanceData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert(
           "Attendance successfully updated."
         );
@@ -150,13 +161,23 @@ function Attendance() {
 
       else {
 
-        await addDoc(
+        const attendanceReference = await addDoc(
           collection(db, "attendance"),
           {
             ...attendanceData,
             createdAt: serverTimestamp()
           }
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "attendance",
+          recordId: attendanceReference.id,
+          recordLabel: attendanceData.employeeName,
+          details: "Attendance record created.",
+          site: attendanceData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert(
           "Attendance successfully saved."
@@ -235,7 +256,7 @@ function Attendance() {
   // DELETE
   // =========================
 
-  const deleteAttendance = async (id) => {
+  const deleteAttendance = async (id, record = {}) => {
 
     const confirmDelete = window.confirm(
       "Kya aap ye attendance record delete karna chahte hain?"
@@ -251,6 +272,16 @@ function Attendance() {
       await deleteDoc(
         doc(db, "attendance", id)
       );
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "attendance",
+        recordId: id,
+        recordLabel: record.employeeName,
+        details: "Attendance record deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert(
         "Attendance successfully deleted."
@@ -658,9 +689,7 @@ function Attendance() {
                         <button
                           className="delete-btn"
                           onClick={() =>
-                            deleteAttendance(
-                              item.id
-                            )
+                            deleteAttendance(item.id, item)
                           }
                         >
                           🗑️ Delete

@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import "../Styles/Sidebar.css";
 import { useAuth } from "../auth/AuthProvider";
 import {
+  ADMIN_ROLES,
   FIELD_UPDATE_ROLES,
   STANDARD_ERP_ROLES,
 } from "../auth/authorization";
@@ -25,6 +26,8 @@ function Sidebar() {
     { path: "/field-dashboard", icon: "📱", label: "Field Home", roles: FIELD_UPDATE_ROLES },
     { path: "/field-update", icon: "📱", label: "Field Update", roles: FIELD_UPDATE_ROLES },
     { path: "/reports", icon: "📊", label: "Reports", roles: STANDARD_ERP_ROLES },
+    { path: "/audit-logs", icon: "🛡️", label: "Audit Log", roles: ADMIN_ROLES },
+    { path: "/user-management", icon: "👥", label: "User Management", roles: ADMIN_ROLES },
   ];
 
   const closeSidebar = () => {

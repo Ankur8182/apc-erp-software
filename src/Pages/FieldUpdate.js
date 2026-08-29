@@ -41,6 +41,7 @@ import {
   saveFieldUpdateDraft,
 } from "../utils/fieldUpdateDrafts";
 import { getRecordDate, getSiteName } from "../utils/financialReporting";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import "../Styles/FieldUpdate.css";
 
@@ -130,6 +131,7 @@ function FieldUpdate() {
   const [loadError, setLoadError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const [auditWarning, setAuditWarning] = useState("");
   const [draftMessage, setDraftMessage] = useState("");
   const [draftReady, setDraftReady] = useState(false);
   const [draftUserId, setDraftUserId] = useState("");
@@ -357,6 +359,7 @@ function FieldUpdate() {
     setIsSubmitting(true);
     setSubmitError("");
     setSubmitSuccess("");
+    setAuditWarning("");
     setDraftMessage("");
     setPhotoError("");
 
@@ -389,6 +392,16 @@ function FieldUpdate() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      const auditResult = await logAuditEvent({
+        action: "create",
+        module: "dailyProgressReports",
+        recordId: reportReference.id,
+        recordLabel: payload.value.workActivity,
+        details: "Field Daily Progress Report created.",
+        site: payload.value.site,
+      });
+      if (!auditResult.success) setAuditWarning(getAuditFailureMessage());
 
       clearFieldUpdateDraft(userId);
       setFormData(createInitialFieldUpdateForm());
@@ -522,6 +535,7 @@ function FieldUpdate() {
             )}
 
             {submitError && <p className="field-feedback field-feedback-error" role="alert">{submitError}</p>}
+            {auditWarning && <p className="field-feedback field-feedback-error" role="alert">{auditWarning}</p>}
             {submitSuccess && <p className="field-feedback field-feedback-success" role="status">{submitSuccess}</p>}
             {draftMessage && <p className="field-feedback field-feedback-draft" role="status">{draftMessage}</p>}
 

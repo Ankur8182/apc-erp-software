@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Salary.css";
 
 import { db } from "../firebase";
@@ -172,6 +173,16 @@ function Salary() {
           salaryData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "salary",
+          recordId: editId,
+          recordLabel: salaryData.employeeName,
+          details: "Salary record updated.",
+          site: salaryData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert(
           "Salary successfully updated."
         );
@@ -182,13 +193,23 @@ function Salary() {
 
       else {
 
-        await addDoc(
+        const salaryReference = await addDoc(
           collection(db, "salaries"),
           {
             ...salaryData,
             createdAt: serverTimestamp()
           }
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "salary",
+          recordId: salaryReference.id,
+          recordLabel: salaryData.employeeName,
+          details: "Salary record created.",
+          site: salaryData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert(
           "Salary successfully saved."
@@ -275,7 +296,7 @@ function Salary() {
   // DELETE SALARY
   // =========================
 
-  const deleteSalary = async (id) => {
+  const deleteSalary = async (id, record = {}) => {
 
     const confirmDelete = window.confirm(
       "Kya aap is Salary record ko delete karna chahte hain?"
@@ -291,6 +312,16 @@ function Salary() {
       await deleteDoc(
         doc(db, "salaries", id)
       );
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "salary",
+        recordId: id,
+        recordLabel: record.employeeName,
+        details: "Salary record deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert(
         "Salary successfully deleted."
@@ -727,7 +758,7 @@ function Salary() {
                         <button
                           className="delete-btn"
                           onClick={() =>
-                            deleteSalary(item.id)
+                            deleteSalary(item.id, item)
                           }
                         >
                           🗑️ Delete

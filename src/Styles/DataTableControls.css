@@ -13,6 +13,7 @@
 .data-table-search { flex: 1 1 15rem; }
 
 .data-table-search input,
+.data-table-filter-controls input,
 .data-table-filter-controls select,
 .data-table-sort-control select {
   width: 100%;
@@ -26,6 +27,7 @@
 }
 
 .data-table-search input:focus,
+.data-table-filter-controls input:focus,
 .data-table-filter-controls select:focus,
 .data-table-sort-control select:focus {
   outline: 3px solid rgba(37, 99, 235, 0.16);

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Materials.css";
 
 import {
@@ -179,12 +180,32 @@ function Materials() {
           materialData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "materials",
+          recordId: editId,
+          recordLabel: materialData.materialName,
+          details: "Material entry updated.",
+          site: materialData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert("Material entry updated successfully.");
       } else {
-        await addDoc(collection(db, "materials"), {
+        const materialReference = await addDoc(collection(db, "materials"), {
           ...materialData,
           createdAt: serverTimestamp(),
         });
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "materials",
+          recordId: materialReference.id,
+          recordLabel: materialData.materialName,
+          details: "Material entry created.",
+          site: materialData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert("Material added successfully.");
       }
@@ -233,7 +254,7 @@ function Materials() {
   // ==============================
   // DELETE MATERIAL
   // ==============================
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, record = {}) => {
     const confirmDelete = window.confirm(
       "Kya aap ye material entry delete karna chahte hain?"
     );
@@ -242,6 +263,16 @@ function Materials() {
 
     try {
       await deleteDoc(doc(db, "materials", id));
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "materials",
+        recordId: id,
+        recordLabel: record.materialName || record.name,
+        details: "Material entry deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert("Material deleted successfully.");
 
@@ -708,7 +739,7 @@ function Materials() {
                             <button
                               className="material-delete-btn"
                               onClick={() =>
-                                handleDelete(item.id)
+                                handleDelete(item.id, item)
                               }
                             >
                               Delete

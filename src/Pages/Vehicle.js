@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
+import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import "../Styles/Vehicle.css";
 
 import { auth, db } from "../firebase";
@@ -202,15 +203,35 @@ function Vehicle() {
           vehicleData
         );
 
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "vehicle",
+          recordId: editId,
+          recordLabel: vehicleData.vehicleNumber,
+          details: "Vehicle record updated.",
+          site: vehicleData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
+
         alert("Vehicle successfully updated.");
       } else {
-        await addDoc(
+        const vehicleReference = await addDoc(
           collection(db, "vehicles"),
           {
             ...vehicleData,
             createdAt: serverTimestamp()
           }
         );
+
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "vehicle",
+          recordId: vehicleReference.id,
+          recordLabel: vehicleData.vehicleNumber,
+          details: "Vehicle record created.",
+          site: vehicleData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
 
         alert("Vehicle successfully saved.");
       }
@@ -252,7 +273,7 @@ function Vehicle() {
   // DELETE VEHICLE
   // =========================
 
-  const deleteVehicle = async (id, vehicleNo) => {
+  const deleteVehicle = async (id, vehicleNo, record = {}) => {
     const hasExpenseHistory = vehicleExpenses.some(
       (expense) =>
         expense.vehicleId === id ||
@@ -275,6 +296,16 @@ function Vehicle() {
       await deleteDoc(
         doc(db, "vehicles", id)
       );
+
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "vehicle",
+        recordId: id,
+        recordLabel: vehicleNo,
+        details: "Vehicle record deleted.",
+        site: record.site,
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
 
       alert("Vehicle successfully deleted.");
 
@@ -350,15 +381,33 @@ function Vehicle() {
           doc(db, "vehicleExpenses", expenseEditId),
           expenseData
         );
+        const auditResult = await logAuditEvent({
+          action: "update",
+          module: "vehicleExpenses",
+          recordId: expenseEditId,
+          recordLabel: expenseData.vehicleNumber || expenseData.vehicleName,
+          details: `${expenseData.expenseType} vehicle expense updated.`,
+          site: expenseData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
         alert("Vehicle expense successfully updated.");
       } else {
         const createdBy = auth.currentUser?.uid;
 
-        await addDoc(collection(db, "vehicleExpenses"), {
+        const vehicleExpenseReference = await addDoc(collection(db, "vehicleExpenses"), {
           ...expenseData,
           ...(createdBy ? { createdBy } : {}),
           createdAt: serverTimestamp(),
         });
+        const auditResult = await logAuditEvent({
+          action: "create",
+          module: "vehicleExpenses",
+          recordId: vehicleExpenseReference.id,
+          recordLabel: expenseData.vehicleNumber || expenseData.vehicleName,
+          details: `${expenseData.expenseType} vehicle expense created.`,
+          site: expenseData.site,
+        });
+        if (!auditResult.success) alert(getAuditFailureMessage());
         alert("Vehicle expense successfully saved.");
       }
 
@@ -383,13 +432,22 @@ function Vehicle() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const deleteVehicleExpense = async (id) => {
+  const deleteVehicleExpense = async (id, record = {}) => {
     if (!window.confirm("Kya aap is vehicle expense ko delete karna chahte hain?")) {
       return;
     }
 
     try {
       await deleteDoc(doc(db, "vehicleExpenses", id));
+      const auditResult = await logAuditEvent({
+        action: "delete",
+        module: "vehicleExpenses",
+        recordId: id,
+        recordLabel: record.vehicleNumber || record.vehicleName,
+        details: `${record.expenseType || "Vehicle"} expense deleted.`,
+        site: getSiteName(record),
+      });
+      if (!auditResult.success) alert(getAuditFailureMessage());
       alert("Vehicle expense successfully deleted.");
 
       if (expenseEditId === id) {
@@ -970,7 +1028,7 @@ function Vehicle() {
                         </button>
                         <button
                           className="delete-btn"
-                          onClick={() => deleteVehicleExpense(item.id)}
+                          onClick={() => deleteVehicleExpense(item.id, item)}
                         >
                           🗑️ Delete
                         </button>
@@ -1182,7 +1240,8 @@ function Vehicle() {
                             onClick={() =>
                               deleteVehicle(
                                 item.id,
-                                item.vehicleNumber
+                                item.vehicleNumber,
+                                item
                               )
                             }
                           >
