@@ -35,6 +35,7 @@ import {
   formatBudgetUsagePercent,
 } from "../utils/siteBudget";
 import { summariseInventory } from "../utils/inventory";
+import { getProcurementSummary } from "../utils/procurement";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
@@ -52,6 +53,9 @@ function Dashboard() {
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
   const [dailyProgressReports, setDailyProgressReports] = useState([]);
+  const [purchaseRequests, setPurchaseRequests] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [goodsReceipts, setGoodsReceipts] = useState([]);
   const [dprLoading, setDprLoading] = useState(true);
   const [dprError, setDprError] = useState("");
 
@@ -253,6 +257,24 @@ function Dashboard() {
       }
     );
 
+    const unsubscribePurchaseRequests = onSnapshot(
+      collection(db, "purchaseRequests"),
+      (snapshot) => setPurchaseRequests(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (error) => console.error("Purchase request Error:", error)
+    );
+
+    const unsubscribePurchaseOrders = onSnapshot(
+      collection(db, "purchaseOrders"),
+      (snapshot) => setPurchaseOrders(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (error) => console.error("Purchase order Error:", error)
+    );
+
+    const unsubscribeGoodsReceipts = onSnapshot(
+      collection(db, "goodsReceipts"),
+      (snapshot) => setGoodsReceipts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (error) => console.error("Goods receipt Error:", error)
+    );
+
     return () => {
       unsubscribeSites();
       unsubscribeSiteBudgets();
@@ -267,6 +289,9 @@ function Dashboard() {
       unsubscribeVehicles();
       unsubscribeVehicleExpenses();
       unsubscribeDailyProgressReports();
+      unsubscribePurchaseRequests();
+      unsubscribePurchaseOrders();
+      unsubscribeGoodsReceipts();
     };
   }, []);
 
@@ -287,6 +312,17 @@ function Dashboard() {
     () => summariseInventory(inventoryItems, inventoryTransactions),
     [inventoryItems, inventoryTransactions]
   );
+
+  const procurementSummary = useMemo(
+    () => getProcurementSummary(purchaseRequests, purchaseOrders, goodsReceipts),
+    [purchaseRequests, purchaseOrders, goodsReceipts]
+  );
+
+  const recentProcurement = useMemo(() => [
+    ...purchaseRequests.map((item) => ({ ...item, type: "Purchase Request", activityDate: item.updatedAt?.toDate?.() || item.date || "", label: item.requestNumber || item.id })),
+    ...purchaseOrders.map((item) => ({ ...item, type: "Purchase Order", activityDate: item.updatedAt?.toDate?.() || item.poDate || "", label: item.poNumber || item.id })),
+    ...goodsReceipts.map((item) => ({ ...item, type: "Goods Receipt", activityDate: item.updatedAt?.toDate?.() || item.receiptDate || "", label: item.grnNumber || item.id })),
+  ].sort((first, second) => new Date(second.activityDate || 0) - new Date(first.activityDate || 0)).slice(0, 6), [purchaseRequests, purchaseOrders, goodsReceipts]);
 
   // =========================
   // DASHBOARD SUMMARY
@@ -728,6 +764,25 @@ function Dashboard() {
             <article className="dashboard-status-card status-inventory-low"><span>⚠️ Low Stock</span><strong>{inventorySummary.lowStockCount}</strong><small>At or below the reorder level</small></article>
             <article className="dashboard-status-card status-inventory-out"><span>⛔ Out of Stock</span><strong>{inventorySummary.outOfStockCount}</strong><small>Needs material received or adjustment</small></article>
           </div>
+        </section>
+
+        <section aria-labelledby="procurement-overview">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Purchase workflow</span>
+              <h2 id="procurement-overview">🛒 Procurement Overview</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-pending"><span>📝 Pending Requests</span><strong>{procurementSummary.pendingRequests}</strong><small>Awaiting approval</small></article>
+            <article className="dashboard-status-card status-inventory"><span>📄 Open Purchase Orders</span><strong>{procurementSummary.openPurchaseOrders}</strong><small>{procurementSummary.pendingDeliveries} delivery pending</small></article>
+            <article className="dashboard-status-card status-budget"><span>💳 Purchase Value</span><strong>{formatMoney(procurementSummary.purchaseValue)}</strong><small>{procurementSummary.goodsReceiptCount} completed GRNs</small></article>
+            <article className="dashboard-status-card status-inventory-low"><span>⚠️ Vendor Outstanding</span><strong>{formatMoney(procurementSummary.vendorOutstanding)}</strong><small>From active purchase orders</small></article>
+          </div>
+          <article className="dashboard-dpr-activity-card">
+            <div className="dashboard-card-title-row"><div><h3>Recent Procurement Activity</h3><p>Requests, purchase orders, and completed goods receipts.</p></div></div>
+            {recentProcurement.length === 0 ? <p className="empty-text">No procurement records are available yet.</p> : <div className="dashboard-dpr-list">{recentProcurement.map((item) => <div className="dashboard-dpr-item" key={`${item.type}-${item.id}`}><div><strong>{item.label}</strong><p>{item.type} · {getSiteName(item) || "Site not recorded"}</p></div><span>{item.status || "-"}</span></div>)}</div>}
+          </article>
         </section>
 
         <section aria-labelledby="financial-charts">

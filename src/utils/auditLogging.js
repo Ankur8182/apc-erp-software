@@ -22,6 +22,10 @@ export const AUDIT_MODULES = [
   "dailyProgressReports",
   "inventoryItems",
   "inventoryTransactions",
+  "vendors",
+  "purchaseRequests",
+  "purchaseOrders",
+  "goodsReceipts",
   "users",
 ];
 
@@ -47,6 +51,17 @@ const MODULE_ALIASES = {
   "inventory-items": "inventoryItems",
   inventorytransactions: "inventoryTransactions",
   "inventory-transactions": "inventoryTransactions",
+  vendors: "vendors",
+  vendor: "vendors",
+  purchaserequests: "purchaseRequests",
+  "purchase-requests": "purchaseRequests",
+  purchaserequest: "purchaseRequests",
+  purchaseorders: "purchaseOrders",
+  "purchase-orders": "purchaseOrders",
+  purchaseorder: "purchaseOrders",
+  goodsreceipts: "goodsReceipts",
+  "goods-receipts": "goodsReceipts",
+  grn: "goodsReceipts",
   users: "users",
   user: "users",
 };

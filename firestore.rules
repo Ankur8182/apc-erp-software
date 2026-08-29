@@ -128,7 +128,11 @@ service cloud.firestore {
           "invoices",
           "dailyProgressReports",
           "inventoryItems",
-          "inventoryTransactions"
+          "inventoryTransactions",
+          "vendors",
+          "purchaseRequests",
+          "purchaseOrders",
+          "goodsReceipts"
         ] &&
         request.resource.data.recordId is string &&
           request.resource.data.recordId.size() > 0 && request.resource.data.recordId.size() <= 200 &&
@@ -260,6 +264,12 @@ service cloud.firestore {
           "reason",
           "reference",
           "notes",
+          "sourceType",
+          "goodsReceiptId",
+          "purchaseOrderId",
+          "vendorId",
+          "siteId",
+          "materialId",
           "createdBy",
           "createdAt"
         ]) &&
@@ -281,7 +291,238 @@ service cloud.firestore {
         (!request.resource.data.keys().hasAll(["reference"]) ||
           (request.resource.data.reference is string && request.resource.data.reference.size() <= 250)) &&
         (!request.resource.data.keys().hasAll(["notes"]) ||
+          (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000)) &&
+        (!request.resource.data.keys().hasAll(["sourceType"]) ||
+          (request.resource.data.sourceType is string && request.resource.data.sourceType.size() <= 50)) &&
+        (!request.resource.data.keys().hasAll(["goodsReceiptId"]) ||
+          (request.resource.data.goodsReceiptId is string && request.resource.data.goodsReceiptId.size() <= 200)) &&
+        (!request.resource.data.keys().hasAll(["purchaseOrderId"]) ||
+          (request.resource.data.purchaseOrderId is string && request.resource.data.purchaseOrderId.size() <= 200)) &&
+        (!request.resource.data.keys().hasAll(["vendorId"]) ||
+          (request.resource.data.vendorId is string && request.resource.data.vendorId.size() <= 200)) &&
+        (!request.resource.data.keys().hasAll(["siteId"]) ||
+          (request.resource.data.siteId is string && request.resource.data.siteId.size() <= 200)) &&
+        (!request.resource.data.keys().hasAll(["materialId"]) ||
+          (request.resource.data.materialId is string && request.resource.data.materialId.size() <= 200));
+    }
+
+    function isLinkedGoodsReceiptMovement(transactionId) {
+      let receiptPath = /databases/$(database)/documents/goodsReceipts/$(request.resource.data.goodsReceiptId);
+      let receipt = getAfter(receiptPath).data;
+      let materialPath = /databases/$(database)/documents/materials/$(receipt.materialEntryId);
+      let material = getAfter(materialPath).data;
+
+      return request.resource.data.keys().hasAll(["goodsReceiptId", "purchaseOrderId", "vendorId"]) &&
+          existsAfter(receiptPath) &&
+          existsAfter(materialPath) &&
+          receipt.inventoryTransactionId == transactionId &&
+          receipt.purchaseOrderId == request.resource.data.purchaseOrderId &&
+          receipt.vendorId == request.resource.data.vendorId &&
+          receipt.materialName == request.resource.data.materialName &&
+          receipt.site == request.resource.data.site &&
+          material.goodsReceiptId == request.resource.data.goodsReceiptId &&
+          material.purchaseOrderId == request.resource.data.purchaseOrderId &&
+          material.inventoryTransactionId == transactionId;
+    }
+
+    function hasValidVendorData() {
+      return request.resource.data.keys().hasAll([
+          "vendorName", "openingBalance", "status", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "vendorName", "contactPerson", "mobile", "email", "gstNumber", "panNumber",
+          "address", "city", "state", "category", "openingBalance", "notes", "status",
+          "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.vendorName is string && request.resource.data.vendorName.size() > 0 && request.resource.data.vendorName.size() <= 250 &&
+        request.resource.data.openingBalance is number && request.resource.data.openingBalance >= 0 &&
+        request.resource.data.status in ["active", "inactive"] &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0 && request.resource.data.createdBy.size() <= 128 &&
+        (!request.resource.data.keys().hasAll(["mobile"]) ||
+          (request.resource.data.mobile is string && request.resource.data.mobile.size() <= 20)) &&
+        (!request.resource.data.keys().hasAll(["email"]) ||
+          (request.resource.data.email is string && request.resource.data.email.size() <= 320)) &&
+        (!request.resource.data.keys().hasAll(["notes"]) ||
           (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000));
+    }
+
+    function hasValidPurchaseRequestData(requestId) {
+      return request.resource.data.keys().hasAll([
+          "requestNumber", "date", "site", "requestedBy", "requiredDate", "priority",
+          "items", "status", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "requestNumber", "date", "site", "requestedBy", "requiredDate", "priority",
+          "purpose", "notes", "items", "status", "approvedBy", "approvedAt",
+          "rejectionReason", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.requestNumber == requestId &&
+        request.resource.data.date is string && request.resource.data.date.size() >= 10 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.site.size() <= 200 &&
+        request.resource.data.requestedBy is string && request.resource.data.requestedBy.size() > 0 && request.resource.data.requestedBy.size() <= 250 &&
+        request.resource.data.requiredDate is string && request.resource.data.requiredDate.size() >= 10 &&
+        request.resource.data.priority in ["Low", "Normal", "High", "Urgent"] &&
+        request.resource.data.items is list && request.resource.data.items.size() > 0 && request.resource.data.items.size() <= 25 &&
+        request.resource.data.status in ["draft", "pending approval", "approved", "rejected", "converted to po"] &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0 &&
+        (!request.resource.data.keys().hasAll(["rejectionReason"]) ||
+          (request.resource.data.rejectionReason is string && request.resource.data.rejectionReason.size() <= 500));
+    }
+
+    function hasValidPurchaseRequestTransition() {
+      return request.resource.data.status == resource.data.status ||
+        (resource.data.status == "pending approval" &&
+          request.resource.data.status == "approved" &&
+          request.resource.data.approvedBy == request.auth.uid &&
+          request.resource.data.approvedAt == request.time) ||
+        (resource.data.status == "pending approval" &&
+          request.resource.data.status == "rejected" &&
+          request.resource.data.approvedBy == request.auth.uid &&
+          request.resource.data.approvedAt == request.time &&
+          request.resource.data.rejectionReason is string &&
+          request.resource.data.rejectionReason.size() > 0) ||
+        (resource.data.status == "approved" && request.resource.data.status == "converted to po");
+    }
+
+    function hasValidPurchaseOrderData(orderId) {
+      return request.resource.data.keys().hasAll([
+          "poNumber", "vendorId", "vendorName", "site", "poDate", "expectedDeliveryDate",
+          "items", "subtotal", "discount", "tax", "grandTotal", "paidAmount", "outstandingAmount",
+          "status", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "poNumber", "purchaseRequestId", "vendorId", "vendorName", "site", "siteId", "poDate",
+          "expectedDeliveryDate", "items", "paymentTerms", "deliveryTerms", "notes", "subtotal",
+          "discount", "tax", "grandTotal", "paidAmount", "outstandingAmount", "status", "createdBy",
+          "lastGoodsReceiptId", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.poNumber == orderId &&
+        request.resource.data.vendorId is string && request.resource.data.vendorId.size() > 0 &&
+        request.resource.data.vendorName is string && request.resource.data.vendorName.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.poDate is string && request.resource.data.poDate.size() >= 10 &&
+        request.resource.data.expectedDeliveryDate is string && request.resource.data.expectedDeliveryDate.size() >= 10 &&
+        request.resource.data.items is list && request.resource.data.items.size() > 0 && request.resource.data.items.size() <= 25 &&
+        request.resource.data.subtotal is number && request.resource.data.subtotal >= 0 &&
+        request.resource.data.discount is number && request.resource.data.discount >= 0 &&
+        request.resource.data.tax is number && request.resource.data.tax >= 0 &&
+        request.resource.data.grandTotal is number && request.resource.data.grandTotal >= 0 &&
+        request.resource.data.paidAmount is number && request.resource.data.paidAmount >= 0 && request.resource.data.paidAmount <= request.resource.data.grandTotal &&
+        request.resource.data.outstandingAmount is number && request.resource.data.outstandingAmount >= 0 &&
+        request.resource.data.status in ["draft", "issued", "partially received", "received", "cancelled"] &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0 &&
+        (!request.resource.data.keys().hasAll(["lastGoodsReceiptId"]) ||
+          (request.resource.data.lastGoodsReceiptId is string && request.resource.data.lastGoodsReceiptId.size() > 0 && request.resource.data.lastGoodsReceiptId.size() <= 200));
+    }
+
+    function samePurchaseOrderReceiptLink() {
+      return (!resource.data.keys().hasAll(["lastGoodsReceiptId"]) &&
+          !request.resource.data.keys().hasAll(["lastGoodsReceiptId"])) ||
+        (resource.data.keys().hasAll(["lastGoodsReceiptId"]) &&
+          request.resource.data.keys().hasAll(["lastGoodsReceiptId"]) &&
+          request.resource.data.lastGoodsReceiptId == resource.data.lastGoodsReceiptId);
+    }
+
+    function isPurchaseOrderReceiptUpdate(orderId) {
+      let receiptPath = /databases/$(database)/documents/goodsReceipts/$(request.resource.data.lastGoodsReceiptId);
+      let receipt = getAfter(receiptPath).data;
+
+      return request.resource.data.keys().hasAll(["lastGoodsReceiptId"]) &&
+        request.resource.data.lastGoodsReceiptId is string && request.resource.data.lastGoodsReceiptId.size() > 0 &&
+        (!resource.data.keys().hasAll(["lastGoodsReceiptId"]) ||
+          request.resource.data.lastGoodsReceiptId != resource.data.lastGoodsReceiptId) &&
+        !exists(receiptPath) && existsAfter(receiptPath) &&
+        receipt.purchaseOrderId == orderId && receipt.status == "completed";
+    }
+
+    function hasValidPurchaseOrderTransition() {
+      return (resource.data.status == "draft" && request.resource.data.status == "draft") ||
+        (resource.data.status == "draft" && request.resource.data.status in ["issued", "cancelled"] &&
+          request.resource.data.items == resource.data.items && samePurchaseOrderReceiptLink() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])) ||
+        (request.resource.data.status == resource.data.status && resource.data.status in ["issued", "partially received", "received"] &&
+          request.resource.data.items == resource.data.items && samePurchaseOrderReceiptLink() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["paidAmount", "outstandingAmount", "updatedAt"])) ||
+        (resource.data.status in ["issued", "partially received"] &&
+          request.resource.data.status in ["partially received", "received"] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["items", "status", "lastGoodsReceiptId", "updatedAt"]) &&
+          isPurchaseOrderReceiptUpdate(request.resource.data.poNumber));
+    }
+
+    function hasValidGoodsReceiptData(receiptId) {
+      return request.resource.data.keys().hasAll([
+          "grnNumber", "status", "purchaseOrderId", "poNumber", "vendorId", "vendorName", "site",
+          "receiptKey",
+          "lineId", "materialName", "unit", "orderedQuantity", "previousReceivedQuantity",
+          "receivedQuantity", "acceptedQuantity", "rejectedQuantity", "receiptDate",
+          "inventoryTransactionId", "materialEntryId", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "receiptKey", "grnNumber", "status", "purchaseOrderId", "poNumber", "vendorId", "vendorName", "site", "siteId",
+          "lineId", "materialId", "materialName", "unit", "orderedQuantity", "previousReceivedQuantity",
+          "receivedQuantity", "acceptedQuantity", "rejectedQuantity", "challanNumber", "vehicleNumber",
+          "receivedBy", "receiptDate", "remarks", "inventoryTransactionId", "materialEntryId",
+          "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.receiptKey == receiptId && request.resource.data.grnNumber is string && request.resource.data.grnNumber.size() > 0 && request.resource.data.status == "completed" &&
+        request.resource.data.purchaseOrderId is string && request.resource.data.purchaseOrderId.size() > 0 &&
+        request.resource.data.vendorId is string && request.resource.data.vendorId.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.lineId is string && request.resource.data.lineId.size() > 0 &&
+        request.resource.data.materialName is string && request.resource.data.materialName.size() > 0 &&
+        request.resource.data.unit is string && request.resource.data.unit.size() > 0 &&
+        request.resource.data.orderedQuantity is number && request.resource.data.orderedQuantity > 0 &&
+        request.resource.data.previousReceivedQuantity is number && request.resource.data.previousReceivedQuantity >= 0 &&
+        request.resource.data.receivedQuantity is number && request.resource.data.receivedQuantity > 0 &&
+        request.resource.data.acceptedQuantity is number && request.resource.data.acceptedQuantity >= 0 &&
+        request.resource.data.rejectedQuantity is number && request.resource.data.rejectedQuantity >= 0 &&
+        request.resource.data.acceptedQuantity + request.resource.data.rejectedQuantity == request.resource.data.receivedQuantity &&
+        request.resource.data.previousReceivedQuantity + request.resource.data.receivedQuantity <= request.resource.data.orderedQuantity &&
+        request.resource.data.receiptDate is string && request.resource.data.receiptDate.size() >= 10 &&
+        request.resource.data.inventoryTransactionId is string && request.resource.data.materialEntryId is string &&
+        ((request.resource.data.acceptedQuantity == 0 &&
+            request.resource.data.inventoryTransactionId == "" && request.resource.data.materialEntryId == "") ||
+          (request.resource.data.acceptedQuantity > 0 &&
+            request.resource.data.inventoryTransactionId.size() > 0 && request.resource.data.materialEntryId.size() > 0)) &&
+        request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function hasLinkedGoodsReceiptRecords(receiptId) {
+      let movementPath = /databases/$(database)/documents/inventoryTransactions/$(request.resource.data.inventoryTransactionId);
+      let materialPath = /databases/$(database)/documents/materials/$(request.resource.data.materialEntryId);
+      let orderPath = /databases/$(database)/documents/purchaseOrders/$(request.resource.data.purchaseOrderId);
+      let movement = getAfter(movementPath).data;
+      let material = getAfter(materialPath).data;
+      let order = getAfter(orderPath).data;
+
+      return existsAfter(movementPath) && existsAfter(materialPath) && existsAfter(orderPath) &&
+          order.lastGoodsReceiptId == receiptId &&
+          movement.goodsReceiptId == receiptId && movement.purchaseOrderId == request.resource.data.purchaseOrderId &&
+          movement.vendorId == request.resource.data.vendorId && movement.quantity == request.resource.data.acceptedQuantity &&
+          material.goodsReceiptId == receiptId && material.purchaseOrderId == request.resource.data.purchaseOrderId &&
+          material.inventoryTransactionId == request.resource.data.inventoryTransactionId;
+    }
+
+    function isGoodsReceiptLinkedToPurchaseOrder(receiptId) {
+      let orderPath = /databases/$(database)/documents/purchaseOrders/$(request.resource.data.purchaseOrderId);
+      let order = getAfter(orderPath).data;
+      return exists(orderPath) && existsAfter(orderPath) &&
+        order.lastGoodsReceiptId == receiptId;
+    }
+
+    function isLinkedProcurementMaterial(materialId) {
+      let receiptPath = /databases/$(database)/documents/goodsReceipts/$(request.resource.data.goodsReceiptId);
+      let receipt = getAfter(receiptPath).data;
+
+      return request.resource.data.keys().hasAll([
+          "goodsReceiptId", "purchaseOrderId", "vendorId", "inventoryTransactionId"
+        ]) &&
+        existsAfter(receiptPath) &&
+        receipt.materialEntryId == materialId &&
+        receipt.receiptKey == request.resource.data.goodsReceiptId &&
+        receipt.purchaseOrderId == request.resource.data.purchaseOrderId &&
+        receipt.vendorId == request.resource.data.vendorId &&
+        receipt.inventoryTransactionId == request.resource.data.inventoryTransactionId;
     }
 
     function sameInventoryLastTransactionId() {
@@ -401,7 +642,60 @@ service cloud.firestore {
       allow read: if isAuthorizedErpUser();
       allow create: if canWriteErpData() && hasValidInventoryTransactionData() &&
         request.resource.data.createdAt == request.time &&
-        isInventoryTransactionApplied(transactionId);
+        isInventoryTransactionApplied(transactionId) &&
+        (!request.resource.data.keys().hasAll(["sourceType"]) ||
+          request.resource.data.sourceType != "goodsReceipt" ||
+          isLinkedGoodsReceiptMovement(transactionId));
+      allow update, delete: if false;
+    }
+
+    // Procurement master data is append-preserved: vendors can be disabled,
+    // but not deleted once they may be referenced by purchasing history.
+    match /vendors/{vendorId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidVendorData() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidVendorData() &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /purchaseRequests/{requestId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidPurchaseRequestData(requestId) &&
+        request.resource.data.status == "pending approval" &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidPurchaseRequestData(requestId) &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time &&
+        hasValidPurchaseRequestTransition();
+      allow delete: if false;
+    }
+
+    match /purchaseOrders/{orderId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidPurchaseOrderData(orderId) &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidPurchaseOrderData(orderId) &&
+        request.resource.data.poNumber == resource.data.poNumber &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time &&
+        hasValidPurchaseOrderTransition();
+      allow delete: if false;
+    }
+
+    // GRNs are completed once. Any accepted quantity is linked atomically to
+    // one immutable inventory Stock-In movement and one materials cost record.
+    match /goodsReceipts/{receiptId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidGoodsReceiptData(receiptId) &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time &&
+        isGoodsReceiptLinkedToPurchaseOrder(receiptId) &&
+        (request.resource.data.acceptedQuantity == 0 || hasLinkedGoodsReceiptRecords(receiptId));
       allow update, delete: if false;
     }
 
@@ -410,11 +704,18 @@ service cloud.firestore {
       allow create, update, delete: if canWriteErpData();
     }
 
-    match /materials/{document=**} {
+    match /materials/{materialId} {
       // Material purchases can contain rates and amounts. Field users receive
       // names/availability through inventoryItems instead of this collection.
       allow read: if isAuthorizedErpUser();
-      allow create, update, delete: if canWriteErpData();
+      allow create: if canWriteErpData() &&
+        (!request.resource.data.keys().hasAll(["source"]) ||
+          request.resource.data.source != "procurement" ||
+          isLinkedProcurementMaterial(materialId));
+      // Procurement GRN cost entries are immutable links to the accepted
+      // receipt. They remain the single financial source for that purchase.
+      allow update, delete: if canWriteErpData() &&
+        (!resource.data.keys().hasAll(["source"]) || resource.data.source != "procurement");
     }
 
     match /expenses/{document=**} {

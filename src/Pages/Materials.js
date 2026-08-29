@@ -228,6 +228,10 @@ function Materials() {
   // EDIT MATERIAL
   // ==============================
   const handleEdit = (item) => {
+    if (item.source === "procurement") {
+      alert("Procurement material entries are linked to a completed GRN and cannot be edited here.");
+      return;
+    }
     setEditId(item.id);
 
     setFormData({
@@ -255,6 +259,10 @@ function Materials() {
   // DELETE MATERIAL
   // ==============================
   const handleDelete = async (id, record = {}) => {
+    if (record.source === "procurement") {
+      alert("Procurement material entries are retained as an immutable GRN cost record.");
+      return;
+    }
     const confirmDelete = window.confirm(
       "Kya aap ye material entry delete karna chahte hain?"
     );
@@ -727,23 +735,29 @@ function Materials() {
 
                           <td className="material-action-cell">
 
-                            <button
-                              className="material-edit-btn"
-                              onClick={() =>
-                                handleEdit(item)
-                              }
-                            >
-                              Edit
-                            </button>
+                            {item.source === "procurement" ? (
+                              <span className="material-linked-note">Linked GRN</span>
+                            ) : (
+                              <>
+                                <button
+                                  className="material-edit-btn"
+                                  onClick={() =>
+                                    handleEdit(item)
+                                  }
+                                >
+                                  Edit
+                                </button>
 
-                            <button
-                              className="material-delete-btn"
-                              onClick={() =>
-                                handleDelete(item.id, item)
-                              }
-                            >
-                              Delete
-                            </button>
+                                <button
+                                  className="material-delete-btn"
+                                  onClick={() =>
+                                    handleDelete(item.id, item)
+                                  }
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
 
                           </td>
 

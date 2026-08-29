@@ -29,6 +29,9 @@ const CORE_NOTIFICATION_COLLECTIONS = [
   "dailyProgressReports",
   "inventoryItems",
   "inventoryTransactions",
+  "purchaseRequests",
+  "purchaseOrders",
+  "goodsReceipts",
 ];
 
 const EMPTY_NOTIFICATION_DATA = {
@@ -45,6 +48,9 @@ const EMPTY_NOTIFICATION_DATA = {
   dailyProgressReports: [],
   inventoryItems: [],
   inventoryTransactions: [],
+  purchaseRequests: [],
+  purchaseOrders: [],
+  goodsReceipts: [],
 };
 
 function Header() {

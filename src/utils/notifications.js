@@ -117,6 +117,9 @@ const createCoreAlerts = ({
   dailyProgressReports = [],
   inventoryItems = [],
   inventoryTransactions = [],
+  purchaseRequests = [],
+  purchaseOrders = [],
+  goodsReceipts = [],
 }) => {
   const alerts = [];
 
@@ -147,6 +150,88 @@ const createCoreAlerts = ({
       date: getDateValue(item, today),
       href: "/inventory",
       module: "Inventory",
+    });
+  });
+
+  (Array.isArray(purchaseRequests) ? purchaseRequests : []).forEach((request) => {
+    if (!request || typeof request !== "object") return;
+    const status = normaliseStatus(request.status);
+    const label = request.requestNumber || "Purchase request";
+
+    if (status === "pending approval") {
+      addAlert(alerts, {
+        id: `purchase-request-pending-${normaliseId(request.id || label)}`,
+        severity: NOTIFICATION_SEVERITIES.warning,
+        title: "Purchase request awaiting approval",
+        message: `${label} for ${getSiteName(request) || "a site"} is pending approval.`,
+        date: getDateValue(request, today),
+        href: "/purchase-requests",
+        module: "Purchase Request",
+        site: getSiteName(request),
+      });
+      return;
+    }
+
+    if (["approved", "rejected"].includes(status) && normaliseDate(request.updatedAt) === today) {
+      addAlert(alerts, {
+        id: `purchase-request-${status}-${normaliseId(request.id || label)}-${today}`,
+        severity: status === "approved" ? NOTIFICATION_SEVERITIES.info : NOTIFICATION_SEVERITIES.warning,
+        title: status === "approved" ? "Purchase request approved" : "Purchase request rejected",
+        message: `${label} has been ${status}.`,
+        date: today,
+        href: "/purchase-requests",
+        module: "Purchase Request",
+        site: getSiteName(request),
+      });
+    }
+  });
+
+  (Array.isArray(purchaseOrders) ? purchaseOrders : []).forEach((order) => {
+    if (!order || typeof order !== "object") return;
+    const status = normaliseStatus(order.status);
+    if (!["issued", "partially received"].includes(status)) return;
+    const label = order.poNumber || "Purchase order";
+    const expectedDate = normaliseDate(order.expectedDeliveryDate);
+    const overdue = expectedDate && expectedDate < today;
+    addAlert(alerts, {
+      id: `purchase-order-delivery-${normaliseId(order.id || label)}`,
+      severity: overdue ? NOTIFICATION_SEVERITIES.critical : NOTIFICATION_SEVERITIES.info,
+      title: overdue ? "Purchase delivery overdue" : "Purchase order awaiting delivery",
+      message: overdue
+        ? `${label} was expected on ${expectedDate}.`
+        : `${label} is ${status} and awaiting delivery.`,
+      date: expectedDate || getDateValue(order, today),
+      href: "/goods-receipts",
+      module: "Purchase Order",
+      site: getSiteName(order),
+    });
+
+    const outstanding = normaliseMoney(order.outstandingAmount);
+    if (outstanding <= 0) return;
+    addAlert(alerts, {
+      id: `vendor-outstanding-${normaliseId(order.id || label)}`,
+      severity: NOTIFICATION_SEVERITIES.warning,
+      title: "Vendor payment outstanding",
+      message: `${order.vendorName || "Vendor"} has ${formatMoney(outstanding)} outstanding for ${label}.`,
+      date: getDateValue(order, today),
+      href: "/vendors",
+      module: "Vendor",
+      site: getSiteName(order),
+    });
+  });
+
+  (Array.isArray(goodsReceipts) ? goodsReceipts : []).forEach((receipt) => {
+    if (!receipt || typeof receipt !== "object" || normaliseDate(receipt.receiptDate) !== today) return;
+    const label = receipt.grnNumber || "Goods receipt";
+    addAlert(alerts, {
+      id: `goods-receipt-completed-${normaliseId(receipt.id || label)}`,
+      severity: NOTIFICATION_SEVERITIES.info,
+      title: "Goods receipt completed",
+      message: `${label} recorded ${receipt.acceptedQuantity || 0} ${receipt.unit || "units"} accepted for ${receipt.materialName || "material"}.`,
+      date: receipt.receiptDate,
+      href: "/goods-receipts",
+      module: "Goods Receipt",
+      site: getSiteName(receipt),
     });
   });
 
@@ -388,6 +473,9 @@ export const generateNotifications = ({
   dailyProgressReports = [],
   inventoryItems = [],
   inventoryTransactions = [],
+  purchaseRequests = [],
+  purchaseOrders = [],
+  goodsReceipts = [],
 } = {}) => {
   const currentDate = normaliseDate(today) || getDprTodayDate();
   const normalisedRole = cleanRole(role);
@@ -437,6 +525,9 @@ export const generateNotifications = ({
       dailyProgressReports: reports,
       inventoryItems,
       inventoryTransactions,
+      purchaseRequests,
+      purchaseOrders,
+      goodsReceipts,
     })
   );
 };

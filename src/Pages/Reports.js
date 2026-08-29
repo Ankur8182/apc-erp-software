@@ -11,6 +11,7 @@ import {
   getSiteName,
   isDateInRange,
   isSameSite,
+  normaliseDate,
   toNumber,
 } from "../utils/financialReporting";
 import {
@@ -23,6 +24,7 @@ import {
   formatBudgetUsagePercent,
 } from "../utils/siteBudget";
 import { summariseInventory } from "../utils/inventory";
+import { getProcurementSummary } from "../utils/procurement";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -59,11 +61,18 @@ function Reports() {
   const [dailyProgressReports, setDailyProgressReports] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [inventoryTransactions, setInventoryTransactions] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [purchaseRequests, setPurchaseRequests] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [goodsReceipts, setGoodsReceipts] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [workActivity, setWorkActivity] = useState("");
+  const [vendorFilter, setVendorFilter] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("");
+  const [purchaseOrderStatusFilter, setPurchaseOrderStatusFilter] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [dprError, setDprError] = useState("");
@@ -75,7 +84,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 13;
+    const totalCollections = 17;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -140,6 +149,10 @@ function Reports() {
     );
     loadCollection("inventoryItems", setInventoryItems);
     loadCollection("inventoryTransactions", setInventoryTransactions);
+    loadCollection("vendors", setVendors);
+    loadCollection("purchaseRequests", setPurchaseRequests);
+    loadCollection("purchaseOrders", setPurchaseOrders);
+    loadCollection("goodsReceipts", setGoodsReceipts);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -211,6 +224,10 @@ function Reports() {
       addSite(getSiteName(item))
     );
 
+    purchaseRequests.forEach((item) => addSite(getSiteName(item)));
+    purchaseOrders.forEach((item) => addSite(getSiteName(item)));
+    goodsReceipts.forEach((item) => addSite(getSiteName(item)));
+
     return Array.from(siteMap.values()).sort(
       (a, b) => a.localeCompare(b)
     );
@@ -225,6 +242,9 @@ function Reports() {
     vehicles,
     vehicleExpenses,
     inventoryItems,
+    purchaseRequests,
+    purchaseOrders,
+    goodsReceipts,
   ]);
 
   const reportSiteNames = useMemo(() => {
@@ -347,6 +367,72 @@ function Reports() {
     [inventoryItems, inventoryTransactions, dailyProgressReports, selectedSite]
   );
 
+  const filteredPurchaseOrders = useMemo(
+    () => purchaseOrders.filter((order) => {
+      const orderDate = normaliseDate(order.poDate || order.date || order.createdAt);
+      const siteMatched = selectedSite === "all" || isSameSite(order, selectedSite);
+      const dateMatched = (!fromDate || (orderDate && orderDate >= fromDate)) &&
+        (!toDate || (orderDate && orderDate <= toDate));
+      const vendorMatched = !vendorFilter || order.vendorId === vendorFilter;
+      const statusMatched = !purchaseOrderStatusFilter || String(order.status || "").toLowerCase() === purchaseOrderStatusFilter;
+      const materialMatched = !materialFilter || (order.items || []).some((item) =>
+        String(item.materialName || "").toLowerCase().includes(materialFilter.toLowerCase())
+      );
+      return siteMatched && dateMatched && vendorMatched && statusMatched && materialMatched;
+    }),
+    [purchaseOrders, selectedSite, fromDate, toDate, vendorFilter, materialFilter, purchaseOrderStatusFilter]
+  );
+
+  const filteredPurchaseRequests = useMemo(
+    () => purchaseRequests.filter((request) => {
+      const date = normaliseDate(request.date || request.createdAt);
+      return (selectedSite === "all" || isSameSite(request, selectedSite)) &&
+        (!fromDate || (date && date >= fromDate)) && (!toDate || (date && date <= toDate));
+    }),
+    [purchaseRequests, selectedSite, fromDate, toDate]
+  );
+
+  const filteredGoodsReceipts = useMemo(
+    () => goodsReceipts.filter((receipt) => {
+      const date = normaliseDate(receipt.receiptDate || receipt.date || receipt.createdAt);
+      return (selectedSite === "all" || isSameSite(receipt, selectedSite)) &&
+        (!fromDate || (date && date >= fromDate)) && (!toDate || (date && date <= toDate)) &&
+        (!vendorFilter || receipt.vendorId === vendorFilter) &&
+        (!materialFilter || String(receipt.materialName || "").toLowerCase().includes(materialFilter.toLowerCase()));
+    }),
+    [goodsReceipts, selectedSite, fromDate, toDate, vendorFilter, materialFilter]
+  );
+
+  const procurementSummary = useMemo(
+    () => getProcurementSummary(filteredPurchaseRequests, filteredPurchaseOrders, filteredGoodsReceipts),
+    [filteredPurchaseRequests, filteredPurchaseOrders, filteredGoodsReceipts]
+  );
+
+  const procurementBreakdowns = useMemo(() => {
+    const bySite = new Map();
+    const byVendor = new Map();
+    const byMaterial = new Map();
+    const byMonth = new Map();
+    const byStatus = new Map();
+    filteredPurchaseOrders.forEach((order) => {
+      const total = toNumber(order.grandTotal);
+      const site = getSiteName(order) || "Unassigned";
+      const vendor = order.vendorName || "Unknown vendor";
+      const month = normaliseDate(order.poDate || order.date).slice(0, 7) || "Unknown";
+      bySite.set(site, (bySite.get(site) || 0) + total);
+      byVendor.set(vendor, (byVendor.get(vendor) || 0) + total);
+      byMonth.set(month, (byMonth.get(month) || 0) + total);
+      const status = order.status || "draft";
+      byStatus.set(status, (byStatus.get(status) || 0) + 1);
+      (order.items || []).forEach((item) => {
+        const material = item.materialName || "Unknown material";
+        byMaterial.set(material, (byMaterial.get(material) || 0) + toNumber(item.lineGrandTotal));
+      });
+    });
+    const rows = (map) => Array.from(map, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    return { bySite: rows(bySite), byVendor: rows(byVendor), byMaterial: rows(byMaterial), byMonth: rows(byMonth), byStatus: rows(byStatus) };
+  }, [filteredPurchaseOrders]);
+
   const vehicleExpenseCoverage = useMemo(
     () =>
       vehicleExpenses.filter(
@@ -465,6 +551,9 @@ function Reports() {
     setFromDate("");
     setToDate("");
     setWorkActivity("");
+    setVendorFilter("");
+    setMaterialFilter("");
+    setPurchaseOrderStatusFilter("");
   };
 
   /* =========================================
@@ -663,6 +752,44 @@ function Reports() {
     })),
   };
 
+  const procurementExport = {
+    title: "Procurement Report",
+    filters: [
+      ...baseExportFilters,
+      { label: "Vendor", value: vendors.find((vendor) => vendor.id === vendorFilter)?.vendorName || "All Vendors" },
+      { label: "Material", value: materialFilter || "All Materials" },
+      { label: "PO Status", value: purchaseOrderStatusFilter || "All Statuses" },
+    ],
+    summary: [
+      { label: "Purchase Orders", value: filteredPurchaseOrders.length },
+      { label: "Purchase Value", value: formatExportMoney(procurementSummary.purchaseValue) },
+      { label: "Vendor Outstanding", value: formatExportMoney(procurementSummary.vendorOutstanding) },
+      { label: "Completed GRNs", value: procurementSummary.goodsReceiptCount },
+    ],
+    columns: [
+      { key: "poNumber", label: "PO Number" },
+      { key: "date", label: "PO Date" },
+      { key: "vendor", label: "Vendor" },
+      { key: "site", label: "Site" },
+      { key: "materials", label: "Materials", width: 1.5 },
+      { key: "status", label: "Status" },
+      { key: "total", label: "PO Total (INR)", format: formatExportMoney },
+      { key: "paid", label: "Paid (INR)", format: formatExportMoney },
+      { key: "outstanding", label: "Outstanding (INR)", format: formatExportMoney },
+    ],
+    rows: filteredPurchaseOrders.map((order) => ({
+      poNumber: order.poNumber || order.id,
+      date: normaliseDate(order.poDate || order.date) || "-",
+      vendor: order.vendorName || "-",
+      site: getSiteName(order) || "-",
+      materials: (order.items || []).map((item) => `${item.materialName} (${item.quantity} ${item.unit})`).join(", ") || "-",
+      status: order.status || "draft",
+      total: toNumber(order.grandTotal),
+      paid: toNumber(order.paidAmount),
+      outstanding: toNumber(order.outstandingAmount),
+    })),
+  };
+
   const listedExpenseTotal =
     financialSummary.materialExpenseFromExpenses +
     financialSummary.labourExpenseFromExpenses +
@@ -831,6 +958,33 @@ function Reports() {
               />
             </div>
 
+            <div className="filter-group">
+              <label>Vendor (Procurement)</label>
+              <select value={vendorFilter} onChange={(event) => setVendorFilter(event.target.value)}>
+                <option value="">All Vendors</option>
+                {vendors.map((vendor) => (
+                  <option key={vendor.id} value={vendor.id}>{vendor.vendorName || vendor.id}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label>Material (Procurement)</label>
+              <input type="text" value={materialFilter} onChange={(event) => setMaterialFilter(event.target.value)} placeholder="e.g. Cement" />
+            </div>
+
+            <div className="filter-group">
+              <label>PO Status</label>
+              <select value={purchaseOrderStatusFilter} onChange={(event) => setPurchaseOrderStatusFilter(event.target.value)}>
+                <option value="">All Statuses</option>
+                <option value="draft">Draft</option>
+                <option value="issued">Issued</option>
+                <option value="partially received">Partially Received</option>
+                <option value="received">Received</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
             <div className="report-buttons">
               <button
                 type="button"
@@ -864,6 +1018,7 @@ function Reports() {
             <ReportExportActions report={expensesExport} disabled={loading} />
             <ReportExportActions report={attendanceExport} disabled={loading} />
             <ReportExportActions report={inventoryExport} disabled={loading} />
+            <ReportExportActions report={procurementExport} disabled={loading} />
           </div>
         </section>
 
@@ -1069,6 +1224,54 @@ function Reports() {
               </div>
             </div>
 
+            {/* PROCUREMENT */}
+
+            <div className="report-section-title">
+              <h2>🛒 Procurement Summary</h2>
+            </div>
+
+            <div className="inventory-report-note">
+              Purchase-order values are procurement commitments and payable tracking only.
+              Financial cost is recorded once from accepted GRN quantities in Materials, so PO
+              totals are not added again to expense, budget, or profit calculations.
+            </div>
+
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card"><span>📝 Pending Requests</span><h3>{procurementSummary.pendingRequests}</h3></div>
+              <div className="dpr-report-summary-card"><span>📄 Open POs</span><h3>{procurementSummary.openPurchaseOrders}</h3></div>
+              <div className="dpr-report-summary-card"><span>🚚 Pending Deliveries</span><h3>{procurementSummary.pendingDeliveries}</h3></div>
+              <div className="dpr-report-summary-card"><span>💳 Vendor Outstanding</span><h3>{formatMoney(procurementSummary.vendorOutstanding)}</h3></div>
+            </div>
+
+            <div className="reports-table-card">
+              <div className="table-responsive">
+                <table className="reports-table procurement-report-table">
+                  <thead><tr><th>PO</th><th>Date</th><th>Vendor</th><th>Site</th><th>Materials</th><th>Status</th><th>PO Value</th><th>Outstanding</th></tr></thead>
+                  <tbody>
+                    {filteredPurchaseOrders.length === 0 ? <tr><td colSpan="8" className="no-report-data">No purchase orders match the current procurement filters.</td></tr> : filteredPurchaseOrders.map((order) => <tr key={order.id}>
+                      <td>{order.poNumber || order.id}</td><td>{normaliseDate(order.poDate || order.date) || "-"}</td><td>{order.vendorName || "-"}</td><td>{getSiteName(order) || "-"}</td>
+                      <td>{(order.items || []).map((item) => `${item.materialName} (${item.quantity} ${item.unit})`).join(", ") || "-"}</td><td>{order.status || "draft"}</td><td>{formatMoney(order.grandTotal)}</td><td>{formatMoney(order.outstandingAmount)}</td>
+                    </tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="procurement-report-breakdown">
+              {[
+                ["Purchase by Site", procurementBreakdowns.bySite, true],
+                ["Purchase by Vendor", procurementBreakdowns.byVendor, true],
+                ["Purchase by Material", procurementBreakdowns.byMaterial, true],
+                ["Monthly Purchase Trend", procurementBreakdowns.byMonth, true],
+                ["PO Status", procurementBreakdowns.byStatus, false],
+              ].map(([title, rows, isMoney]) => (
+                <div className="dpr-report-detail" key={title}>
+                  <h3>{title}</h3>
+                  {rows.length === 0 ? <p>No matching data.</p> : <ul className="dpr-report-list">{rows.slice(0, 8).map((row) => <li key={row.label}><strong>{row.label}</strong><span>{isMoney ? formatMoney(row.value) : row.value}</span></li>)}</ul>}
+                </div>
+              ))}
+            </div>
+
             {/* PROJECT PERFORMANCE */}
 
             <div className="report-section-title">
@@ -1209,6 +1412,14 @@ function Reports() {
 
               <span>
                 Inventory: {inventoryItems.length}
+              </span>
+
+              <span>
+                POs: {purchaseOrders.length}
+              </span>
+
+              <span>
+                GRNs: {goodsReceipts.length}
               </span>
             </div>
 

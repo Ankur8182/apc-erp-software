@@ -8,6 +8,10 @@ import Sites from "./Pages/Sites";
 import SiteDetails from "./Pages/SiteDetails";
 import Materials from "./Pages/Materials";
 import Inventory from "./Pages/Inventory";
+import Vendors from "./Pages/Vendors";
+import PurchaseRequests from "./Pages/PurchaseRequests";
+import PurchaseOrders from "./Pages/PurchaseOrders";
+import GoodsReceipts from "./Pages/GoodsReceipts";
 import Expenses from "./Pages/Expenses";
 import Attendance from "./Pages/Attendance";
 import Salary from "./Pages/Salary";
@@ -55,6 +59,14 @@ function App() {
           <Route path="/materials" element={protectedPage(<Materials />)} />
 
           <Route path="/inventory" element={protectedPage(<Inventory />)} />
+
+          <Route path="/vendors" element={protectedPage(<Vendors />)} />
+
+          <Route path="/purchase-requests" element={protectedPage(<PurchaseRequests />)} />
+
+          <Route path="/purchase-orders" element={protectedPage(<PurchaseOrders />)} />
+
+          <Route path="/goods-receipts" element={protectedPage(<GoodsReceipts />)} />
 
           <Route path="/expenses" element={protectedPage(<Expenses />)} />
 

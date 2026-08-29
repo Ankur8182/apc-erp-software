@@ -19,7 +19,9 @@ test("shows supervisor users only the field workflow navigation", () => {
   expect(screen.getByText("Field Update")).toBeInTheDocument();
   expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
   expect(screen.queryByText("Reports")).not.toBeInTheDocument();
-  expect(screen.queryByText("Inventory")).not.toBeInTheDocument();
+    expect(screen.queryByText("Inventory")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vendors")).not.toBeInTheDocument();
+    expect(screen.queryByText("Purchase Requests")).not.toBeInTheDocument();
   expect(screen.queryByText("Expenses")).not.toBeInTheDocument();
 });
 
@@ -29,7 +31,9 @@ test("keeps the standard ERP navigation for an admin", () => {
 
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
   expect(screen.getByText("Reports")).toBeInTheDocument();
-  expect(screen.getByText("Inventory")).toBeInTheDocument();
+    expect(screen.getByText("Inventory")).toBeInTheDocument();
+    expect(screen.getByText("Vendors")).toBeInTheDocument();
+    expect(screen.getByText("Purchase Requests")).toBeInTheDocument();
   expect(screen.getByText("Daily Progress")).toBeInTheDocument();
   expect(screen.getByText("User Management")).toBeInTheDocument();
 });

@@ -126,6 +126,23 @@ describe("notification generation", () => {
     expect(alerts.filter((alert) => alert.module === "Materials")).toHaveLength(0);
   });
 
+  it("creates procurement alerts from real pending requests, deliveries, payables, and completed GRNs", () => {
+    const alerts = generateNotifications({
+      role: "manager",
+      today: TODAY,
+      purchaseRequests: [{ id: "pr-1", requestNumber: "PR-2026-0001", site: "River View", status: "Pending Approval" }],
+      purchaseOrders: [{ id: "po-1", poNumber: "PO-2026-0001", site: "River View", vendorName: "ABC Traders", status: "Issued", expectedDeliveryDate: "2026-08-28", outstandingAmount: 2000 }],
+      goodsReceipts: [{ id: "grn-1", grnNumber: "GRN-2026-0001", site: "River View", receiptDate: TODAY, materialName: "Cement", acceptedQuantity: 10, unit: "Bag" }],
+    });
+
+    expect(alerts.map((alert) => alert.title)).toEqual(expect.arrayContaining([
+      "Purchase request awaiting approval",
+      "Purchase delivery overdue",
+      "Vendor payment outstanding",
+      "Goods receipt completed",
+    ]));
+  });
+
   it("keeps field users on their own operational DPR alert only", () => {
     const alerts = generateNotifications({
       role: "supervisor",
