@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import Layout from "../Components/Layout";
 import { db } from "../firebase";
@@ -17,6 +30,8 @@ import {
   getDailyProgressOperationalSummary,
   getDprTodayDate,
 } from "../utils/dailyProgressReporting";
+
+const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
 function Dashboard() {
   const [sites, setSites] = useState([]);
@@ -400,56 +415,156 @@ function Dashboard() {
     return getInvoiceSummary(item).pending > 0;
   });
 
+  const primaryKpis = [
+    {
+      label: "Total Income",
+      value: formatMoney(summary.income),
+      icon: "🧾",
+      tone: "income",
+      helper: "Invoice value",
+    },
+    {
+      label: "Received",
+      value: formatMoney(summary.received),
+      icon: "💳",
+      tone: "received",
+      helper: "Payments collected",
+    },
+    {
+      label: "Pending",
+      value: formatMoney(summary.pending),
+      icon: "⏳",
+      tone: "pending",
+      helper: "Awaiting collection",
+    },
+    {
+      label: "Total Expense",
+      value: formatMoney(summary.totalExpense),
+      icon: "📉",
+      tone: "expense",
+      helper: "All recorded costs",
+    },
+    {
+      label: summary.profit >= 0 ? "Net Profit" : "Net Loss",
+      value: formatMoney(Math.abs(summary.profit)),
+      icon: summary.profit >= 0 ? "📈" : "📉",
+      tone: summary.profit >= 0 ? "profit" : "loss",
+      helper: summary.profit >= 0 ? "Income after expenses" : "Expenses exceed income",
+    },
+    {
+      label: "Active Sites",
+      value: sites.length,
+      icon: "🏗️",
+      tone: "sites",
+      helper: `${runningSites} running`,
+    },
+    {
+      label: "Labour",
+      value: labours.length,
+      icon: "👷",
+      tone: "labour",
+      helper: "Registered workforce",
+    },
+    {
+      label: "Today’s DPR",
+      value: todayDprSummary.todayCount,
+      icon: "📋",
+      tone: "dpr",
+      helper: `${todayDprSummary.totalManpower} manpower reported`,
+    },
+  ];
+
+  const incomeExpenseChartData = [
+    { name: "Income", amount: toNumber(summary.income) },
+    { name: "Expense", amount: toNumber(summary.totalExpense) },
+  ];
+
+  const siteProfitChartData = siteSummary.map((site) => ({
+    name: site.siteName,
+    profit: toNumber(site.profit),
+  }));
+
+  const expenseBreakdownData = [
+    { name: "Material", value: toNumber(summary.materialExpense) },
+    { name: "Labour", value: toNumber(summary.labourExpense) },
+    { name: "Vehicle", value: toNumber(summary.vehicleExpense) },
+    { name: "Other", value: toNumber(summary.otherExpenseFromExpenses) },
+  ].filter((item) => item.value > 0);
+
   return (
     <Layout title="🏗️ AP Construction ERP">
-
       <div className="dashboard-page">
-
-        {/* =========================
-            SITE OVERVIEW
-        ========================= */}
-
-        <h2 className="dashboard-heading">
-          🏗️ Site Overview
-        </h2>
-
-        <div className="dashboard-card-grid">
-
-          <div className="dashboard-card">
-            <h3>🟢 Running</h3>
-            <p>{runningSites}</p>
+        <section className="dashboard-hero">
+          <div>
+            <span className="dashboard-eyebrow">Operations overview</span>
+            <h2>Project performance, live from your ERP.</h2>
+            <p>Track finances, field progress, workforce, and site health in one place.</p>
           </div>
-
-          <div className="dashboard-card">
-            <h3>✅ Completed</h3>
-            <p>{completedSites}</p>
+          <div className="dashboard-hero-status">
+            <span>Live operational data</span>
+            <strong>{sites.length} sites in view</strong>
           </div>
+        </section>
 
-          <div className="dashboard-card">
-            <h3>⏳ Pending</h3>
-            <p>{pendingSites}</p>
+        <section aria-labelledby="dashboard-kpis">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Key performance indicators</span>
+              <h2 id="dashboard-kpis">Business at a glance</h2>
+            </div>
           </div>
-
-          <div className="dashboard-card">
-            <h3>🏗️ Total Sites</h3>
-            <p>{sites.length}</p>
+          <div className="dashboard-kpi-grid">
+            {primaryKpis.map((kpi) => (
+              <article className={`dashboard-kpi-card dashboard-kpi-${kpi.tone}`} key={kpi.label}>
+                <div className="dashboard-kpi-icon" aria-hidden="true">{kpi.icon}</div>
+                <div>
+                  <span>{kpi.label}</span>
+                  <strong className={kpi.tone === "profit" ? "profit-text" : kpi.tone === "loss" ? "loss-text" : ""}>
+                    {kpi.value}
+                  </strong>
+                  <small>{kpi.helper}</small>
+                </div>
+              </article>
+            ))}
           </div>
+        </section>
 
-        </div>
+        <section aria-labelledby="site-overview">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Portfolio</span>
+              <h2 id="site-overview">🏗️ Site Overview</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-running">
+              <span>🟢 Running</span>
+              <strong>{runningSites}</strong>
+              <small>Sites currently in progress</small>
+            </article>
+            <article className="dashboard-status-card status-completed">
+              <span>✅ Completed</span>
+              <strong>{completedSites}</strong>
+              <small>Sites marked complete</small>
+            </article>
+            <article className="dashboard-status-card status-pending">
+              <span>⏳ Pending</span>
+              <strong>{pendingSites}</strong>
+              <small>Sites awaiting work</small>
+            </article>
+          </div>
+        </section>
 
-
-        {/* =========================
-            SITE FINANCIAL TABLE
-        ========================= */}
-
-        <div className="dashboard-table-card">
-
-          <h2>📊 Site-wise Financial Summary</h2>
-
+        <section className="dashboard-table-card" aria-labelledby="site-financial-summary">
+          <div className="dashboard-table-heading">
+            <div>
+              <span className="dashboard-eyebrow">Financial health by site</span>
+              <h2 id="site-financial-summary">📊 Site-wise Financial Summary</h2>
+            </div>
+            <span className="dashboard-table-note">Scroll horizontally on smaller screens</span>
+          </div>
           <div className="dashboard-table-responsive">
-
             <table className="dashboard-table">
-
               <thead>
                 <tr>
                   <th>S.No</th>
@@ -459,403 +574,236 @@ function Dashboard() {
                   <th>Income</th>
                   <th>Material</th>
                   <th>Other Expense</th>
-                  <th>Salary</th>
+                  <th>Labour</th>
                   <th>Total Expense</th>
                   <th>Profit/Loss</th>
                 </tr>
               </thead>
-
               <tbody>
-
                 {siteSummary.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan="10"
-                      style={{
-                        textAlign: "center",
-                        padding: "25px",
-                      }}
-                    >
-                      No Site Found
-                    </td>
+                    <td className="dashboard-table-empty" colSpan="10">No site financial records are available yet.</td>
                   </tr>
                 ) : (
-                  siteSummary.map(
-                    (item, index) => (
+                  siteSummary.map((item, index) => {
+                    const siteStatus = normaliseStatus(item.status);
+                    const statusClass = siteStatus === "completed"
+                      ? "completed-status"
+                      : siteStatus === "pending"
+                        ? "pending-status"
+                        : "running-status";
+
+                    return (
                       <tr key={item.id}>
-
+                        <td>{index + 1}</td>
+                        <td><strong>{item.siteName}</strong></td>
+                        <td>{item.location}</td>
+                        <td><span className={statusClass}>{item.status}</span></td>
+                        <td>{formatMoney(item.income)}</td>
+                        <td>{formatMoney(item.materialExpense)}</td>
+                        <td>{formatMoney(item.otherExpense)}</td>
+                        <td>{formatMoney(item.salaryExpense)}</td>
+                        <td><strong>{formatMoney(item.totalExpense)}</strong></td>
                         <td>
-                          {index + 1}
-                        </td>
-
-                        <td>
-                          <strong>
-                            {item.siteName}
-                          </strong>
-                        </td>
-
-                        <td>
-                          {item.location}
-                        </td>
-
-                        <td>
-                          <span
-                            className={
-                              item.status === "Completed"
-                                ? "completed-status"
-                                : item.status === "Pending"
-                                ? "pending-status"
-                                : "running-status"
-                            }
-                          >
-                            {item.status}
-                          </span>
-                        </td>
-
-                        <td>
-                          {formatMoney(item.income)}
-                        </td>
-
-                        <td>
-                          {formatMoney(
-                            item.materialExpense
-                          )}
-                        </td>
-
-                        <td>
-                          {formatMoney(
-                            item.otherExpense
-                          )}
-                        </td>
-
-                        <td>
-                          {formatMoney(
-                            item.salaryExpense
-                          )}
-                        </td>
-
-                        <td>
-                          <strong>
-                            {formatMoney(
-                              item.totalExpense
-                            )}
-                          </strong>
-                        </td>
-
-                        <td>
-                          <strong
-                            className={
-                              item.profit >= 0
-                                ? "profit-text"
-                                : "loss-text"
-                            }
-                          >
+                          <strong className={item.profit >= 0 ? "profit-text" : "loss-text"}>
                             {formatMoney(item.profit)}
                           </strong>
                         </td>
-
                       </tr>
-                    )
-                  )
+                    );
+                  })
                 )}
-
               </tbody>
-
             </table>
-
           </div>
+        </section>
 
-        </div>
-
-
-        {/* =========================
-            FINANCIAL SUMMARY
-        ========================= */}
-
-        <h2 className="dashboard-heading">
-          📅 Financial Summary
-        </h2>
-
-        <div className="dashboard-card-grid financial-grid">
-
-          <div className="dashboard-card">
-            <h3>🧾 Total Invoice</h3>
-            <p>
-              {formatMoney(
-                summary.income
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>💰 Received</h3>
-            <p>
-              {formatMoney(
-                summary.received
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>⏳ Pending Payment</h3>
-            <p>
-              {formatMoney(
-                summary.pending
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>📦 Material Expense</h3>
-            <p>
-              {formatMoney(
-                summary.materialExpense
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>💸 Other Expense</h3>
-            <p>
-              {formatMoney(
-                summary.otherExpense
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>👷 Labour / Salary Expense</h3>
-            <p>
-              {formatMoney(
-                summary.labourExpense
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>📉 Total Expense</h3>
-            <p>
-              {formatMoney(
-                summary.totalExpense
-              )}
-            </p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>
-              {summary.profit >= 0
-                ? "📈 Estimated Profit"
-                : "📉 Estimated Loss"}
-            </h3>
-
-            <p
-              className={
-                summary.profit >= 0
-                  ? "profit-text"
-                  : "loss-text"
-              }
-            >
-              {formatMoney(
-                summary.profit
-              )}
-            </p>
-          </div>
-
-        </div>
-
-
-        {/* =========================
-            TODAY'S DPR OVERVIEW
-        ========================= */}
-
-        <h2 className="dashboard-heading">
-          📋 Today&apos;s Site Progress
-        </h2>
-
-        <div className="dashboard-card-grid dpr-dashboard-grid">
-
-          <div className="dashboard-card">
-            <h3>📋 DPR Submitted</h3>
-            <p>{todayDprSummary.todayCount}</p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>👷 Manpower Reported</h3>
-            <p>{todayDprSummary.totalManpower}</p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>🏗️ Sites Submitted</h3>
-            <p>{todayDprSummary.submittedSites.length}</p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>⏳ Sites Without DPR</h3>
-            <p>{sitesWithoutDprToday}</p>
-          </div>
-
-        </div>
-
-        <div className="dashboard-dpr-activity-card">
-
-          <h2>🛠️ Recent DPR Activity</h2>
-
-          {dprLoading ? (
-            <p className="empty-text">Loading daily progress reports...</p>
-          ) : dprError ? (
-            <p className="dashboard-dpr-error">{dprError}</p>
-          ) : todayDprSummary.recentReports.length === 0 ? (
-            <p className="empty-text">No daily progress reports available yet.</p>
-          ) : (
-            <div className="dashboard-dpr-list">
-              {todayDprSummary.recentReports.map((report, index) => (
-                <div
-                  className="dashboard-dpr-item"
-                  key={report.id || `${report.date || "legacy"}-${index}`}
-                >
-                  <div>
-                    <strong>{report.workActivity || "Work activity not recorded"}</strong>
-                    <p>
-                      {getSiteName(report) || "Site not recorded"} · {report.date || "Date not recorded"}
-                    </p>
-                  </div>
-
-                  <span>
-                    {report.quantity ?? "-"} {report.unit || ""}
-                    {report.manpowerCount !== undefined && report.manpowerCount !== ""
-                      ? ` · ${report.manpowerCount} manpower`
-                      : ""}
-                  </span>
-                </div>
-              ))}
+        <section aria-labelledby="financial-charts">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Visual reporting</span>
+              <h2 id="financial-charts">Financial performance</h2>
             </div>
-          )}
+          </div>
+          <div className="dashboard-chart-grid">
+            <article className="dashboard-chart-card">
+              <div className="dashboard-chart-heading">
+                <div>
+                  <h3>Income vs Expense</h3>
+                  <p>Live totals from invoices and recorded expenses.</p>
+                </div>
+              </div>
+              {summary.income === 0 && summary.totalExpense === 0 ? (
+                <p className="dashboard-chart-empty">No financial entries are available yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={270}>
+                  <BarChart data={incomeExpenseChartData} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `₹${toNumber(value).toLocaleString("en-IN")}`} />
+                    <Tooltip formatter={(value) => formatMoney(value)} cursor={{ fill: "#eff6ff" }} />
+                    <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
+                      {incomeExpenseChartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.name === "Income" ? "#2563eb" : "#ef4444"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </article>
 
-        </div>
+            <article className="dashboard-chart-card">
+              <div className="dashboard-chart-heading">
+                <div>
+                  <h3>Site-wise Profit / Loss</h3>
+                  <p>Each bar uses the same site summary shown above.</p>
+                </div>
+              </div>
+              {siteProfitChartData.length === 0 ? (
+                <p className="dashboard-chart-empty">No site financial data is available yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={270}>
+                  <BarChart data={siteProfitChartData} margin={{ top: 12, right: 8, left: 0, bottom: 34 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} angle={-18} textAnchor="end" interval={0} height={62} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `₹${toNumber(value).toLocaleString("en-IN")}`} />
+                    <Tooltip formatter={(value) => formatMoney(value)} />
+                    <Bar dataKey="profit" radius={[7, 7, 0, 0]}>
+                      {siteProfitChartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.profit >= 0 ? "#16a34a" : "#dc2626"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </article>
 
+            <article className="dashboard-chart-card">
+              <div className="dashboard-chart-heading">
+                <div>
+                  <h3>Expense Breakdown</h3>
+                  <p>Categories reconcile to total expense without double counting.</p>
+                </div>
+              </div>
+              {expenseBreakdownData.length === 0 ? (
+                <p className="dashboard-chart-empty">No expense entries are available yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={270}>
+                  <PieChart>
+                    <Pie data={expenseBreakdownData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={3}>
+                      {expenseBreakdownData.map((entry, index) => (
+                        <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => formatMoney(value)} />
+                    <Legend verticalAlign="bottom" iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </article>
+          </div>
+        </section>
 
-        {/* =========================
-            ATTENDANCE
-        ========================= */}
-
-        <h2 className="dashboard-heading">
-          👥 Attendance Overview
-        </h2>
-
-        <div className="dashboard-card-grid small-grid">
-
-          <div className="dashboard-card">
-            <h3>🟢 Present</h3>
-            <p>{presentCount}</p>
+        <section aria-labelledby="today-dpr">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Field operations</span>
+              <h2 id="today-dpr">📋 Today&apos;s Site Progress</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid dashboard-dpr-grid">
+            <article className="dashboard-status-card status-dpr"><span>📋 DPR Submitted</span><strong>{todayDprSummary.todayCount}</strong><small>Updates received today</small></article>
+            <article className="dashboard-status-card status-manpower"><span>👷 Manpower Reported</span><strong>{todayDprSummary.totalManpower}</strong><small>Across today&apos;s DPRs</small></article>
+            <article className="dashboard-status-card status-sites"><span>🏗️ Sites Submitted</span><strong>{todayDprSummary.submittedSites.length}</strong><small>Sites with updates today</small></article>
+            <article className="dashboard-status-card status-pending"><span>⏳ Sites Without DPR</span><strong>{sitesWithoutDprToday}</strong><small>Awaiting today&apos;s update</small></article>
           </div>
 
-          <div className="dashboard-card">
-            <h3>🔴 Absent</h3>
-            <p>{absentCount}</p>
-          </div>
-
-          <div className="dashboard-card">
-            <h3>👷 Total Labour</h3>
-            <p>{labours.length}</p>
-          </div>
-
-        </div>
-
-
-        {/* =========================
-            ALERTS
-        ========================= */}
-
-        <div className="dashboard-alert-grid">
-
-          {/* PENDING INVOICES */}
-
-          <div className="dashboard-alert-card">
-
-            <h2>⏳ Pending Invoice Alerts</h2>
-
-            {pendingInvoices.length === 0 ? (
-              <p className="empty-text">
-                🎉 No Pending Invoice
-              </p>
+          <article className="dashboard-dpr-activity-card">
+            <div className="dashboard-card-title-row">
+              <div>
+                <h3>🛠️ Recent DPR Activity</h3>
+                <p>Operational updates only — not included in financial expenses.</p>
+              </div>
+            </div>
+            {dprLoading ? (
+              <p className="empty-text">Loading daily progress reports...</p>
+            ) : dprError ? (
+              <p className="dashboard-dpr-error">{dprError}</p>
+            ) : todayDprSummary.recentReports.length === 0 ? (
+              <p className="empty-text">No daily progress reports are available yet.</p>
             ) : (
-              pendingInvoices.slice(0, 5).map(
-                (item) => {
-                  const { pending } = getInvoiceSummary(item);
-
-                  return (
-                    <div
-                      className="alert-item"
-                      key={item.id}
-                    >
-                      <div>
-                        <strong>
-                          {item.invoiceNo}
-                        </strong>
-
-                        <p>
-                          {item.site}
-                        </p>
-                      </div>
-
-                      <strong className="loss-text">
-                        {formatMoney(pending)}
-                      </strong>
-                    </div>
-                  );
-                }
-              )
-            )}
-
-          </div>
-
-
-          {/* LOW STOCK */}
-
-          <div className="dashboard-alert-card">
-
-            <h2>⚠️ Low Stock Alert</h2>
-
-            {lowStockMaterials.length === 0 ? (
-              <p className="empty-text">
-                🎉 Stock Level Normal
-              </p>
-            ) : (
-              lowStockMaterials.slice(0, 5).map(
-                (item) => (
-                  <div
-                    className="alert-item"
-                    key={item.id}
-                  >
+              <div className="dashboard-dpr-list">
+                {todayDprSummary.recentReports.map((report, index) => (
+                  <div className="dashboard-dpr-item" key={report.id || `${report.date || "legacy"}-${index}`}>
                     <div>
-                      <strong>
-                        {item.materialName ||
-                          item.name ||
-                          "Material"}
-                      </strong>
-
-                      <p>
-                        Site: {item.site || "-"}
-                      </p>
+                      <strong>{report.workActivity || "Work activity not recorded"}</strong>
+                      <p>{getSiteName(report) || "Site not recorded"} · {report.date || "Date not recorded"}</p>
                     </div>
-
-                    <strong className="loss-text">
-                      {item.stock ??
-                        item.quantity ??
-                        item.qty ??
-                        0}
-                    </strong>
+                    <span>
+                      {report.quantity ?? "-"} {report.unit || ""}
+                      {report.manpowerCount !== undefined && report.manpowerCount !== "" ? ` · ${report.manpowerCount} manpower` : ""}
+                    </span>
                   </div>
-                )
-              )
+                ))}
+              </div>
             )}
+          </article>
+        </section>
 
+        <section aria-labelledby="attendance-overview">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Workforce operations</span>
+              <h2 id="attendance-overview">👥 Attendance Overview</h2>
+            </div>
           </div>
+          <div className="dashboard-status-grid dashboard-attendance-grid">
+            <article className="dashboard-status-card status-present"><span>🟢 Present</span><strong>{presentCount}</strong><small>Attendance records marked present</small></article>
+            <article className="dashboard-status-card status-absent"><span>🔴 Absent</span><strong>{absentCount}</strong><small>Attendance records marked absent</small></article>
+            <article className="dashboard-status-card status-labour"><span>👷 Total Labour</span><strong>{labours.length}</strong><small>Registered labour records</small></article>
+          </div>
+        </section>
 
-        </div>
+        <section className="dashboard-alert-grid" aria-label="Operational alerts">
+          <article className="dashboard-alert-card">
+            <div className="dashboard-card-title-row">
+              <div><h3>⏳ Pending Invoice Alerts</h3><p>Invoices with a balance still outstanding.</p></div>
+              <span className="dashboard-alert-count">{pendingInvoices.length}</span>
+            </div>
+            {pendingInvoices.length === 0 ? (
+              <p className="empty-text">🎉 No pending invoices.</p>
+            ) : (
+              pendingInvoices.slice(0, 5).map((item) => {
+                const { pending } = getInvoiceSummary(item);
 
+                return (
+                  <div className="alert-item" key={item.id}>
+                    <div><strong>{item.invoiceNo || "Invoice"}</strong><p>{getSiteName(item) || "Site not recorded"}</p></div>
+                    <strong className="loss-text">{formatMoney(pending)}</strong>
+                  </div>
+                );
+              })
+            )}
+          </article>
+
+          <article className="dashboard-alert-card">
+            <div className="dashboard-card-title-row">
+              <div><h3>⚠️ Low Stock Alert</h3><p>Materials at or below their configured minimum.</p></div>
+              <span className="dashboard-alert-count dashboard-alert-warning">{lowStockMaterials.length}</span>
+            </div>
+            {lowStockMaterials.length === 0 ? (
+              <p className="empty-text">🎉 Stock levels are normal.</p>
+            ) : (
+              lowStockMaterials.slice(0, 5).map((item) => (
+                <div className="alert-item" key={item.id}>
+                  <div><strong>{item.materialName || item.name || "Material"}</strong><p>Site: {getSiteName(item) || "-"}</p></div>
+                  <strong className="loss-text">{item.stock ?? item.quantity ?? item.qty ?? 0}</strong>
+                </div>
+              ))
+            )}
+          </article>
+        </section>
       </div>
-
     </Layout>
   );
 }

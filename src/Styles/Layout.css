@@ -1,32 +1,33 @@
 .layout{
     display:flex;
     min-height:100vh;
-    background:#f4f6f9;
+    background:#f6f8fc;
 }
 
 .layout-main{
     margin-left:250px;
     width:calc(100% - 250px);
     min-height:100vh;
-    background:#f4f6f9;
+    background:linear-gradient(145deg, #f8fafc 0%, #f3f6fb 100%);
 }
 
 .layout-content{
-    padding:30px;
+    padding:28px 30px 36px;
 }
 
 .page-title{
-    font-size:32px;
-    font-weight:700;
+    font-size:27px;
+    font-weight:800;
     color:#1e293b;
-    margin-bottom:25px;
+    margin-bottom:20px;
 }
 
 .page-card{
     background:#fff;
-    border-radius:16px;
+    border:1px solid #e2e8f0;
+    border-radius:18px;
     padding:25px;
-    box-shadow:0 5px 15px rgba(0,0,0,.08);
+    box-shadow:0 10px 30px rgba(15,23,42,.06);
     margin-bottom:25px;
 }
 
@@ -63,9 +64,10 @@
 
 .table-card{
     background:#fff;
-    border-radius:16px;
+    border:1px solid #e2e8f0;
+    border-radius:18px;
     padding:20px;
-    box-shadow:0 5px 15px rgba(0,0,0,.08);
+    box-shadow:0 10px 30px rgba(15,23,42,.06);
 }
 
 table{
@@ -92,7 +94,7 @@ table td{
 }
 
 .layout-content{
-    padding:25px;
+    padding:22px 16px 30px;
     width:100%;
 }
 
