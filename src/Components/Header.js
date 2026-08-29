@@ -27,6 +27,8 @@ const CORE_NOTIFICATION_COLLECTIONS = [
   "vehicles",
   "vehicleExpenses",
   "dailyProgressReports",
+  "inventoryItems",
+  "inventoryTransactions",
 ];
 
 const EMPTY_NOTIFICATION_DATA = {
@@ -41,6 +43,8 @@ const EMPTY_NOTIFICATION_DATA = {
   vehicles: [],
   vehicleExpenses: [],
   dailyProgressReports: [],
+  inventoryItems: [],
+  inventoryTransactions: [],
 };
 
 function Header() {

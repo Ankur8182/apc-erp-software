@@ -28,7 +28,7 @@ test("limits field submissions to admin, manager, supervisor, and engineer", () 
 });
 
 test("limits field reference-data assumptions to the mobile field workflow", () => {
-  expect(FIELD_REFERENCE_COLLECTIONS).toEqual(["sites", "materials", "vehicles"]);
+  expect(FIELD_REFERENCE_COLLECTIONS).toEqual(["sites", "inventoryItems", "vehicles"]);
   expect(canReadFieldReferenceData("engineer")).toBe(true);
   expect(canReadFieldReferenceData("viewer")).toBe(true);
   expect(canReadFieldReferenceData("unknown")).toBe(false);

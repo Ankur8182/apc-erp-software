@@ -7,7 +7,7 @@ export const FIELD_UPDATE_ROLES = [
   "engineer",
 ];
 export const FIELD_USER_ROLES = ["supervisor", "engineer"];
-export const FIELD_REFERENCE_COLLECTIONS = ["sites", "materials", "vehicles"];
+export const FIELD_REFERENCE_COLLECTIONS = ["sites", "inventoryItems", "vehicles"];
 export const ERP_ROLES = new Set([
   ...STANDARD_ERP_ROLES,
   "supervisor",

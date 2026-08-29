@@ -17,7 +17,11 @@ import {
 import Layout from "../Components/Layout";
 import { db, storage } from "../firebase";
 import { useAuth } from "../auth/AuthProvider";
-import { canSubmitFieldUpdate, getDprReadScope } from "../auth/authorization";
+import {
+  canSubmitFieldUpdate,
+  getDprReadScope,
+  isFieldOnlyRole,
+} from "../auth/authorization";
 import {
   createDprSubmitGuard,
   createFieldUpdateDprPayload,
@@ -40,7 +44,7 @@ import {
   loadFieldUpdateDraft,
   saveFieldUpdateDraft,
 } from "../utils/fieldUpdateDrafts";
-import { getRecordDate, getSiteName } from "../utils/financialReporting";
+import { getRecordDate, getSiteName, isSameSite } from "../utils/financialReporting";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import "../Styles/FieldUpdate.css";
@@ -121,6 +125,7 @@ function FieldUpdate() {
   const { role, user } = useAuth();
   const [sites, setSites] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [reports, setReports] = useState([]);
   const [formData, setFormData] = useState(createInitialFieldUpdateForm);
@@ -140,6 +145,7 @@ function FieldUpdate() {
   const submitGuardRef = useRef(createDprSubmitGuard());
 
   const canSubmit = canSubmitFieldUpdate(role);
+  const fieldOnly = isFieldOnlyRole(role);
   const userId = user?.uid || "";
   const dprReadScope = getDprReadScope(role, userId);
 
@@ -192,17 +198,35 @@ function FieldUpdate() {
       }
     );
 
-    const unsubscribeMaterials = onSnapshot(
-      collection(db, "materials"),
+    const unsubscribeMaterials = fieldOnly
+      ? () => {}
+      : onSnapshot(
+        collection(db, "materials"),
+        (snapshot) => {
+          setMaterials(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        },
+        (error) => {
+          console.error("Field update materials load error:", error);
+          setLoadError(
+            getUserFriendlyFirebaseError(
+              error,
+              "Reference data could not be loaded. Please try again later."
+            )
+          );
+        }
+      );
+
+    const unsubscribeInventoryItems = onSnapshot(
+      collection(db, "inventoryItems"),
       (snapshot) => {
-        setMaterials(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        setInventoryItems(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },
       (error) => {
-        console.error("Field update materials load error:", error);
+        console.error("Field update inventory load error:", error);
         setLoadError(
           getUserFriendlyFirebaseError(
             error,
-            "Reference data could not be loaded. Please try again later."
+            "Material availability could not be loaded. Please try again later."
           )
         );
       }
@@ -228,9 +252,10 @@ function FieldUpdate() {
       unsubscribeReports();
       unsubscribeSites();
       unsubscribeMaterials();
+      unsubscribeInventoryItems();
       unsubscribeVehicles();
     };
-  }, [dprReadScope.canRead, dprReadScope.createdBy]);
+  }, [dprReadScope.canRead, dprReadScope.createdBy, fieldOnly]);
 
   useEffect(() => {
     setDraftReady(false);
@@ -271,11 +296,21 @@ function FieldUpdate() {
 
   const materialNames = useMemo(
     () =>
-      getUniqueValues([...materials, ...reports], (record) => [
+      getUniqueValues([...(fieldOnly ? inventoryItems : materials), ...reports], (record) => [
         ...getDprUsageValues(record.materialsUsed),
         record.materialName || record.name || "",
       ]),
-    [materials, reports]
+    [fieldOnly, inventoryItems, materials, reports]
+  );
+
+  const availableMaterialsForSelectedSite = useMemo(
+    () => inventoryItems
+      .filter((item) => formData.site && isSameSite(item, formData.site))
+      .map((item) => ({
+        ...item,
+        currentStock: Math.max(Number(item.currentStock || 0), 0),
+      })),
+    [formData.site, inventoryItems]
   );
 
   const equipmentNames = useMemo(
@@ -499,6 +534,21 @@ function FieldUpdate() {
                 <label htmlFor="field-material-quantity">Material Quantity</label>
                 <input id="field-material-quantity" type="number" min="0" step="0.01" name="materialQuantity" value={formData.materialQuantity} onChange={handleChange} placeholder="Optional" disabled={!canSubmit || isSubmitting} />
               </div>
+
+              {fieldOnly && formData.site && (
+                <div className="field-material-availability field-update-full-width">
+                  <strong>📦 Material Availability at {formData.site}</strong>
+                  {availableMaterialsForSelectedSite.length === 0 ? (
+                    <span>No inventory availability has been recorded for this site yet.</span>
+                  ) : (
+                    <ul>
+                      {availableMaterialsForSelectedSite.map((item) => (
+                        <li key={item.id}>{item.materialName}: {item.currentStock} {item.unit || ""} available</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="field-update-group">
                 <label htmlFor="field-equipment">Vehicle / Machinery Used</label>

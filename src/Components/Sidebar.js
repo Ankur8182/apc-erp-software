@@ -17,6 +17,7 @@ function Sidebar() {
     { path: "/labour", icon: "👷", label: "Labour", roles: STANDARD_ERP_ROLES },
     { path: "/sites", icon: "🏗️", label: "Sites", roles: STANDARD_ERP_ROLES },
     { path: "/materials", icon: "📦", label: "Materials", roles: STANDARD_ERP_ROLES },
+    { path: "/inventory", icon: "📋", label: "Inventory", roles: STANDARD_ERP_ROLES },
     { path: "/expenses", icon: "💰", label: "Expenses", roles: STANDARD_ERP_ROLES },
     { path: "/attendance", icon: "📅", label: "Attendance", roles: STANDARD_ERP_ROLES },
     { path: "/salary", icon: "💵", label: "Salary", roles: STANDARD_ERP_ROLES },

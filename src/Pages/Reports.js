@@ -22,6 +22,7 @@ import {
   calculateSiteBudgetSummary,
   formatBudgetUsagePercent,
 } from "../utils/siteBudget";
+import { summariseInventory } from "../utils/inventory";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -33,6 +34,12 @@ const formatExportMoney = (amount) =>
   `INR ${toNumber(amount).toLocaleString("en-IN", {
     maximumFractionDigits: 2,
   })}`;
+
+const formatInventoryStatus = (status) => {
+  if (status === "out") return "Out of Stock";
+  if (status === "low") return "Low Stock";
+  return "Available";
+};
 
 /* =========================================
    REPORTS COMPONENT
@@ -50,6 +57,8 @@ function Reports() {
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
   const [dailyProgressReports, setDailyProgressReports] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [inventoryTransactions, setInventoryTransactions] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -66,7 +75,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 11;
+    const totalCollections = 13;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -129,6 +138,8 @@ function Reports() {
       setDailyProgressReports,
       setDprError
     );
+    loadCollection("inventoryItems", setInventoryItems);
+    loadCollection("inventoryTransactions", setInventoryTransactions);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -196,6 +207,10 @@ function Reports() {
       addSite(getSiteName(item))
     );
 
+    inventoryItems.forEach((item) =>
+      addSite(getSiteName(item))
+    );
+
     return Array.from(siteMap.values()).sort(
       (a, b) => a.localeCompare(b)
     );
@@ -209,6 +224,7 @@ function Reports() {
     attendance,
     vehicles,
     vehicleExpenses,
+    inventoryItems,
   ]);
 
   const reportSiteNames = useMemo(() => {
@@ -319,6 +335,16 @@ function Reports() {
         workActivity,
       }),
     [dailyProgressReports, selectedSite, fromDate, toDate, workActivity]
+  );
+
+  // Inventory is a current stock position, not a historical-cost report. The
+  // selected site narrows it; date filters intentionally do not change stock.
+  const inventorySummary = useMemo(
+    () =>
+      summariseInventory(inventoryItems, inventoryTransactions, dailyProgressReports, {
+        site: selectedSite,
+      }),
+    [inventoryItems, inventoryTransactions, dailyProgressReports, selectedSite]
   );
 
   const vehicleExpenseCoverage = useMemo(
@@ -600,6 +626,43 @@ function Reports() {
     })),
   };
 
+  const inventoryExport = {
+    title: "Site-wise Inventory Summary",
+    filters: [
+      { label: "Site", value: selectedSite === "all" ? "All Sites" : selectedSite },
+      { label: "Stock Position", value: "Current (all recorded transactions)" },
+    ],
+    summary: [
+      { label: "Inventory Items", value: inventorySummary.itemCount },
+      { label: "Low Stock", value: inventorySummary.lowStockCount },
+      { label: "Out of Stock", value: inventorySummary.outOfStockCount },
+    ],
+    columns: [
+      { key: "materialName", label: "Material", width: 1.25 },
+      { key: "site", label: "Site", width: 1.2 },
+      { key: "unit", label: "Unit" },
+      { key: "opening", label: "Opening" },
+      { key: "received", label: "Received" },
+      { key: "issued", label: "Issued / Used" },
+      { key: "available", label: "Available" },
+      { key: "reorder", label: "Reorder Level" },
+      { key: "status", label: "Stock Status" },
+      { key: "dprReferences", label: "DPR Mentions" },
+    ],
+    rows: inventorySummary.rows.map((row) => ({
+      materialName: row.materialName || "-",
+      site: getSiteName(row) || "-",
+      unit: row.unit || "-",
+      opening: row.openingStock,
+      received: row.receivedStock,
+      issued: row.issuedStock,
+      available: row.currentStock,
+      reorder: row.reorderLevel,
+      status: formatInventoryStatus(row.status),
+      dprReferences: row.dprReferenceCount,
+    })),
+  };
+
   const listedExpenseTotal =
     financialSummary.materialExpenseFromExpenses +
     financialSummary.labourExpenseFromExpenses +
@@ -800,6 +863,7 @@ function Reports() {
             <ReportExportActions report={dprExport} disabled={loading || Boolean(dprError)} />
             <ReportExportActions report={expensesExport} disabled={loading} />
             <ReportExportActions report={attendanceExport} disabled={loading} />
+            <ReportExportActions report={inventoryExport} disabled={loading} />
           </div>
         </section>
 
@@ -928,6 +992,82 @@ function Reports() {
                 )}
               </>
             )}
+
+            {/* INVENTORY */}
+
+            <div className="report-section-title">
+              <h2>📦 Site-wise Inventory Summary</h2>
+            </div>
+
+            <div className="inventory-report-note">
+              Current stock uses all recorded stock transactions. Site filtering is applied;
+              financial and date filters do not change the current stock position. DPR
+              material mentions are informational and are not deducted automatically.
+            </div>
+
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card">
+                <span>📦 Inventory Items</span>
+                <h3>{inventorySummary.itemCount}</h3>
+              </div>
+              <div className="dpr-report-summary-card">
+                <span>⚠️ Low Stock</span>
+                <h3>{inventorySummary.lowStockCount}</h3>
+              </div>
+              <div className="dpr-report-summary-card">
+                <span>⛔ Out of Stock</span>
+                <h3>{inventorySummary.outOfStockCount}</h3>
+              </div>
+            </div>
+
+            <div className="reports-table-card">
+              <div className="table-responsive">
+                <table className="reports-table inventory-report-table">
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Site</th>
+                      <th>Unit</th>
+                      <th>Opening</th>
+                      <th>Received</th>
+                      <th>Issued / Used</th>
+                      <th>Available</th>
+                      <th>Reorder</th>
+                      <th>Status</th>
+                      <th>DPR Mentions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventorySummary.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan="10" className="no-report-data">
+                          No inventory items match the selected site.
+                        </td>
+                      </tr>
+                    ) : (
+                      inventorySummary.rows.map((row) => (
+                        <tr key={row.id}>
+                          <td className="site-name-cell">{row.materialName}</td>
+                          <td>{getSiteName(row) || "-"}</td>
+                          <td>{row.unit || "-"}</td>
+                          <td>{row.openingStock}</td>
+                          <td>{row.receivedStock}</td>
+                          <td>{row.issuedStock}</td>
+                          <td>{row.currentStock}</td>
+                          <td>{row.reorderLevel}</td>
+                          <td>
+                            <span className={`inventory-report-status inventory-report-status-${row.status}`}>
+                              {formatInventoryStatus(row.status)}
+                            </span>
+                          </td>
+                          <td>{row.dprReferenceCount}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
             {/* PROJECT PERFORMANCE */}
 
@@ -1065,6 +1205,10 @@ function Reports() {
 
               <span>
                 DPR: {dailyProgressReports.length}
+              </span>
+
+              <span>
+                Inventory: {inventoryItems.length}
               </span>
             </div>
 

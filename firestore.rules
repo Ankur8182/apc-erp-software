@@ -126,7 +126,9 @@ service cloud.firestore {
           "vehicle",
           "vehicleExpenses",
           "invoices",
-          "dailyProgressReports"
+          "dailyProgressReports",
+          "inventoryItems",
+          "inventoryTransactions"
         ] &&
         request.resource.data.recordId is string &&
           request.resource.data.recordId.size() > 0 && request.resource.data.recordId.size() <= 200 &&
@@ -187,6 +189,162 @@ service cloud.firestore {
             request.resource.data.budget.contingencyBudget >= 0));
     }
 
+    function hasValidInventoryItemData(itemId) {
+      return request.resource.data.keys().hasAll([
+          "itemKey",
+          "materialName",
+          "site",
+          "unit",
+          "openingStock",
+          "reorderLevel",
+          "currentStock",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "itemKey",
+          "materialName",
+          "site",
+          "unit",
+          "openingStock",
+          "reorderLevel",
+          "currentStock",
+          "supplier",
+          "reference",
+          "notes",
+          "lastTransactionId",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        request.resource.data.itemKey == itemId &&
+        request.resource.data.materialName is string && request.resource.data.materialName.size() > 0 && request.resource.data.materialName.size() <= 200 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.site.size() <= 200 &&
+        request.resource.data.unit is string && request.resource.data.unit.size() > 0 && request.resource.data.unit.size() <= 50 &&
+        request.resource.data.openingStock is number && request.resource.data.openingStock >= 0 &&
+        request.resource.data.reorderLevel is number && request.resource.data.reorderLevel >= 0 &&
+        request.resource.data.currentStock is number && request.resource.data.currentStock >= 0 &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0 && request.resource.data.createdBy.size() <= 128 &&
+        (!request.resource.data.keys().hasAll(["supplier"]) ||
+          (request.resource.data.supplier is string && request.resource.data.supplier.size() <= 250)) &&
+        (!request.resource.data.keys().hasAll(["reference"]) ||
+          (request.resource.data.reference is string && request.resource.data.reference.size() <= 250)) &&
+        (!request.resource.data.keys().hasAll(["notes"]) ||
+          (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000)) &&
+        (!request.resource.data.keys().hasAll(["lastTransactionId"]) ||
+          (request.resource.data.lastTransactionId is string && request.resource.data.lastTransactionId.size() > 0 && request.resource.data.lastTransactionId.size() <= 200));
+    }
+
+    function hasValidInventoryTransactionData() {
+      return request.resource.data.keys().hasAll([
+          "inventoryItemId",
+          "materialName",
+          "site",
+          "unit",
+          "transactionType",
+          "quantity",
+          "date",
+          "createdBy",
+          "createdAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "inventoryItemId",
+          "materialName",
+          "site",
+          "unit",
+          "transactionType",
+          "adjustmentDirection",
+          "quantity",
+          "date",
+          "reason",
+          "reference",
+          "notes",
+          "createdBy",
+          "createdAt"
+        ]) &&
+        request.resource.data.inventoryItemId is string && request.resource.data.inventoryItemId.size() > 0 &&
+        request.resource.data.materialName is string && request.resource.data.materialName.size() > 0 && request.resource.data.materialName.size() <= 200 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.site.size() <= 200 &&
+        request.resource.data.unit is string && request.resource.data.unit.size() > 0 && request.resource.data.unit.size() <= 50 &&
+        request.resource.data.transactionType in ["in", "out", "adjustment"] &&
+        request.resource.data.quantity is number && request.resource.data.quantity > 0 &&
+        request.resource.data.date is string && request.resource.data.date.size() >= 10 && request.resource.data.date.size() <= 30 &&
+        request.resource.data.createdBy == request.auth.uid &&
+        (!request.resource.data.keys().hasAll(["adjustmentDirection"]) ||
+          request.resource.data.adjustmentDirection in ["increase", "decrease"]) &&
+        (request.resource.data.transactionType != "adjustment" ||
+          (request.resource.data.keys().hasAll(["adjustmentDirection", "reason"]) &&
+            request.resource.data.reason is string && request.resource.data.reason.size() > 0)) &&
+        (!request.resource.data.keys().hasAll(["reason"]) ||
+          (request.resource.data.reason is string && request.resource.data.reason.size() <= 500)) &&
+        (!request.resource.data.keys().hasAll(["reference"]) ||
+          (request.resource.data.reference is string && request.resource.data.reference.size() <= 250)) &&
+        (!request.resource.data.keys().hasAll(["notes"]) ||
+          (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000));
+    }
+
+    function sameInventoryLastTransactionId() {
+      return (!resource.data.keys().hasAll(["lastTransactionId"]) &&
+          !request.resource.data.keys().hasAll(["lastTransactionId"])) ||
+        (resource.data.keys().hasAll(["lastTransactionId"]) &&
+          request.resource.data.keys().hasAll(["lastTransactionId"]) &&
+          request.resource.data.lastTransactionId == resource.data.lastTransactionId);
+    }
+
+    function isInventoryTransactionApplied(transactionId) {
+      let itemPath = /databases/$(database)/documents/inventoryItems/$(request.resource.data.inventoryItemId);
+      let beforeItem = get(itemPath).data;
+      let afterItem = getAfter(itemPath).data;
+      let quantity = request.resource.data.quantity;
+
+      return exists(itemPath) &&
+        existsAfter(itemPath) &&
+        afterItem.lastTransactionId == transactionId &&
+        afterItem.materialName == request.resource.data.materialName &&
+        afterItem.site == request.resource.data.site &&
+        afterItem.unit == request.resource.data.unit &&
+        ((request.resource.data.transactionType == "in" &&
+            afterItem.currentStock == beforeItem.currentStock + quantity) ||
+          (request.resource.data.transactionType == "out" &&
+            afterItem.currentStock == beforeItem.currentStock - quantity) ||
+          (request.resource.data.transactionType == "adjustment" &&
+            request.resource.data.adjustmentDirection == "increase" &&
+            afterItem.currentStock == beforeItem.currentStock + quantity) ||
+          (request.resource.data.transactionType == "adjustment" &&
+            request.resource.data.adjustmentDirection == "decrease" &&
+            afterItem.currentStock == beforeItem.currentStock - quantity));
+    }
+
+    function isInventoryItemMovementUpdate(itemId) {
+      let transactionPath = /databases/$(database)/documents/inventoryTransactions/$(request.resource.data.lastTransactionId);
+      let movement = getAfter(transactionPath).data;
+      let quantity = movement.quantity;
+
+      return request.resource.data.keys().hasAll(["lastTransactionId"]) &&
+        request.resource.data.lastTransactionId is string &&
+        request.resource.data.lastTransactionId.size() > 0 &&
+        (!resource.data.keys().hasAll(["lastTransactionId"]) ||
+          request.resource.data.lastTransactionId != resource.data.lastTransactionId) &&
+        !exists(transactionPath) &&
+        existsAfter(transactionPath) &&
+        movement.inventoryItemId == itemId &&
+        movement.createdBy == request.auth.uid &&
+        movement.materialName == resource.data.materialName &&
+        movement.site == resource.data.site &&
+        movement.unit == resource.data.unit &&
+        ((movement.transactionType == "in" &&
+            request.resource.data.currentStock == resource.data.currentStock + quantity) ||
+          (movement.transactionType == "out" &&
+            request.resource.data.currentStock == resource.data.currentStock - quantity) ||
+          (movement.transactionType == "adjustment" &&
+            movement.adjustmentDirection == "increase" &&
+            request.resource.data.currentStock == resource.data.currentStock + quantity) ||
+          (movement.transactionType == "adjustment" &&
+            movement.adjustmentDirection == "decrease" &&
+            request.resource.data.currentStock == resource.data.currentStock - quantity));
+    }
+
     // Users may read only their own authorization profile. Roles can only be
     // assigned or changed from the Firebase Console/Admin SDK, never by a client.
     match /users/{userId} {
@@ -213,13 +371,49 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Quantity-only availability documents are safe for field users to read.
+    // Supplier references and stock data intentionally exclude rates/costs.
+    match /inventoryItems/{itemId} {
+      allow read: if isAuthorizedErpUser() || isFieldUser();
+      allow create: if canWriteErpData() && hasValidInventoryItemData(itemId) &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidInventoryItemData(itemId) &&
+        request.resource.data.itemKey == resource.data.itemKey &&
+        request.resource.data.materialName == resource.data.materialName &&
+        request.resource.data.site == resource.data.site &&
+        request.resource.data.unit == resource.data.unit &&
+        request.resource.data.openingStock == resource.data.openingStock &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time &&
+        ((request.resource.data.currentStock == resource.data.currentStock &&
+            sameInventoryLastTransactionId()) ||
+          isInventoryItemMovementUpdate(itemId));
+      allow delete: if false;
+    }
+
+    // Stock movements are append-only. The inventory item stores a safe
+    // current-stock snapshot for field availability, while this ledger remains
+    // available only to core ERP roles.
+    match /inventoryTransactions/{transactionId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidInventoryTransactionData() &&
+        request.resource.data.createdAt == request.time &&
+        isInventoryTransactionApplied(transactionId);
+      allow update, delete: if false;
+    }
+
     match /labours/{document=**} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }
 
     match /materials/{document=**} {
-      allow read: if isAuthorizedErpUser() || isFieldUser();
+      // Material purchases can contain rates and amounts. Field users receive
+      // names/availability through inventoryItems instead of this collection.
+      allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }
 

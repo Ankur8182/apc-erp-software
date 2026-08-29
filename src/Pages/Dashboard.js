@@ -34,12 +34,15 @@ import {
   calculateSiteBudgetSummary,
   formatBudgetUsagePercent,
 } from "../utils/siteBudget";
+import { summariseInventory } from "../utils/inventory";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
 function Dashboard() {
   const [sites, setSites] = useState([]);
   const [siteBudgets, setSiteBudgets] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [inventoryTransactions, setInventoryTransactions] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -97,6 +100,32 @@ function Dashboard() {
       },
       (error) => {
         console.error("Site budget Error:", error);
+      }
+    );
+
+    const unsubscribeInventoryItems = onSnapshot(
+      collection(db, "inventoryItems"),
+      (snapshot) => {
+        setInventoryItems(snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        })));
+      },
+      (error) => {
+        console.error("Inventory items Error:", error);
+      }
+    );
+
+    const unsubscribeInventoryTransactions = onSnapshot(
+      collection(db, "inventoryTransactions"),
+      (snapshot) => {
+        setInventoryTransactions(snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        })));
+      },
+      (error) => {
+        console.error("Inventory transactions Error:", error);
       }
     );
 
@@ -227,6 +256,8 @@ function Dashboard() {
     return () => {
       unsubscribeSites();
       unsubscribeSiteBudgets();
+      unsubscribeInventoryItems();
+      unsubscribeInventoryTransactions();
       unsubscribeInvoices();
       unsubscribeExpenses();
       unsubscribeMaterials();
@@ -250,6 +281,11 @@ function Dashboard() {
   const siteBudgetBySiteId = useMemo(
     () => new Map(siteBudgets.map((budget) => [budget.siteId || budget.id, budget])),
     [siteBudgets]
+  );
+
+  const inventorySummary = useMemo(
+    () => summariseInventory(inventoryItems, inventoryTransactions),
+    [inventoryItems, inventoryTransactions]
   );
 
   // =========================
@@ -677,6 +713,20 @@ function Dashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section aria-labelledby="inventory-overview">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Material availability</span>
+              <h2 id="inventory-overview">📦 Inventory Overview</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-inventory"><span>📦 Inventory Items</span><strong>{inventorySummary.itemCount}</strong><small>Tracked material/site/unit records</small></article>
+            <article className="dashboard-status-card status-inventory-low"><span>⚠️ Low Stock</span><strong>{inventorySummary.lowStockCount}</strong><small>At or below the reorder level</small></article>
+            <article className="dashboard-status-card status-inventory-out"><span>⛔ Out of Stock</span><strong>{inventorySummary.outOfStockCount}</strong><small>Needs material received or adjustment</small></article>
           </div>
         </section>
 

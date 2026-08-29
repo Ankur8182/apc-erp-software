@@ -172,6 +172,9 @@
 .status-completed { border-left: 4px solid #2563eb; }
 .status-pending { border-left: 4px solid #d97706; }
 .status-budget { border-left: 4px solid #9333ea; }
+.status-inventory { border-left: 4px solid #2563eb; }
+.status-inventory-low { border-left: 4px solid #d97706; }
+.status-inventory-out { border-left: 4px solid #dc2626; }
 .status-dpr { border-left: 4px solid #4f46e5; }
 .status-manpower { border-left: 4px solid #0891b2; }
 .status-sites { border-left: 4px solid #7c3aed; }

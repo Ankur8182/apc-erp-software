@@ -83,6 +83,49 @@ describe("notification generation", () => {
     });
   });
 
+  it("uses inventory movements for low and out-of-stock alerts without duplicating legacy material alerts", () => {
+    const alerts = generateNotifications({
+      role: "admin",
+      today: TODAY,
+      materials: [{
+        id: "legacy-cement",
+        materialName: "Cement",
+        site: "River View",
+        currentStock: 0,
+        reorderLevel: 10,
+      }],
+      inventoryItems: [{
+        id: "cement-river-view",
+        materialName: "Cement",
+        site: "river   view",
+        unit: "Bag",
+        openingStock: 3,
+        reorderLevel: 2,
+      }, {
+        id: "sand-river-view",
+        materialName: "Sand",
+        site: "River View",
+        unit: "Ton",
+        openingStock: 0,
+        reorderLevel: 1,
+      }],
+      inventoryTransactions: [{
+        id: "cement-out",
+        inventoryItemId: "cement-river-view",
+        transactionType: "out",
+        quantity: 2,
+        date: TODAY,
+      }],
+    });
+
+    expect(alerts.filter((alert) => alert.module === "Inventory")).toHaveLength(2);
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Low material stock", href: "/inventory" }),
+      expect.objectContaining({ title: "Material out of stock", href: "/inventory" }),
+    ]));
+    expect(alerts.filter((alert) => alert.module === "Materials")).toHaveLength(0);
+  });
+
   it("keeps field users on their own operational DPR alert only", () => {
     const alerts = generateNotifications({
       role: "supervisor",

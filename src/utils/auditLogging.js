@@ -20,6 +20,8 @@ export const AUDIT_MODULES = [
   "vehicleExpenses",
   "invoices",
   "dailyProgressReports",
+  "inventoryItems",
+  "inventoryTransactions",
   "users",
 ];
 
@@ -41,6 +43,10 @@ const MODULE_ALIASES = {
   dailyprogressreports: "dailyProgressReports",
   "daily-progress-reports": "dailyProgressReports",
   dpr: "dailyProgressReports",
+  inventoryitems: "inventoryItems",
+  "inventory-items": "inventoryItems",
+  inventorytransactions: "inventoryTransactions",
+  "inventory-transactions": "inventoryTransactions",
   users: "users",
   user: "users",
 };

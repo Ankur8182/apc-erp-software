@@ -99,6 +99,34 @@
   grid-column: 1 / -1;
 }
 
+.field-material-availability {
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.field-material-availability strong,
+.field-material-availability span {
+  display: block;
+}
+
+.field-material-availability span,
+.field-material-availability li {
+  margin-top: 7px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.field-material-availability ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .field-photo-upload {
   margin-top: 20px;
   padding: 16px;
@@ -255,6 +283,10 @@
   }
 
   .field-update-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-material-availability ul {
     grid-template-columns: 1fr;
   }
 

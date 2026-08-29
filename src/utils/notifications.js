@@ -16,6 +16,7 @@ import {
 } from "./dailyProgressReporting";
 import { FIELD_USER_ROLES, STANDARD_ERP_ROLES } from "../auth/authorization";
 import { calculateSiteBudgetSummary } from "./siteBudget";
+import { summariseInventory } from "./inventory";
 
 export const NOTIFICATION_SEVERITIES = {
   info: "info",
@@ -29,6 +30,11 @@ const cleanText = (value) => String(value || "").trim();
 const cleanRole = (role) => cleanText(role).toLowerCase();
 
 const normaliseId = (value) => cleanText(value).replace(/\s+/g, "-").toLowerCase();
+
+const getInventoryAlertIdentity = (item = {}) =>
+  `${normaliseSiteName(getSiteName(item)).toLowerCase()}|${
+    normaliseSiteName(item.materialName).toLowerCase()
+  }`;
 
 const getRecordLabel = (record = {}, fallback = "Record") =>
   cleanText(
@@ -109,8 +115,40 @@ const createCoreAlerts = ({
   vehicles = [],
   vehicleExpenses = [],
   dailyProgressReports = [],
+  inventoryItems = [],
+  inventoryTransactions = [],
 }) => {
   const alerts = [];
+
+  const inventorySummary = summariseInventory(
+    inventoryItems,
+    inventoryTransactions,
+    dailyProgressReports
+  );
+  const trackedInventoryIdentities = new Set(
+    inventorySummary.rows.map((item) => getInventoryAlertIdentity(item))
+  );
+
+  inventorySummary.rows.forEach((item) => {
+    if (item.status === "available") return;
+
+    const outOfStock = item.status === "out";
+    const label = item.materialName || "Material";
+    const siteName = getSiteName(item) || "this site";
+    addAlert(alerts, {
+      id: `inventory-${item.status}-${normaliseId(item.id || item.itemKey || label)}`,
+      severity: outOfStock
+        ? NOTIFICATION_SEVERITIES.critical
+        : NOTIFICATION_SEVERITIES.warning,
+      title: outOfStock ? "Material out of stock" : "Low material stock",
+      message: outOfStock
+        ? `${label} is out of stock at ${siteName}.`
+        : `${label} has ${item.currentStock} ${item.unit || "units"} available at ${siteName} (reorder level ${item.reorderLevel}).`,
+      date: getDateValue(item, today),
+      href: "/inventory",
+      module: "Inventory",
+    });
+  });
 
   invoices.forEach((invoice) => {
     if (!invoice || typeof invoice !== "object") return;
@@ -132,6 +170,10 @@ const createCoreAlerts = ({
 
   materials.forEach((material) => {
     if (!material || typeof material !== "object") return;
+
+    // A tracked inventory item is the preferred stock source. Do not create a
+    // second alert from a legacy material-level stock field for the same site.
+    if (trackedInventoryIdentities.has(getInventoryAlertIdentity(material))) return;
 
     // A stock alert is only shown when both values are explicitly present.
     // Purchase quantity alone is not stock and must never create a fake alert.
@@ -344,6 +386,8 @@ export const generateNotifications = ({
   vehicles = [],
   vehicleExpenses = [],
   dailyProgressReports = [],
+  inventoryItems = [],
+  inventoryTransactions = [],
 } = {}) => {
   const currentDate = normaliseDate(today) || getDprTodayDate();
   const normalisedRole = cleanRole(role);
@@ -391,6 +435,8 @@ export const generateNotifications = ({
       vehicles,
       vehicleExpenses,
       dailyProgressReports: reports,
+      inventoryItems,
+      inventoryTransactions,
     })
   );
 };
