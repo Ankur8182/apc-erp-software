@@ -9,6 +9,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import Layout from "../Components/Layout";
+import DprPhotoGallery from "../Components/DprPhotoGallery";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { auth, db } from "../firebase";
 import { useAuth } from "../auth/AuthProvider";
@@ -403,6 +404,7 @@ function DailyProgressReport() {
               <p><strong>Equipment:</strong> {getDprUsageValues(viewReport.equipmentUsed).join(", ") || "-"}</p>
               <p className="dpr-full-width"><strong>Remarks:</strong> {viewReport.remarks || "-"}</p>
             </div>
+            <DprPhotoGallery report={viewReport} />
           </div>
         )}
 

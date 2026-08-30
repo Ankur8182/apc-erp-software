@@ -1,0 +1,71 @@
+.dpr-photo-gallery {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.dpr-photo-gallery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dpr-photo-gallery-heading h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 16px;
+}
+
+.dpr-photo-gallery-heading span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.dpr-photo-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 10px;
+}
+
+.dpr-photo-gallery-item {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #1d4ed8;
+  text-align: center;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dpr-photo-gallery-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #e2e8f0;
+}
+
+.dpr-photo-gallery-item span {
+  display: block;
+  padding: 7px;
+}
+
+.dpr-photo-gallery-compact {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.dpr-photo-gallery-compact .dpr-photo-gallery-grid {
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+}
+
+.dpr-photo-gallery-compact .dpr-photo-gallery-item span {
+  padding: 5px;
+  font-size: 11px;
+}

@@ -26,6 +26,8 @@ service firebase.storage {
     }
 
     function canReadDprPhoto(userId) {
+      // Standard ERP roles have the same operational-DPR read scope as
+      // Firestore. Field-only users are confined to their own path.
       return isCoreErpReader() ||
         (isFieldUser() && request.auth.uid == userId);
     }
@@ -36,14 +38,36 @@ service firebase.storage {
         request.resource.contentType.matches('image/(jpeg|png|webp)');
     }
 
-    match /dpr/{userId}/{dprId}/{fileName} {
-      // Keep field-photo reads aligned with DPR document ownership.
+    function hasValidStablePhotoName(photoFile) {
+      return (request.resource.contentType == "image/jpeg" &&
+          photoFile.matches('^photo-[A-Za-z0-9_-]{6,110}[.]jpg$')) ||
+        (request.resource.contentType == "image/png" &&
+          photoFile.matches('^photo-[A-Za-z0-9_-]{6,110}[.]png$')) ||
+        (request.resource.contentType == "image/webp" &&
+          photoFile.matches('^photo-[A-Za-z0-9_-]{6,110}[.]webp$'));
+    }
+
+    // Phase 8C writes only stable client-generated IDs here; never a
+    // user-provided filename. Existing photos in the legacy dpr/ path remain
+    // readable below, but new uploads must use this isolated namespace.
+    match /dprPhotos/{userId}/{dprId}/{photoFile} {
       allow read: if canReadDprPhoto(userId);
-      allow create: if isValidDprImage() &&
+      allow create: if isValidDprImage() && hasValidStablePhotoName(photoFile) &&
         (isAdminOrManager() || (isFieldUser() && request.auth.uid == userId));
+      // A field user may clean up an unlinked partial upload only in their own
+      // path. The UI never exposes removal of linked DPR evidence.
       allow delete: if isAdminOrManager() ||
         (isFieldUser() && request.auth.uid == userId);
       allow update: if false;
+    }
+
+    // Retain read access for Phase 4B/legacy evidence. New uploads use the
+    // dprPhotos/ namespace above; this path cannot receive new objects.
+    match /dpr/{userId}/{dprId}/{fileName} {
+      allow read: if canReadDprPhoto(userId);
+      allow delete: if isAdminOrManager() ||
+        (isFieldUser() && request.auth.uid == userId);
+      allow create, update: if false;
     }
 
     match /{allPaths=**} {

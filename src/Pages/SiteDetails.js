@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import Sidebar from "../Components/Sidebar";
 import Header from "../Components/Header";
+import DprPhotoGallery from "../Components/DprPhotoGallery";
 import "../Styles/SiteDetails.css";
 
 import { db } from "../firebase";
@@ -15,6 +16,7 @@ import {
   getDprTodayDate,
   getDprUsageValues,
 } from "../utils/dailyProgressReporting";
+import { getDprPhotoMetadata } from "../utils/dprPhotos";
 import { formatBudgetUsagePercent } from "../utils/siteBudget";
 import { calculateProjectFinancialSummary } from "../utils/projectFinancials";
 import { getClientBillingSummary } from "../utils/clientBilling";
@@ -1296,6 +1298,22 @@ function SiteDetails() {
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+
+                      {siteDprSummary.recentReports.some((report) => getDprPhotoMetadata(report).length > 0) && (
+                        <div className="site-dpr-photo-evidence">
+                          <h3>📷 Recent Site Evidence</h3>
+                          {siteDprSummary.recentReports.map((report, index) => {
+                            const photoCount = getDprPhotoMetadata(report).length;
+
+                            return photoCount > 0 ? (
+                              <article className="site-dpr-photo-evidence-item" key={`photo-evidence-${report.id || index}`}>
+                                <strong>{getRecordDate(report) || "Date not recorded"} · {report.workActivity || "Work activity not recorded"}</strong>
+                                <DprPhotoGallery report={report} title="" compact />
+                              </article>
+                            ) : null;
+                          })}
                         </div>
                       )}
                     </div>

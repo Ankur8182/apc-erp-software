@@ -179,6 +179,73 @@ describe("FieldUpdate submission", () => {
     expect(screen.getByRole("status")).toHaveTextContent("submitted successfully without photos");
   });
 
+  test("previews selected evidence and lets the field user remove it before submission", () => {
+    const createObjectUrl = jest.fn(() => "blob:selected-site-photo");
+    const revokeObjectUrl = jest.fn();
+    Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrl });
+
+    renderFieldUpdate();
+    const image = new File(["photo"], "progress.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText(/Site Progress Photos/), { target: { files: [image] } });
+
+    expect(screen.getByRole("img", { name: "Selected site evidence 1" })).toHaveAttribute("src", "blob:selected-site-photo");
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected photo 1" }));
+    expect(screen.queryByRole("img", { name: "Selected site evidence 1" })).not.toBeInTheDocument();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:selected-site-photo");
+  });
+
+  test("links uploaded evidence metadata to the confirmed DPR write", async () => {
+    uploadBytesResumable.mockReturnValue({
+      snapshot: { ref: { path: "photo-reference" } },
+      on: (event, progress, reject, complete) => {
+        void event;
+        void reject;
+        progress({ bytesTransferred: 10, totalBytes: 10 });
+        complete();
+      },
+    });
+    renderFieldUpdate();
+    completeRequiredForm();
+    const image = new File(["photo"], "progress.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText(/Site Progress Photos/), { target: { files: [image] } });
+    fireEvent.click(screen.getByRole("button", { name: /submit site update/i }));
+
+    await waitFor(() => expect(setDoc).toHaveBeenCalledTimes(1));
+    expect(setDoc.mock.calls[0][1].photos).toEqual([
+      expect.objectContaining({
+        id: expect.stringMatching(/^photo-/),
+        storagePath: expect.stringMatching(/^dprPhotos\/supervisor-1\/new-dpr\/photo-[A-Za-z0-9_-]+[.]jpg$/),
+        url: "https://example.com/photo",
+        uploadedBy: "supervisor-1",
+        contentType: "image/jpeg",
+        size: 5,
+      }),
+    ]);
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.stringMatching(/1 photo evidence item/),
+    }));
+  });
+
+  test("keeps the selected DPR and photos available for retry after a non-fallback upload failure", async () => {
+    uploadBytesResumable.mockReturnValue({
+      on: (event, progress, reject) => {
+        void event;
+        void progress;
+        reject({ code: "storage/unknown" });
+      },
+    });
+    renderFieldUpdate();
+    completeRequiredForm();
+    const image = new File(["photo"], "progress.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText(/Site Progress Photos/), { target: { files: [image] } });
+    fireEvent.click(screen.getByRole("button", { name: /submit site update/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Photo upload could not be completed.");
+    expect(setDoc).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue("PCC work")).toBeInTheDocument();
+    expect(screen.getByText(/1 photo selected/i)).toBeInTheDocument();
+  });
   test("uses touch-friendly numeric inputs without exposing financial fields", () => {
     renderFieldUpdate();
     expect(screen.getByLabelText(/^Manpower Count/)).toHaveAttribute("inputmode", "numeric");

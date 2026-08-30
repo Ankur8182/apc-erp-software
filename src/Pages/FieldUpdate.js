@@ -15,6 +15,7 @@ import {
   uploadBytesResumable,
 } from "firebase/storage";
 import Layout from "../Components/Layout";
+import DprPhotoGallery from "../Components/DprPhotoGallery";
 import { db, storage } from "../firebase";
 import { useAuth } from "../auth/AuthProvider";
 import {
@@ -32,10 +33,12 @@ import {
   sortDailyProgressReports,
 } from "../utils/dailyProgressReporting";
 import {
+  createDprPhotoId,
   createDprPhotoMetadata,
   createDprPhotoStoragePath,
   getDprPhotoMetadata,
   getDprPhotoUploadFallbackMessage,
+  isDprPhotoStorageUnavailable,
   validateDprPhotoFiles,
 } from "../utils/dprPhotos";
 import {
@@ -75,11 +78,12 @@ const uploadDprPhotos = async ({ files, userId, dprId, onProgress }) => {
 
   try {
     for (const [index, file] of files.entries()) {
+      const photoId = createDprPhotoId();
       const storagePath = createDprPhotoStoragePath(
         userId,
         dprId,
-        index,
-        file.name
+        photoId,
+        file
       );
       const photoReference = ref(storage, storagePath);
       uploadedPaths.push(storagePath);
@@ -102,7 +106,13 @@ const uploadDprPhotos = async ({ files, userId, dprId, onProgress }) => {
             try {
               const url = await getDownloadURL(uploadTask.snapshot.ref);
               metadata.push(
-                createDprPhotoMetadata({ file, storagePath, url })
+                createDprPhotoMetadata({
+                  file,
+                  storagePath,
+                  url,
+                  photoId,
+                  uploadedBy: userId,
+                })
               );
               resolve();
             } catch (error) {
@@ -133,6 +143,7 @@ function FieldUpdate() {
   const [reports, setReports] = useState([]);
   const [formData, setFormData] = useState(createInitialFieldUpdateForm);
   const [photoFiles, setPhotoFiles] = useState([]);
+  const [photoPreviews, setPhotoPreviews] = useState([]);
   const [photoProgress, setPhotoProgress] = useState(0);
   const [photoError, setPhotoError] = useState("");
   const [reportsLoading, setReportsLoading] = useState(true);
@@ -147,6 +158,7 @@ function FieldUpdate() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submitGuardRef = useRef(createDprSubmitGuard());
+  const photoPreviewUrlsRef = useRef([]);
 
   const canSubmit = canSubmitFieldUpdate(role);
   const fieldOnly = isFieldOnlyRole(role);
@@ -354,25 +366,64 @@ function FieldUpdate() {
     setDraftMessage("");
   };
 
+  const clearSelectedPhotos = () => {
+    photoPreviewUrlsRef.current.forEach((previewUrl) => {
+      if (typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+        URL.revokeObjectURL(previewUrl);
+      }
+    });
+    photoPreviewUrlsRef.current = [];
+    setPhotoFiles([]);
+    setPhotoPreviews([]);
+  };
+
   const handlePhotoChange = (event) => {
-    const validation = validateDprPhotoFiles(event.target.files);
+    const validation = validateDprPhotoFiles(event.target.files, photoFiles.length);
 
     if (!validation.isValid) {
-      setPhotoFiles([]);
       setPhotoError(validation.error);
       event.target.value = "";
       return;
     }
 
-    setPhotoFiles(validation.files);
+    const nextPreviews = validation.files.map((file, index) => {
+      const previewUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+        ? URL.createObjectURL(file)
+        : "";
+      return { id: `${file.name}-${file.size}-${Date.now()}-${index}`, url: previewUrl, name: file.name };
+    });
+
+    photoPreviewUrlsRef.current = [...photoPreviewUrlsRef.current, ...nextPreviews.map((preview) => preview.url).filter(Boolean)];
+    setPhotoFiles((current) => [...current, ...validation.files]);
+    setPhotoPreviews((current) => [...current, ...nextPreviews]);
     setPhotoError("");
     setPhotoProgress(0);
+    event.target.value = "";
   };
+
+  const removeSelectedPhoto = (index) => {
+    const preview = photoPreviews[index];
+    if (preview?.url && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(preview.url);
+      photoPreviewUrlsRef.current = photoPreviewUrlsRef.current.filter((url) => url !== preview.url);
+    }
+    setPhotoFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setPhotoPreviews((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setPhotoError("");
+  };
+
+  useEffect(() => () => {
+    photoPreviewUrlsRef.current.forEach((previewUrl) => {
+      if (typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+        URL.revokeObjectURL(previewUrl);
+      }
+    });
+  }, []);
 
   const discardDraft = () => {
     clearFieldUpdateDraft(userId);
     setFormData(createInitialFieldUpdateForm());
-    setPhotoFiles([]);
+    clearSelectedPhotos();
     setPhotoProgress(0);
     setPhotoError("");
     setDraftAvailable(false);
@@ -407,7 +458,7 @@ function FieldUpdate() {
     const resetSubmittedForm = () => {
       clearFieldUpdateDraft(userId);
       setFormData(createInitialFieldUpdateForm());
-      setPhotoFiles([]);
+      clearSelectedPhotos();
       setPhotoProgress(0);
       setDraftAvailable(false);
     };
@@ -417,7 +468,7 @@ function FieldUpdate() {
         await queueDpr({ clientSubmissionId, payload: payload.value });
         resetSubmittedForm();
         if (photoFiles.length > 0) {
-          setPhotoError("Photos are not queued while offline. This site update will synchronize without photos.");
+          setPhotoError("Photos require an online submission and are not queued. This DPR will synchronize without photo evidence.");
         }
         setSubmitSuccess("Site update saved on this device and pending synchronization. It has not been saved to the server yet.");
       } catch (error) {
@@ -457,6 +508,14 @@ function FieldUpdate() {
           uploadedPhotoPaths = uploadedPhotos.uploadedPaths;
         } catch (photoUploadError) {
           console.error("Field update photo upload error:", photoUploadError);
+
+          if (!isDprPhotoStorageUnavailable(photoUploadError)) {
+            setPhotoError("Photo upload could not be completed. Try submitting again, or remove the selected photos and save the DPR without evidence.");
+            const uploadFailure = new Error("Photo evidence upload could not be completed.");
+            uploadFailure.code = "dpr-photo-upload-failed";
+            throw uploadFailure;
+          }
+
           photoUploadFallback = getDprPhotoUploadFallbackMessage(photoUploadError);
           setPhotoError(photoUploadFallback);
         }
@@ -475,7 +534,7 @@ function FieldUpdate() {
         module: "dailyProgressReports",
         recordId: reportReference.id,
         recordLabel: payload.value.workActivity,
-        details: "Field Daily Progress Report created.",
+        details: uploadedPhotos.metadata.length > 0 ? `Field Daily Progress Report created with ${uploadedPhotos.metadata.length} photo evidence item${uploadedPhotos.metadata.length === 1 ? "" : "s"}.` : "Field Daily Progress Report created.",
         site: payload.value.site,
       });
       if (!auditResult.success) setAuditWarning(getAuditFailureMessage());
@@ -495,14 +554,14 @@ function FieldUpdate() {
           queuedAfterTemporaryFailure = true;
           resetSubmittedForm();
           if (uploadedPhotoPaths.length > 0 || photoFiles.length > 0) {
-            setPhotoError("Photos are not queued after a connection failure. This site update will synchronize without new photos.");
+            setPhotoError("Photos require an online submission and are not queued after a connection failure. This DPR will synchronize without photo evidence.");
           }
           setSubmitSuccess("The connection was interrupted. Your site update is saved on this device and pending synchronization.");
         } catch (queueError) {
           console.error("Interrupted site update queue error:", queueError);
           setSubmitError("The connection failed and this site update could not be saved on this device. Keep the form open and try again.");
         }
-      } else {
+      } else if (error?.code !== "dpr-photo-upload-failed") {
         setSubmitError(
           getUserFriendlyFirebaseError(
             error,
@@ -542,7 +601,7 @@ function FieldUpdate() {
                   ? "Synchronizing local site updates..."
                   : outboxSummary.total === 0
                     ? "All local site updates are synchronized."
-                    : `${outboxSummary.pending} pending · ${outboxSummary.failed} need attention`}
+                    : `${outboxSummary.pending} pending · ${outboxSummary.failed} need attention. Queued DPRs synchronize without photo evidence.`}
               </span>
             </div>
             {outboxSummary.total > 0 && canRetryOutbox && (
@@ -648,8 +707,18 @@ function FieldUpdate() {
             <div className="field-photo-upload">
               <label htmlFor="field-photos">📷 Site Progress Photos</label>
               <input id="field-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" onChange={handlePhotoChange} disabled={!canSubmit || isSubmitting} />
-              <p>Up to 5 JPG, PNG, or WebP photos. Maximum 5 MB each. Photos are not stored in drafts. If photo upload is unavailable, the site update will still be saved without photos.</p>
+              <p>Up to 5 JPG, PNG, or WebP photos. Maximum 5 MB each. Photos require an internet connection and are never stored in local drafts or the Phase 8B outbox.</p>
               {photoFiles.length > 0 && <p className="field-photo-selected">{photoFiles.length} photo{photoFiles.length > 1 ? "s" : ""} selected.</p>}
+              {photoPreviews.length > 0 && (
+                <div className="field-photo-preview-grid" aria-label="Selected site photo previews">
+                  {photoPreviews.map((preview, index) => (
+                    <div className="field-photo-preview" key={preview.id}>
+                      {preview.url ? <img src={preview.url} alt={`Selected site evidence ${index + 1}`} /> : <span>Photo {index + 1}</span>}
+                      <button type="button" onClick={() => removeSelectedPhoto(index)} disabled={isSubmitting} aria-label={`Remove selected photo ${index + 1}`}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {isSubmitting && photoFiles.length > 0 && <progress className="field-photo-progress" value={photoProgress} max="100">{photoProgress}%</progress>}
               {photoError && <p className="field-feedback field-feedback-error" role="alert">{photoError}</p>}
             </div>
@@ -688,12 +757,19 @@ function FieldUpdate() {
                 const photoCount = getDprPhotoMetadata(report).length;
 
                 return (
-                  <div className="field-history-item" key={report.id || `field-report-${index}`}>
-                    <div>
-                      <strong>{report.workActivity || "Work activity not recorded"}</strong>
-                      <p>{getSiteName(report) || "Site not recorded"} · {getRecordDate(report) || "Date not recorded"}</p>
+                  <div className={`field-history-item${photoCount > 0 ? " field-history-item-with-photos" : ""}`} key={report.id || `field-report-${index}`}>
+                    <div className="field-history-summary">
+                      <div>
+                        <strong>{report.workActivity || "Work activity not recorded"}</strong>
+                        <p>{getSiteName(report) || "Site not recorded"} · {getRecordDate(report) || "Date not recorded"}</p>
+                      </div>
+                      <span>{report.quantity ?? "-"} {report.unit || ""} · {report.manpowerCount ?? "-"} manpower{photoCount ? ` · 📷 ${photoCount}` : ""}</span>
                     </div>
-                    <span>{report.quantity ?? "-"} {report.unit || ""} · {report.manpowerCount ?? "-"} manpower{photoCount ? ` · 📷 ${photoCount}` : ""}</span>
+                    {photoCount > 0 && (
+                      <div className="field-history-photo-evidence">
+                        <DprPhotoGallery report={report} title="" compact />
+                      </div>
+                    )}
                   </div>
                 );
               })}
