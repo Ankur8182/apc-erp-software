@@ -139,6 +139,8 @@ const createCoreAlerts = ({
   purchaseRequests = [],
   purchaseOrders = [],
   goodsReceipts = [],
+  workOrders = [],
+  contractorBills = [],
 }) => {
   const alerts = [];
 
@@ -484,6 +486,35 @@ const createCoreAlerts = ({
     });
   });
 
+  (Array.isArray(workOrders) ? workOrders : []).forEach((order) => {
+    if (!order || typeof order !== "object" || !["approved", "active"].includes(normaliseStatus(order.status))) return;
+    const dueDate = normaliseDate(order.expectedCompletionDate);
+    const label = order.workOrderNumber || "Work order";
+    if (dueDate && dueDate < today) {
+      addAlert(alerts, {
+        id: `work-order-overdue-${normaliseId(order.id || label)}`,
+        severity: NOTIFICATION_SEVERITIES.critical,
+        title: "Work order completion overdue",
+        message: `${label} for ${getSiteName(order) || "a site"} was due on ${dueDate}.`,
+        date: dueDate, href: "/work-orders", module: "Work Order", site: getSiteName(order),
+      });
+    }
+  });
+
+  (Array.isArray(contractorBills) ? contractorBills : []).forEach((bill) => {
+    if (!bill || typeof bill !== "object") return;
+    const pending = normaliseMoney(bill.pendingAmount);
+    if (pending <= 0) return;
+    const label = bill.billNumber || bill.workOrderNumber || "Contractor bill";
+    addAlert(alerts, {
+      id: `contractor-bill-pending-${normaliseId(bill.id || label)}`,
+      severity: NOTIFICATION_SEVERITIES.warning,
+      title: "Contractor payment pending",
+      message: `${bill.vendorName || "Contractor"} has ${formatMoney(pending)} pending for ${label}.`,
+      date: normaliseDate(bill.billDate) || getDateValue(bill, today),
+      href: "/work-orders", module: "Contractor Bill", site: getSiteName(bill),
+    });
+  });
   vehicles.forEach((vehicle) => {
     if (!vehicle || typeof vehicle !== "object") return;
 
@@ -555,6 +586,8 @@ export const generateNotifications = ({
   purchaseRequests = [],
   purchaseOrders = [],
   goodsReceipts = [],
+  workOrders = [],
+  contractorBills = [],
 } = {}) => {
   const currentDate = normaliseDate(today) || getDprTodayDate();
   const normalisedRole = cleanRole(role);
@@ -607,6 +640,8 @@ export const generateNotifications = ({
       purchaseRequests,
       purchaseOrders,
       goodsReceipts,
+      workOrders,
+      contractorBills,
     })
   );
 };

@@ -32,6 +32,8 @@ const CORE_NOTIFICATION_COLLECTIONS = [
   "purchaseRequests",
   "purchaseOrders",
   "goodsReceipts",
+  "workOrders",
+  "contractorBills",
 ];
 
 const EMPTY_NOTIFICATION_DATA = {
@@ -51,6 +53,8 @@ const EMPTY_NOTIFICATION_DATA = {
   purchaseRequests: [],
   purchaseOrders: [],
   goodsReceipts: [],
+  workOrders: [],
+  contractorBills: [],
 };
 
 function Header() {

@@ -160,7 +160,19 @@ describe("notification generation", () => {
     ]));
   });
 
-  it("adds non-duplicated equipment breakdown and certificate-expiry alerts for ERP roles", () => {
+
+  it("creates real work-order and contractor-bill alerts only for standard ERP roles", () => {
+    const alerts = generateNotifications({
+      role: "manager", today: TODAY,
+      workOrders: [{ id: "wo-1", workOrderNumber: "WO-1", site: "River View", status: "Active", expectedCompletionDate: "2026-08-28" }],
+      contractorBills: [{ id: "bill-1", billNumber: "CB-1", vendorName: "Build Co", site: "River View", billDate: TODAY, pendingAmount: 2500 }],
+    });
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Work order completion overdue", href: "/work-orders" }),
+      expect.objectContaining({ title: "Contractor payment pending", href: "/work-orders" }),
+    ]));
+    expect(generateNotifications({ role: "supervisor", userId: "field-1", today: TODAY, workOrders: [{ status: "Active" }], contractorBills: [{ pendingAmount: 100 }]}).every((alert) => alert.href === "/field-update")).toBe(true);
+  });  it("adds non-duplicated equipment breakdown and certificate-expiry alerts for ERP roles", () => {
     const alerts = generateNotifications({
       role: "manager",
       today: TODAY,

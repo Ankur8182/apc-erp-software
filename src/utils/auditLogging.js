@@ -30,6 +30,10 @@ export const AUDIT_MODULES = [
   "purchaseRequests",
   "purchaseOrders",
   "goodsReceipts",
+  "workOrders",
+  "workOrderProgress",
+  "contractorBills",
+  "contractorPayments",
   "users",
 ];
 
@@ -77,6 +81,14 @@ const MODULE_ALIASES = {
   goodsreceipts: "goodsReceipts",
   "goods-receipts": "goodsReceipts",
   grn: "goodsReceipts",
+  workorders: "workOrders",
+  "work-orders": "workOrders",
+  workorderprogress: "workOrderProgress",
+  "work-order-progress": "workOrderProgress",
+  contractorbills: "contractorBills",
+  "contractor-bills": "contractorBills",
+  contractorpayments: "contractorPayments",
+  "contractor-payments": "contractorPayments",
   users: "users",
   user: "users",
 };

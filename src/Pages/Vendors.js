@@ -6,7 +6,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
-import { canManageProcurement, createInitialVendorForm, getVendorPayableSummary, validateVendor } from "../utils/procurement";
+import { canManageProcurement, createInitialVendorForm, getVendorPayableSummary, validateVendor, VENDOR_TYPES } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
 const formatMoney = (value) => `₹ ${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -53,7 +53,7 @@ function Vendors() {
     ...vendor,
     payable: getVendorPayableSummary(vendor, purchaseOrders),
   })).filter((vendor) => {
-    const text = `${vendor.vendorName} ${vendor.contactPerson} ${vendor.mobile} ${vendor.email} ${vendor.category}`.toLowerCase();
+    const text = `${vendor.vendorName} ${vendor.contactPerson} ${vendor.mobile} ${vendor.email} ${vendor.vendorType} ${vendor.tradeCategory} ${vendor.category}`.toLowerCase();
     return (!search || text.includes(search.toLowerCase())) &&
       (!categoryFilter || vendor.category === categoryFilter) &&
       (!statusFilter || String(vendor.status || "active").toLowerCase() === statusFilter);
@@ -140,6 +140,8 @@ function Vendors() {
             <label>Email<input name="email" type="email" value={form.email} onChange={handleChange} disabled={saving} /></label>
             <label>GST Number<input name="gstNumber" value={form.gstNumber} onChange={handleChange} disabled={saving} /></label>
             <label>PAN Number<input name="panNumber" value={form.panNumber} onChange={handleChange} disabled={saving} /></label>
+            <label>Vendor Type<select name="vendorType" value={form.vendorType} onChange={handleChange} disabled={saving}>{VENDOR_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+            <label>Trade / Service<input name="tradeCategory" value={form.tradeCategory} onChange={handleChange} placeholder="Civil work, plumbing..." disabled={saving} /></label>
             <label>Category<input name="category" value={form.category} onChange={handleChange} placeholder="Cement, Steel, Transport..." disabled={saving} /></label>
             <label>Opening Balance<input name="openingBalance" type="number" min="0" step="0.01" value={form.openingBalance} onChange={handleChange} disabled={saving} /></label>
             <label>City<input name="city" value={form.city} onChange={handleChange} disabled={saving} /></label>
@@ -150,11 +152,11 @@ function Vendors() {
           </div><div className="procurement-actions"><button className="procurement-primary" disabled={saving}>{saving ? "Saving..." : editId ? "Update Vendor" : "Save Vendor"}</button>{editId && <button type="button" className="procurement-secondary" onClick={resetForm} disabled={saving}>Cancel</button>}</div></form> : <p className="procurement-readonly">You have read-only vendor access.</p>}
         </section>
         {selectedVendor && <section className="procurement-detail"><strong>{selectedVendor.vendorName}</strong><span>{selectedVendor.contactPerson || "No contact person"}</span><span>{selectedVendor.mobile || selectedVendor.email || "No contact details"}</span><span>{selectedVendor.address || [selectedVendor.city, selectedVendor.state].filter(Boolean).join(", ") || "Address not recorded"}</span><span>Purchases: {formatMoney(selectedPayable?.totalPurchases)}</span><span>Paid: {formatMoney(selectedPayable?.totalPaid)}</span><span>Outstanding: {formatMoney(selectedPayable?.outstandingAmount)}</span></section>}
-        <section className="procurement-card"><h2>Vendor Directory</h2><DataTableToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search vendor, contact, category..." table={table}>
+        <section className="procurement-card"><h2>Vendor Directory</h2><DataTableToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search vendor, contact, trade..." table={table}>
           <label><span>Category</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
           <label><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
         </DataTableToolbar>
-        {loading ? <p className="procurement-state">Loading vendors...</p> : table.count === 0 ? <p className="procurement-state">No vendors match the current filters.</p> : <div className="procurement-table-wrap"><table><thead><tr><th>Vendor</th><th>Contact</th><th>Category</th><th>Status</th><th>Purchases</th><th>Outstanding</th><th>Action</th></tr></thead><tbody>{table.rows.map((vendor) => <tr key={vendor.id}><td><button type="button" className="procurement-link" onClick={() => setSelectedVendor(vendor)}>{vendor.vendorName}</button><small>{vendor.email || vendor.mobile || "-"}</small></td><td>{vendor.contactPerson || "-"}</td><td>{vendor.category || "-"}</td><td><span className={`procurement-status procurement-status-${vendor.status || "active"}`}>{vendor.status || "active"}</span></td><td>{formatMoney(vendor.payable.totalPurchases)}</td><td>{formatMoney(vendor.payable.outstandingAmount)}</td><td>{canWrite && <><button type="button" className="procurement-text-button" onClick={() => startEdit(vendor)}>Edit</button><button type="button" className="procurement-text-button" onClick={() => toggleStatus(vendor)}>{String(vendor.status || "active").toLowerCase() === "active" ? "Disable" : "Enable"}</button></>}</td></tr>)}</tbody></table></div>}
+        {loading ? <p className="procurement-state">Loading vendors...</p> : table.count === 0 ? <p className="procurement-state">No vendors match the current filters.</p> : <div className="procurement-table-wrap"><table><thead><tr><th>Vendor</th><th>Contact</th><th>Type / Trade</th><th>Status</th><th>Purchases</th><th>Outstanding</th><th>Action</th></tr></thead><tbody>{table.rows.map((vendor) => <tr key={vendor.id}><td><button type="button" className="procurement-link" onClick={() => setSelectedVendor(vendor)}>{vendor.vendorName}</button><small>{vendor.email || vendor.mobile || "-"}</small></td><td>{vendor.contactPerson || "-"}</td><td>{vendor.vendorType || "Supplier"}<small>{vendor.tradeCategory || vendor.category || "-"}</small></td><td><span className={`procurement-status procurement-status-${vendor.status || "active"}`}>{vendor.status || "active"}</span></td><td>{formatMoney(vendor.payable.totalPurchases)}</td><td>{formatMoney(vendor.payable.outstandingAmount)}</td><td>{canWrite && <><button type="button" className="procurement-text-button" onClick={() => startEdit(vendor)}>Edit</button><button type="button" className="procurement-text-button" onClick={() => toggleStatus(vendor)}>{String(vendor.status || "active").toLowerCase() === "active" ? "Disable" : "Enable"}</button></>}</td></tr>)}</tbody></table></div>}
         <DataTablePagination table={table} /></section>
       </main>
     </Layout>

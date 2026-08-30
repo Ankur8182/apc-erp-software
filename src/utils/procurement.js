@@ -8,6 +8,13 @@ import {
 import { createInventoryItemKey } from "./inventory";
 
 export const VENDOR_STATUSES = ["active", "inactive"];
+export const VENDOR_TYPES = [
+  "Supplier",
+  "Subcontractor",
+  "Service Provider",
+  "Equipment Provider",
+  "Other",
+];
 export const PURCHASE_REQUEST_STATUSES = [
   "draft",
   "pending approval",
@@ -51,6 +58,8 @@ export const createInitialVendorForm = () => ({
   address: "",
   city: "",
   state: "",
+  vendorType: "Supplier",
+  tradeCategory: "",
   category: "",
   openingBalance: "0",
   notes: "",
@@ -63,6 +72,7 @@ export const validateVendor = (form = {}) => {
   const email = cleanText(form.email);
   const openingBalance = strictNumber(form.openingBalance);
   const status = cleanText(form.status).toLowerCase() || "active";
+  const vendorType = cleanText(form.vendorType) || "Supplier";
 
   if (!vendorName) return { isValid: false, error: "Vendor Name is required." };
   if (mobile && !/^\d{10}$/.test(mobile)) {
@@ -71,7 +81,7 @@ export const validateVendor = (form = {}) => {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { isValid: false, error: "Enter a valid email address." };
   }
-  if (openingBalance === null || !VENDOR_STATUSES.includes(status)) {
+  if (openingBalance === null || !VENDOR_STATUSES.includes(status) || !VENDOR_TYPES.includes(vendorType)) {
     return { isValid: false, error: "Vendor balance or status is invalid." };
   }
 
@@ -87,6 +97,8 @@ export const validateVendor = (form = {}) => {
       address: cleanText(form.address),
       city: cleanText(form.city),
       state: cleanText(form.state),
+      vendorType,
+      tradeCategory: cleanText(form.tradeCategory),
       category: cleanText(form.category),
       openingBalance,
       notes: cleanText(form.notes),

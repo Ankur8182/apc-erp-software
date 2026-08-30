@@ -26,6 +26,7 @@ import {
 import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
 import { getEquipmentLabel, getFuelEfficiencyHistory, summariseEquipment } from "../utils/equipment";
+import { getSubcontractingSummary } from "../utils/subcontracting";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -67,6 +68,10 @@ function Reports() {
   const [purchaseRequests, setPurchaseRequests] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [goodsReceipts, setGoodsReceipts] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [workOrderProgress, setWorkOrderProgress] = useState([]);
+  const [contractorBills, setContractorBills] = useState([]);
+  const [contractorPayments, setContractorPayments] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -86,7 +91,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 18;
+    const totalCollections = 22;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -156,6 +161,10 @@ function Reports() {
     loadCollection("purchaseRequests", setPurchaseRequests);
     loadCollection("purchaseOrders", setPurchaseOrders);
     loadCollection("goodsReceipts", setGoodsReceipts);
+    loadCollection("workOrders", setWorkOrders);
+    loadCollection("workOrderProgress", setWorkOrderProgress);
+    loadCollection("contractorBills", setContractorBills);
+    loadCollection("contractorPayments", setContractorPayments);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -233,6 +242,10 @@ function Reports() {
     purchaseRequests.forEach((item) => addSite(getSiteName(item)));
     purchaseOrders.forEach((item) => addSite(getSiteName(item)));
     goodsReceipts.forEach((item) => addSite(getSiteName(item)));
+    workOrders.forEach((item) => addSite(getSiteName(item)));
+    workOrderProgress.forEach((item) => addSite(getSiteName(item)));
+    contractorBills.forEach((item) => addSite(getSiteName(item)));
+    contractorPayments.forEach((item) => addSite(getSiteName(item)));
 
     return Array.from(siteMap.values()).sort(
       (a, b) => a.localeCompare(b)
@@ -252,6 +265,10 @@ function Reports() {
     purchaseRequests,
     purchaseOrders,
     goodsReceipts,
+    workOrders,
+    workOrderProgress,
+    contractorBills,
+    contractorPayments,
   ]);
 
   const reportSiteNames = useMemo(() => {
@@ -472,6 +489,33 @@ function Reports() {
     [goodsReceipts, selectedSite, fromDate, toDate, vendorFilter, materialFilter]
   );
 
+  const filterSubcontractRecord = useCallback((record, dateFields) => {
+    const date = normaliseDate(dateFields.map((field) => record?.[field]).find(Boolean) || record?.createdAt);
+    return (selectedSite === "all" || isSameSite(record, selectedSite)) &&
+      (!fromDate || (date && date >= fromDate)) && (!toDate || (date && date <= toDate)) &&
+      (!vendorFilter || record?.vendorId === vendorFilter);
+  }, [selectedSite, fromDate, toDate, vendorFilter]);
+
+  const filteredWorkOrders = useMemo(
+    () => workOrders.filter((order) => filterSubcontractRecord(order, ["startDate", "expectedCompletionDate"])),
+    [workOrders, filterSubcontractRecord]
+  );
+  const filteredWorkOrderProgress = useMemo(
+    () => workOrderProgress.filter((record) => filterSubcontractRecord(record, ["date"])),
+    [workOrderProgress, filterSubcontractRecord]
+  );
+  const filteredContractorBills = useMemo(
+    () => contractorBills.filter((bill) => filterSubcontractRecord(bill, ["billDate"])),
+    [contractorBills, filterSubcontractRecord]
+  );
+  const filteredContractorPayments = useMemo(
+    () => contractorPayments.filter((payment) => filterSubcontractRecord(payment, ["paymentDate"])),
+    [contractorPayments, filterSubcontractRecord]
+  );
+  const subcontractingSummary = useMemo(
+    () => getSubcontractingSummary(filteredWorkOrders, filteredContractorBills),
+    [filteredWorkOrders, filteredContractorBills]
+  );
   const procurementSummary = useMemo(
     () => getProcurementSummary(filteredPurchaseRequests, filteredPurchaseOrders, filteredGoodsReceipts),
     [filteredPurchaseRequests, filteredPurchaseOrders, filteredGoodsReceipts]
@@ -1083,6 +1127,31 @@ function Reports() {
     })),
   };
 
+  const subcontractingExport = {
+    title: "Subcontracting & Work Orders Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Work Orders", value: filteredWorkOrders.length },
+      { label: "Certified Progress Records", value: filteredWorkOrderProgress.length },
+      { label: "Contract Value", value: formatExportMoney(subcontractingSummary.totalContractValue) },
+      { label: "Certified Work", value: formatExportMoney(subcontractingSummary.certifiedAmount) },
+      { label: "Pending Contractor Bills", value: formatExportMoney(subcontractingSummary.pendingPayable) },
+      { label: "Retention Held", value: formatExportMoney(subcontractingSummary.retentionBalance) },
+    ],
+    columns: [
+      { key: "recordType", label: "Record Type" }, { key: "date", label: "Date" },
+      { key: "reference", label: "Reference" }, { key: "vendor", label: "Vendor" },
+      { key: "site", label: "Site" }, { key: "details", label: "Details" },
+      { key: "amount", label: "Amount (INR)", format: formatExportMoney },
+      { key: "status", label: "Status" },
+    ],
+    rows: [
+      ...filteredWorkOrders.map((order) => ({ recordType: "Work Order", date: order.startDate || "-", reference: order.workOrderNumber || order.id, vendor: order.vendorName || "-", site: getSiteName(order) || "-", details: order.workTrade || "-", amount: toNumber(order.contractValue), status: order.status || "Draft" })),
+      ...filteredWorkOrderProgress.map((record) => ({ recordType: "Certified Progress", date: record.date || "-", reference: record.workOrderNumber || "-", vendor: record.vendorName || "-", site: getSiteName(record) || "-", details: `${toNumber(record.quantity)} ${record.unit || ""} / ${toNumber(record.progressPercent)}%`, amount: toNumber(record.certifiedAmount), status: "Certified" })),
+      ...filteredContractorBills.map((bill) => ({ recordType: "Contractor Bill", date: bill.billDate || "-", reference: bill.billNumber || bill.id, vendor: bill.vendorName || "-", site: getSiteName(bill) || "-", details: `Pending ${formatExportMoney(bill.pendingAmount)}; retention ${formatExportMoney(bill.retentionBalance)}`, amount: toNumber(bill.currentBillAmount), status: bill.paymentStatus || "Pending" })),
+      ...filteredContractorPayments.map((payment) => ({ recordType: "Contractor Payment", date: payment.paymentDate || "-", reference: payment.workOrderNumber || payment.contractorBillId || "-", vendor: payment.vendorName || "-", site: getSiteName(payment) || "-", details: `${payment.paymentType || "Payment"} / ${payment.paymentMode || "-"}`, amount: toNumber(payment.amount), status: "Recorded" })),
+    ],
+  };
   const handlePrint = () => {
     printReport(financialSummaryExport);
   };
@@ -1256,6 +1325,7 @@ function Reports() {
             <ReportExportActions report={equipmentCostExport} disabled={loading} />
             <ReportExportActions report={inventoryExport} disabled={loading} />
             <ReportExportActions report={procurementExport} disabled={loading} />
+            <ReportExportActions report={subcontractingExport} disabled={loading} />
           </div>
         </section>
 
@@ -1496,6 +1566,28 @@ function Reports() {
               </tbody></table></div>
             </div>
 
+            <div className="report-section-title"><h2>🧱 Subcontracting &amp; Work Orders</h2></div>
+            <div className="inventory-report-note">Work-order value and certified progress are operational/commitment figures. Financial expense is recorded once from each linked certified contractor bill in <strong>Expenses</strong>; contractor payments do not create a second expense.</div>
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card"><span>🧱 Active Work Orders</span><h3>{subcontractingSummary.activeWorkOrders}</h3></div>
+              <div className="dpr-report-summary-card"><span>💳 Contract Value</span><h3>{formatMoney(subcontractingSummary.totalContractValue)}</h3></div>
+              <div className="dpr-report-summary-card"><span>✅ Certified Work</span><h3>{formatMoney(subcontractingSummary.certifiedAmount)}</h3></div>
+              <div className="dpr-report-summary-card"><span>⏳ Pending Bills</span><h3>{formatMoney(subcontractingSummary.pendingPayable)}</h3></div>
+              <div className="dpr-report-summary-card"><span>🔒 Retention Held</span><h3>{formatMoney(subcontractingSummary.retentionBalance)}</h3></div>
+              <div className="dpr-report-summary-card"><span>⚠️ Overdue Orders</span><h3>{subcontractingSummary.overdueWorkOrders}</h3></div>
+            </div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Work Order</th><th>Vendor</th><th>Site</th><th>Scope</th><th>Contract</th><th>Certified</th><th>Progress</th><th>Status</th></tr></thead><tbody>
+              {filteredWorkOrders.length === 0 ? <tr><td colSpan="8" className="no-report-data">No work orders match the selected site, date, or vendor filters.</td></tr> : filteredWorkOrders.map((order) => <tr key={order.id}><td>{order.workOrderNumber || order.id}<small>{normaliseDate(order.startDate) || "-"}</small></td><td>{order.vendorName || "-"}</td><td>{getSiteName(order) || "-"}</td><td>{order.workTrade || "-"}</td><td>{formatMoney(order.contractValue)}</td><td>{formatMoney(order.certifiedAmount)}</td><td>{toNumber(order.progressPercent)}%</td><td>{order.status || "Draft"}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Certification Date</th><th>Work Order</th><th>Site</th><th>Quantity / Unit</th><th>Progress</th><th>Certified Amount</th></tr></thead><tbody>
+              {filteredWorkOrderProgress.length === 0 ? <tr><td colSpan="6" className="no-report-data">No certified progress records match the selected filters.</td></tr> : filteredWorkOrderProgress.map((record) => <tr key={record.id}><td>{normaliseDate(record.date) || "-"}</td><td>{record.workOrderNumber || "-"}</td><td>{getSiteName(record) || "-"}</td><td>{toNumber(record.quantity)} {record.unit || ""}</td><td>{toNumber(record.progressPercent)}%</td><td>{formatMoney(record.certifiedAmount)}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Bill</th><th>Date</th><th>Vendor / Site</th><th>Current Bill</th><th>Paid / Pending</th><th>Retention</th><th>Status</th></tr></thead><tbody>
+              {filteredContractorBills.length === 0 ? <tr><td colSpan="7" className="no-report-data">No contractor bills match the selected filters.</td></tr> : filteredContractorBills.map((bill) => <tr key={bill.id}><td>{bill.billNumber || bill.id}<small>{bill.workOrderNumber || "-"}</small></td><td>{normaliseDate(bill.billDate) || "-"}</td><td>{bill.vendorName || "-"}<small>{getSiteName(bill) || "-"}</small></td><td>{formatMoney(bill.currentBillAmount)}</td><td>{formatMoney(bill.paidAmount)} / {formatMoney(bill.pendingAmount)}</td><td>{formatMoney(bill.retentionBalance)}</td><td>{bill.paymentStatus || "Pending"}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Payment Date</th><th>Bill / Work Order</th><th>Vendor / Site</th><th>Type</th><th>Mode</th><th>Amount</th><th>Reference</th></tr></thead><tbody>
+              {filteredContractorPayments.length === 0 ? <tr><td colSpan="7" className="no-report-data">No contractor payments match the selected filters.</td></tr> : filteredContractorPayments.map((payment) => <tr key={payment.id}><td>{normaliseDate(payment.paymentDate) || "-"}</td><td>{payment.workOrderNumber || "-"}</td><td>{payment.vendorName || "-"}<small>{getSiteName(payment) || "-"}</small></td><td>{payment.paymentType || "-"}</td><td>{payment.paymentMode || "-"}</td><td>{formatMoney(payment.amount)}</td><td>{payment.reference || "-"}</td></tr>)}
+            </tbody></table></div></div>
             {/* PROCUREMENT */}
 
             <div className="report-section-title">

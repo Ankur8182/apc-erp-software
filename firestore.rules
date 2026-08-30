@@ -183,7 +183,11 @@ service cloud.firestore {
           "vendors",
           "purchaseRequests",
           "purchaseOrders",
-          "goodsReceipts"
+          "goodsReceipts",
+          "workOrders",
+          "workOrderProgress",
+          "contractorBills",
+          "contractorPayments"
         ] &&
         request.resource.data.recordId is string &&
           request.resource.data.recordId.size() > 0 && request.resource.data.recordId.size() <= 200 &&
@@ -376,13 +380,164 @@ service cloud.firestore {
           material.inventoryTransactionId == transactionId;
     }
 
+    // Work orders keep approved commercial terms immutable. Certified progress,
+    // bills and payments are separate append-only ledgers.
+    function hasValidWorkOrderData(orderId) {
+      return request.resource.data.keys().hasAll([
+          "workOrderNumber", "vendorId", "vendorName", "site", "workTrade", "workDescription",
+          "startDate", "expectedCompletionDate", "rateType", "contractValue", "quantity", "unit",
+          "rate", "retentionPercent", "advanceAmount", "advanceRecovered", "progressQuantity",
+          "progressPercent", "certifiedAmount", "billedAmount", "terms", "remarks", "status", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "workOrderNumber", "vendorId", "vendorName", "site", "siteId", "workTrade", "workDescription",
+          "startDate", "expectedCompletionDate", "rateType", "contractValue", "quantity", "unit",
+          "rate", "retentionPercent", "advanceAmount", "advanceRecovered", "progressQuantity",
+          "progressPercent", "certifiedAmount", "billedAmount", "terms", "remarks", "status", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.workOrderNumber == orderId &&
+        request.resource.data.vendorId is string && request.resource.data.vendorId.size() > 0 &&
+        request.resource.data.vendorName is string && request.resource.data.vendorName.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.workTrade is string && request.resource.data.workTrade.size() > 0 &&
+        request.resource.data.workDescription is string && request.resource.data.workDescription.size() > 0 &&
+        request.resource.data.startDate is string && request.resource.data.startDate.size() >= 10 &&
+        request.resource.data.expectedCompletionDate is string && request.resource.data.expectedCompletionDate.size() >= 10 &&
+        request.resource.data.expectedCompletionDate >= request.resource.data.startDate &&
+        request.resource.data.rateType in ["Lump Sum", "Item Rate", "Daily / Other"] &&
+        request.resource.data.contractValue is number && request.resource.data.contractValue > 0 &&
+        request.resource.data.quantity is number && request.resource.data.quantity >= 0 &&
+        request.resource.data.unit is string && request.resource.data.rate is number && request.resource.data.rate >= 0 &&
+        ((request.resource.data.rateType == "Item Rate" && request.resource.data.quantity > 0 &&
+            request.resource.data.unit.size() > 0 && request.resource.data.contractValue == request.resource.data.quantity * request.resource.data.rate) ||
+          (request.resource.data.rateType != "Item Rate" && request.resource.data.quantity == 0 &&
+            request.resource.data.unit == "" && request.resource.data.rate == 0)) &&
+        request.resource.data.retentionPercent is number && request.resource.data.retentionPercent >= 0 && request.resource.data.retentionPercent <= 100 &&
+        request.resource.data.advanceAmount is number && request.resource.data.advanceAmount >= 0 && request.resource.data.advanceAmount <= request.resource.data.contractValue &&
+        request.resource.data.advanceRecovered is number && request.resource.data.advanceRecovered >= 0 && request.resource.data.advanceRecovered <= request.resource.data.advanceAmount &&
+        request.resource.data.progressQuantity is number && request.resource.data.progressQuantity >= 0 &&
+        request.resource.data.progressPercent is number && request.resource.data.progressPercent >= 0 && request.resource.data.progressPercent <= 100 &&
+        request.resource.data.certifiedAmount is number && request.resource.data.certifiedAmount >= 0 && request.resource.data.certifiedAmount <= request.resource.data.contractValue &&
+        request.resource.data.billedAmount is number && request.resource.data.billedAmount >= 0 && request.resource.data.billedAmount <= request.resource.data.certifiedAmount &&
+        request.resource.data.terms is string && request.resource.data.terms.size() <= 2000 &&
+        request.resource.data.remarks is string && request.resource.data.remarks.size() <= 2000 &&
+        request.resource.data.status in ["Draft", "Approved", "Active", "Completed", "Closed", "Cancelled"] &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0;
+    }
+
+    function hasValidWorkOrderTransition() {
+      return request.resource.data.status == resource.data.status ||
+        (resource.data.status == "Draft" && request.resource.data.status in ["Approved", "Cancelled"]) ||
+        (resource.data.status == "Approved" && request.resource.data.status in ["Active", "Cancelled"]) ||
+        (resource.data.status == "Active" && request.resource.data.status in ["Completed", "Cancelled"]) ||
+        (resource.data.status == "Completed" && request.resource.data.status == "Closed");
+    }
+
+    function hasImmutableWorkOrderCommercialFields() {
+      return request.resource.data.workOrderNumber == resource.data.workOrderNumber &&
+        request.resource.data.vendorId == resource.data.vendorId && request.resource.data.vendorName == resource.data.vendorName &&
+        request.resource.data.site == resource.data.site && request.resource.data.siteId == resource.data.siteId &&
+        request.resource.data.workTrade == resource.data.workTrade && request.resource.data.workDescription == resource.data.workDescription &&
+        request.resource.data.startDate == resource.data.startDate && request.resource.data.expectedCompletionDate == resource.data.expectedCompletionDate &&
+        request.resource.data.rateType == resource.data.rateType && request.resource.data.contractValue == resource.data.contractValue &&
+        request.resource.data.quantity == resource.data.quantity && request.resource.data.unit == resource.data.unit && request.resource.data.rate == resource.data.rate &&
+        request.resource.data.retentionPercent == resource.data.retentionPercent && request.resource.data.advanceAmount == resource.data.advanceAmount &&
+        request.resource.data.terms == resource.data.terms && request.resource.data.remarks == resource.data.remarks;
+    }
+
+    function hasValidWorkOrderProgressData() {
+      return request.resource.data.keys().hasAll([
+          "workOrderId", "workOrderNumber", "vendorId", "vendorName", "site", "date", "quantity", "unit",
+          "progressPercent", "certifiedAmount", "remarks", "dprId", "cumulativeQuantity",
+          "cumulativeProgressPercent", "cumulativeCertifiedAmount", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.keys().hasOnly([
+          "workOrderId", "workOrderNumber", "vendorId", "vendorName", "site", "date", "quantity", "unit",
+          "progressPercent", "certifiedAmount", "remarks", "dprId", "cumulativeQuantity",
+          "cumulativeProgressPercent", "cumulativeCertifiedAmount", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.workOrderId is string && request.resource.data.workOrderId.size() > 0 &&
+        request.resource.data.workOrderNumber is string && request.resource.data.vendorId is string && request.resource.data.vendorName is string &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.date is string && request.resource.data.date.size() >= 10 &&
+        request.resource.data.quantity is number && request.resource.data.quantity >= 0 && request.resource.data.unit is string &&
+        request.resource.data.progressPercent is number && request.resource.data.progressPercent >= 0 && request.resource.data.progressPercent <= 100 &&
+        request.resource.data.certifiedAmount is number && request.resource.data.certifiedAmount >= 0 &&
+        request.resource.data.cumulativeQuantity is number && request.resource.data.cumulativeQuantity >= 0 &&
+        request.resource.data.cumulativeProgressPercent is number && request.resource.data.cumulativeProgressPercent >= 0 && request.resource.data.cumulativeProgressPercent <= 100 &&
+        request.resource.data.cumulativeCertifiedAmount is number && request.resource.data.cumulativeCertifiedAmount >= 0 &&
+        request.resource.data.remarks is string && request.resource.data.remarks.size() <= 2000 && request.resource.data.dprId is string &&
+        request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function hasValidContractorBillData(billId) {
+      return request.resource.data.keys().hasAll([
+          "billNumber", "linkedExpenseId", "workOrderId", "workOrderNumber", "vendorId", "vendorName", "site", "billDate",
+          "certifiedAmount", "previousBilledAmount", "currentBillAmount", "retentionPercent", "retentionAmount",
+          "retentionReleased", "retentionBalance", "advanceRecovery", "deductions", "payableAmount", "paidAmount",
+          "pendingAmount", "paymentStatus", "remarks", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.keys().hasOnly([
+          "billNumber", "linkedExpenseId", "workOrderId", "workOrderNumber", "vendorId", "vendorName", "site", "billDate",
+          "certifiedAmount", "previousBilledAmount", "currentBillAmount", "retentionPercent", "retentionAmount",
+          "retentionReleased", "retentionBalance", "advanceRecovery", "deductions", "payableAmount", "paidAmount",
+          "pendingAmount", "paymentStatus", "remarks", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.billNumber is string && request.resource.data.billNumber.size() > 0 &&
+        request.resource.data.linkedExpenseId is string && request.resource.data.linkedExpenseId.size() > 0 &&
+        request.resource.data.workOrderId is string && request.resource.data.workOrderId.size() > 0 && request.resource.data.workOrderNumber is string &&
+        request.resource.data.vendorId is string && request.resource.data.vendorName is string && request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.billDate is string && request.resource.data.billDate.size() >= 10 &&
+        request.resource.data.certifiedAmount is number && request.resource.data.previousBilledAmount is number && request.resource.data.currentBillAmount is number && request.resource.data.currentBillAmount > 0 &&
+        request.resource.data.retentionPercent is number && request.resource.data.retentionPercent >= 0 && request.resource.data.retentionPercent <= 100 &&
+        request.resource.data.retentionAmount is number && request.resource.data.retentionAmount >= 0 &&
+        request.resource.data.retentionReleased is number && request.resource.data.retentionReleased >= 0 && request.resource.data.retentionBalance is number && request.resource.data.retentionBalance >= 0 &&
+        request.resource.data.advanceRecovery is number && request.resource.data.advanceRecovery >= 0 && request.resource.data.deductions is number && request.resource.data.deductions >= 0 &&
+        request.resource.data.payableAmount is number && request.resource.data.payableAmount >= 0 && request.resource.data.paidAmount is number && request.resource.data.paidAmount >= 0 && request.resource.data.pendingAmount is number && request.resource.data.pendingAmount >= 0 &&
+        request.resource.data.paymentStatus in ["Pending", "Partially Paid", "Paid"] && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 2000 &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function hasLinkedContractorExpense(billId) {
+      let expensePath = /databases/$(database)/documents/expenses/$(request.resource.data.linkedExpenseId);
+      let expense = getAfter(expensePath).data;
+      return existsAfter(expensePath) && expense.sourceType == "contractorBill" && expense.contractorBillId == billId &&
+        expense.workOrderId == request.resource.data.workOrderId && expense.vendorId == request.resource.data.vendorId &&
+        expense.site == request.resource.data.site && expense.date == request.resource.data.billDate &&
+        expense.amount == request.resource.data.currentBillAmount && expense.createdBy == request.auth.uid;
+    }
+
+    function hasValidContractorBillAgainstWorkOrder() {
+      let workOrderPath = /databases/$(database)/documents/workOrders/$(request.resource.data.workOrderId);
+      let beforeOrder = get(workOrderPath).data;
+      let afterOrder = getAfter(workOrderPath).data;
+      return exists(workOrderPath) && existsAfter(workOrderPath) &&
+        beforeOrder.workOrderNumber == request.resource.data.workOrderNumber &&
+        beforeOrder.vendorId == request.resource.data.vendorId && beforeOrder.vendorName == request.resource.data.vendorName &&
+        beforeOrder.site == request.resource.data.site &&
+        beforeOrder.status in ["Approved", "Active", "Completed", "Closed"] &&
+        request.resource.data.currentBillAmount <= beforeOrder.certifiedAmount - beforeOrder.billedAmount &&
+        request.resource.data.advanceRecovery <= beforeOrder.advanceAmount - beforeOrder.advanceRecovered &&
+        afterOrder.billedAmount == beforeOrder.billedAmount + request.resource.data.currentBillAmount &&
+        afterOrder.advanceRecovered == beforeOrder.advanceRecovered + request.resource.data.advanceRecovery;
+    }
+    function hasValidContractorPaymentData() {
+      return request.resource.data.keys().hasAll([
+          "contractorBillId", "workOrderId", "workOrderNumber", "vendorId", "vendorName", "site", "paymentDate",
+          "amount", "paymentMode", "paymentType", "reference", "remarks", "billUpdate", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.keys().hasOnly([
+          "contractorBillId", "workOrderId", "workOrderNumber", "vendorId", "vendorName", "site", "paymentDate",
+          "amount", "paymentMode", "paymentType", "reference", "remarks", "billUpdate", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.contractorBillId is string && request.resource.data.workOrderId is string && request.resource.data.workOrderNumber is string &&
+        request.resource.data.vendorId is string && request.resource.data.vendorName is string && request.resource.data.site is string &&
+        request.resource.data.paymentDate is string && request.resource.data.paymentDate.size() >= 10 && request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        request.resource.data.paymentMode in ["Cash", "Bank Transfer", "Cheque", "UPI", "Other"] && request.resource.data.paymentType in ["Bill Payment", "Retention Release"] &&
+        request.resource.data.reference is string && request.resource.data.reference.size() <= 250 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 2000 &&
+        request.resource.data.billUpdate is map && request.resource.data.createdBy == request.auth.uid;
+    }
     function hasValidVendorData() {
       return request.resource.data.keys().hasAll([
           "vendorName", "openingBalance", "status", "createdBy", "createdAt", "updatedAt"
         ]) &&
         request.resource.data.keys().hasOnly([
           "vendorName", "contactPerson", "mobile", "email", "gstNumber", "panNumber",
-          "address", "city", "state", "category", "openingBalance", "notes", "status",
+          "address", "city", "state", "vendorType", "tradeCategory", "category", "openingBalance", "notes", "status",
           "createdBy", "createdAt", "updatedAt"
         ]) &&
         request.resource.data.vendorName is string && request.resource.data.vendorName.size() > 0 && request.resource.data.vendorName.size() <= 250 &&
@@ -750,6 +905,57 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Subcontracting ledgers use the shared vendor master. Draft commercial
+    // terms can be corrected; approved contracts and bill history are retained.
+    match /workOrders/{orderId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidWorkOrderData(orderId) &&
+        request.resource.data.status == "Draft" && request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidWorkOrderData(orderId) &&
+        request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time && hasValidWorkOrderTransition() &&
+        (resource.data.status == "Draft" || hasImmutableWorkOrderCommercialFields());
+      allow delete: if false;
+    }
+
+    // Progress certification is append-only and never creates an accounting cost.
+    match /workOrderProgress/{progressId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidWorkOrderProgressData() &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // A contractor bill can only be created together with its one linked
+    // expenses record. This makes that expenses record the canonical cost source.
+    match /contractorBills/{billId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidContractorBillData(billId) &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time &&
+        request.resource.data.paidAmount == 0 && request.resource.data.pendingAmount == request.resource.data.payableAmount &&
+        request.resource.data.retentionReleased == 0 && request.resource.data.retentionBalance == request.resource.data.retentionAmount &&
+        hasLinkedContractorExpense(billId) && hasValidContractorBillAgainstWorkOrder();
+      allow update: if canWriteErpData() && hasValidContractorBillData(billId) &&
+        request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "paidAmount", "pendingAmount", "retentionReleased", "retentionBalance", "paymentStatus", "updatedAt"
+        ]) &&
+        request.resource.data.paidAmount >= resource.data.paidAmount && request.resource.data.paidAmount <= request.resource.data.payableAmount &&
+        request.resource.data.pendingAmount == request.resource.data.payableAmount - request.resource.data.paidAmount &&
+        request.resource.data.retentionReleased >= resource.data.retentionReleased && request.resource.data.retentionReleased <= request.resource.data.retentionAmount &&
+        request.resource.data.retentionBalance == request.resource.data.retentionAmount - request.resource.data.retentionReleased;
+      allow delete: if false;
+    }
+
+    // Payment entries settle an existing bill but never create a second expense.
+    match /contractorPayments/{paymentId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidContractorPaymentData() &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update, delete: if false;
+    }
     match /labours/{document=**} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
