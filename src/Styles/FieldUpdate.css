@@ -368,3 +368,56 @@
     font-size: 16px;
   }
 }
+.field-outbox-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #f8fbff;
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.field-outbox-status strong,
+.field-outbox-status span {
+  display: block;
+}
+
+.field-outbox-status span {
+  margin-top: 3px;
+  color: #475569;
+}
+
+.field-outbox-status button {
+  min-height: 42px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 1px solid #2563eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1d4ed8;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.field-outbox-status button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .field-outbox-status {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-outbox-status button {
+    width: 100%;
+    min-height: 46px;
+  }
+}

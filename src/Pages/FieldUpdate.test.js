@@ -17,26 +17,24 @@ import {
   uploadBytesResumable,
 } from "firebase/storage";
 import { logAuditEvent } from "../utils/auditLogging";
-import { hasFieldUpdateDraftContent, saveFieldUpdateDraft } from "../utils/fieldUpdateDrafts";
+import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
 
 const mockUser = { uid: "supervisor-1", email: "supervisor@example.com" };
+let mockIsOnline = true;
+let mockOutboxEntries = [];
+const mockQueueDpr = jest.fn();
+const mockRetryPending = jest.fn();
 
 jest.mock("../Components/Layout", () => ({ children }) => <>{children}</>);
-
 jest.mock("../auth/AuthProvider", () => ({
   useAuth: () => ({ role: "supervisor", user: mockUser }),
 }));
-
-jest.mock("../firebase", () => ({
-  db: {},
-  storage: {},
-}));
-
+jest.mock("../firebase", () => ({ db: {}, storage: {} }));
+jest.mock("../hooks/useDprOutboxSync", () => ({ useDprOutboxSync: jest.fn() }));
 jest.mock("../utils/auditLogging", () => ({
   getAuditFailureMessage: () => "The record was saved, but its audit entry could not be recorded. Please contact an administrator.",
   logAuditEvent: jest.fn(() => Promise.resolve({ success: true })),
 }));
-
 jest.mock("firebase/firestore", () => ({
   collection: jest.fn((database, name) => ({ name })),
   doc: jest.fn(() => ({ id: "new-dpr" })),
@@ -46,14 +44,12 @@ jest.mock("firebase/firestore", () => ({
   setDoc: jest.fn(),
   where: jest.fn(),
 }));
-
 jest.mock("firebase/storage", () => ({
   deleteObject: jest.fn(() => Promise.resolve()),
   getDownloadURL: jest.fn(),
   ref: jest.fn((storage, path) => ({ path })),
   uploadBytesResumable: jest.fn(),
 }));
-
 jest.mock("../utils/fieldUpdateDrafts", () => ({
   clearFieldUpdateDraft: jest.fn(),
   hasFieldUpdateDraftContent: jest.fn(() => false),
@@ -64,34 +60,19 @@ jest.mock("../utils/fieldUpdateDrafts", () => ({
 const renderFieldUpdate = () => {
   onSnapshot.mockImplementation((source, onNext) => {
     void source;
-    onNext({
-      docs: [{ id: "site-1", data: () => ({ siteName: "Civil Site" }) }],
-    });
+    onNext({ docs: [{ id: "site-1", data: () => ({ siteName: "Civil Site" }) }] });
     return jest.fn();
   });
-
   return render(<FieldUpdate />);
 };
 
 const completeRequiredForm = () => {
-  fireEvent.change(screen.getByLabelText(/^Site/), {
-    target: { value: "Civil Site" },
-  });
-  fireEvent.change(screen.getByLabelText(/^Date/), {
-    target: { value: "2026-09-04" },
-  });
-  fireEvent.change(screen.getByLabelText(/^Work Activity/), {
-    target: { value: "PCC work" },
-  });
-  fireEvent.change(screen.getByLabelText(/^Work Location/), {
-    target: { value: "Block A" },
-  });
-  fireEvent.change(screen.getByLabelText(/^Manpower Count/), {
-    target: { value: "5" },
-  });
-  fireEvent.change(screen.getByLabelText(/^Output Quantity/), {
-    target: { value: "0" },
-  });
+  fireEvent.change(screen.getByLabelText(/^Site/), { target: { value: "Civil Site" } });
+  fireEvent.change(screen.getByLabelText(/^Date/), { target: { value: "2026-09-04" } });
+  fireEvent.change(screen.getByLabelText(/^Work Activity/), { target: { value: "PCC work" } });
+  fireEvent.change(screen.getByLabelText(/^Work Location/), { target: { value: "Block A" } });
+  fireEvent.change(screen.getByLabelText(/^Manpower Count/), { target: { value: "5" } });
+  fireEvent.change(screen.getByLabelText(/^Output Quantity/), { target: { value: "0" } });
 };
 
 describe("FieldUpdate submission", () => {
@@ -99,6 +80,19 @@ describe("FieldUpdate submission", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsOnline = true;
+    mockOutboxEntries = [];
+    mockQueueDpr.mockResolvedValue({ created: true });
+    mockRetryPending.mockResolvedValue();
+    useDprOutboxSync.mockImplementation(() => ({
+      isOnline: mockIsOnline,
+      entries: mockOutboxEntries,
+      summary: { pending: 0, syncing: 0, failed: 0, total: mockOutboxEntries.length },
+      isSyncing: false,
+      syncMessage: "",
+      queueDpr: mockQueueDpr,
+      retryPending: mockRetryPending,
+    }));
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     collection.mockImplementation((database, name) => ({ name }));
     doc.mockReturnValue({ id: "new-dpr" });
@@ -112,14 +106,11 @@ describe("FieldUpdate submission", () => {
     getDownloadURL.mockResolvedValue("https://example.com/photo");
   });
 
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
-  });
+  afterEach(() => consoleErrorSpy.mockRestore());
 
-  test("saves a valid supervisor DPR with the authenticated UID and server timestamps", async () => {
+  test("saves a valid supervisor DPR with its authenticated UID, stable ID, and server timestamps", async () => {
     renderFieldUpdate();
     completeRequiredForm();
-
     fireEvent.click(screen.getByRole("button", { name: /submit site update/i }));
 
     await waitFor(() => expect(setDoc).toHaveBeenCalledTimes(1));
@@ -131,74 +122,65 @@ describe("FieldUpdate submission", () => {
       createdAt: "SERVER_TIMESTAMP",
       updatedAt: "SERVER_TIMESTAMP",
       photos: [],
+      clientSubmissionId: expect.stringMatching(/^dpr-supervisor-1-/),
     });
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Site update submitted successfully."
-    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Site update submitted successfully.");
   });
 
   test("keeps the form available and shows a safe error when the DPR save is denied", async () => {
     setDoc.mockRejectedValue({ code: "permission-denied" });
     renderFieldUpdate();
     completeRequiredForm();
-
     fireEvent.click(screen.getByRole("button", { name: /submit site update/i }));
 
-    expect(
-      await screen.findByRole("alert")
-    ).toHaveTextContent("You do not have permission to complete this action.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission to complete this action.");
     expect(screen.getByDisplayValue("PCC work")).toBeInTheDocument();
+    expect(mockQueueDpr).not.toHaveBeenCalled();
+  });
+
+  test("queues a valid offline site update locally without claiming a Firestore save", async () => {
+    mockIsOnline = false;
+    renderFieldUpdate();
+    completeRequiredForm();
+    fireEvent.click(screen.getByRole("button", { name: /save on this device/i }));
+
+    await waitFor(() => expect(mockQueueDpr).toHaveBeenCalledTimes(1));
+    expect(mockQueueDpr).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ site: "Civil Site", createdBy: "supervisor-1" }),
+      clientSubmissionId: expect.stringMatching(/^dpr-supervisor-1-/),
+    }));
+    expect(setDoc).not.toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent("pending synchronization");
+  });
+
+  test("queues after a temporary Firestore failure but keeps permission failures out of retry queue", async () => {
+    setDoc.mockRejectedValue({ code: "unavailable", message: "network offline" });
+    renderFieldUpdate();
+    completeRequiredForm();
+    fireEvent.click(screen.getByRole("button", { name: /submit site update/i }));
+
+    await waitFor(() => expect(mockQueueDpr).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("status")).toHaveTextContent("connection was interrupted");
   });
 
   test("saves the DPR without photos when Firebase Storage is unavailable", async () => {
     uploadBytesResumable.mockReturnValue({
-      on: (event, progress, reject) =>
-        reject({
-          code: "storage/no-default-bucket",
-          message: "Firebase Storage has not been set up",
-        }),
+      on: (event, progress, reject) => reject({ code: "storage/no-default-bucket" }),
     });
     renderFieldUpdate();
     completeRequiredForm();
-
     const image = new File(["photo"], "progress.jpg", { type: "image/jpeg" });
-    fireEvent.change(screen.getByLabelText(/Site Progress Photos/), {
-      target: { files: [image] },
-    });
+    fireEvent.change(screen.getByLabelText(/Site Progress Photos/), { target: { files: [image] } });
     fireEvent.click(screen.getByRole("button", { name: /submit site update/i }));
 
     await waitFor(() => expect(setDoc).toHaveBeenCalledTimes(1));
     expect(setDoc.mock.calls[0][1].photos).toEqual([]);
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Photo upload is currently unavailable."
-    );
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Site update submitted successfully without photos."
-    );
-  });
-  test("keeps an offline field entry as a local draft without attempting a Firestore write", async () => {
-    const originalOnline = window.navigator.onLine;
-    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: false });
-
-    try {
-      hasFieldUpdateDraftContent.mockReturnValue(true);
-      renderFieldUpdate();
-      completeRequiredForm();
-      fireEvent.click(screen.getByRole("button", { name: /offline.*reconnect/i }));
-
-      expect(screen.getByRole("alert")).toHaveTextContent("Your entered site update remains saved as a local draft");
-      expect(await screen.findByRole("status")).toHaveTextContent("Draft saved on this device");
-      expect(saveFieldUpdateDraft).toHaveBeenCalled();
-      expect(setDoc).not.toHaveBeenCalled();
-    } finally {
-      hasFieldUpdateDraftContent.mockReturnValue(false);
-      Object.defineProperty(window.navigator, "onLine", { configurable: true, value: originalOnline });
-    }
+    expect(screen.getByRole("alert")).toHaveTextContent("Photo upload is currently unavailable.");
+    expect(screen.getByRole("status")).toHaveTextContent("submitted successfully without photos");
   });
 
-  test("uses touch-friendly numeric input modes without exposing financial fields", () => {
+  test("uses touch-friendly numeric inputs without exposing financial fields", () => {
     renderFieldUpdate();
-
     expect(screen.getByLabelText(/^Manpower Count/)).toHaveAttribute("inputmode", "numeric");
     expect(screen.getByLabelText(/^Output Quantity/)).toHaveAttribute("inputmode", "decimal");
     expect(screen.queryByText(/Revenue/)).not.toBeInTheDocument();

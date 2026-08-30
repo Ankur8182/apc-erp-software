@@ -47,7 +47,9 @@ import {
 import { getRecordDate, getSiteName, isSameSite } from "../utils/financialReporting";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
-import { getNetworkStatus, getOfflineFieldMessage } from "../utils/pwa";
+import { getOfflineFieldMessage } from "../utils/pwa";
+import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
+import { createDprClientSubmissionId, isRetryableDprSyncError } from "../utils/offlineDprOutbox";
 import "../Styles/FieldUpdate.css";
 
 const getUniqueValues = (records, getValues) => {
@@ -143,26 +145,24 @@ function FieldUpdate() {
   const [draftUserId, setDraftUserId] = useState("");
   const [draftAvailable, setDraftAvailable] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isOnline, setIsOnline] = useState(getNetworkStatus);
+
   const submitGuardRef = useRef(createDprSubmitGuard());
 
   const canSubmit = canSubmitFieldUpdate(role);
   const fieldOnly = isFieldOnlyRole(role);
   const userId = user?.uid || "";
   const dprReadScope = getDprReadScope(role, userId);
+  const {
+    isOnline,
+    entries: outboxEntries,
+    summary: outboxSummary,
+    isSyncing: isOutboxSyncing,
+    syncMessage: outboxSyncMessage,
+    queueDpr,
+    retryPending,
+  } = useDprOutboxSync({ userId, role });
+  const canRetryOutbox = outboxEntries.some((entry) => entry.retryable !== false);
 
-  useEffect(() => {
-    const updateNetworkStatus = () => setIsOnline(getNetworkStatus());
-
-    updateNetworkStatus();
-    window.addEventListener("online", updateNetworkStatus);
-    window.addEventListener("offline", updateNetworkStatus);
-
-    return () => {
-      window.removeEventListener("online", updateNetworkStatus);
-      window.removeEventListener("offline", updateNetworkStatus);
-    };
-  }, []);
 
   useEffect(() => {
     if (!dprReadScope.canRead) {
@@ -386,20 +386,9 @@ function FieldUpdate() {
       setSubmitError("Your role does not have permission to submit a field update.");
       return;
     }
-
-    if (!isOnline) {
-      const hasDraft = hasFieldUpdateDraftContent(formData);
-      setDraftAvailable(hasDraft ? saveFieldUpdateDraft(userId, formData) : false);
-      setSubmitSuccess("");
-      setSubmitError("");
-      setDraftMessage(hasDraft ? "Draft saved on this device. Reconnect to submit it." : "Reconnect before submitting this site update.");
-      return;
-    }
-
     if (isSubmitting || !submitGuardRef.current.begin()) return;
 
     const payload = createFieldUpdateDprPayload(formData, userId);
-
     if (!payload.isValid) {
       setSubmitError(payload.error);
       setSubmitSuccess("");
@@ -407,14 +396,7 @@ function FieldUpdate() {
       return;
     }
 
-    const photoValidation = validateDprPhotoFiles(photoFiles);
-
-    if (!photoValidation.isValid) {
-      setPhotoError(photoValidation.error);
-      submitGuardRef.current.release();
-      return;
-    }
-
+    const clientSubmissionId = createDprClientSubmissionId(userId);
     setIsSubmitting(true);
     setSubmitError("");
     setSubmitSuccess("");
@@ -422,11 +404,46 @@ function FieldUpdate() {
     setDraftMessage("");
     setPhotoError("");
 
+    const resetSubmittedForm = () => {
+      clearFieldUpdateDraft(userId);
+      setFormData(createInitialFieldUpdateForm());
+      setPhotoFiles([]);
+      setPhotoProgress(0);
+      setDraftAvailable(false);
+    };
+
+    if (!isOnline) {
+      try {
+        await queueDpr({ clientSubmissionId, payload: payload.value });
+        resetSubmittedForm();
+        if (photoFiles.length > 0) {
+          setPhotoError("Photos are not queued while offline. This site update will synchronize without photos.");
+        }
+        setSubmitSuccess("Site update saved on this device and pending synchronization. It has not been saved to the server yet.");
+      } catch (error) {
+        console.error("Offline site update queue error:", error);
+        setSubmitError("This site update could not be saved on this device. Keep the form open and try again.");
+      } finally {
+        setIsSubmitting(false);
+        submitGuardRef.current.release();
+      }
+      return;
+    }
+
+    const photoValidation = validateDprPhotoFiles(photoFiles);
+    if (!photoValidation.isValid) {
+      setPhotoError(photoValidation.error);
+      setIsSubmitting(false);
+      submitGuardRef.current.release();
+      return;
+    }
+
     let uploadedPhotoPaths = [];
     let photoUploadFallback = "";
+    let queuedAfterTemporaryFailure = false;
 
     try {
-      const reportReference = doc(collection(db, "dailyProgressReports"));
+      const reportReference = doc(db, "dailyProgressReports", clientSubmissionId);
       let uploadedPhotos = { metadata: [], uploadedPaths: [] };
 
       if (photoValidation.files.length > 0) {
@@ -447,6 +464,7 @@ function FieldUpdate() {
 
       await setDoc(reportReference, {
         ...payload.value,
+        clientSubmissionId,
         photos: uploadedPhotos.metadata,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -462,11 +480,7 @@ function FieldUpdate() {
       });
       if (!auditResult.success) setAuditWarning(getAuditFailureMessage());
 
-      clearFieldUpdateDraft(userId);
-      setFormData(createInitialFieldUpdateForm());
-      setPhotoFiles([]);
-      setPhotoProgress(0);
-      setDraftAvailable(false);
+      resetSubmittedForm();
       setSubmitSuccess(
         photoUploadFallback
           ? "Site update submitted successfully without photos."
@@ -475,20 +489,35 @@ function FieldUpdate() {
     } catch (error) {
       console.error("Field update save error:", error);
 
-      if (uploadedPhotoPaths.length > 0) {
+      if (fieldOnly && isRetryableDprSyncError(error)) {
+        try {
+          await queueDpr({ clientSubmissionId, payload: payload.value });
+          queuedAfterTemporaryFailure = true;
+          resetSubmittedForm();
+          if (uploadedPhotoPaths.length > 0 || photoFiles.length > 0) {
+            setPhotoError("Photos are not queued after a connection failure. This site update will synchronize without new photos.");
+          }
+          setSubmitSuccess("The connection was interrupted. Your site update is saved on this device and pending synchronization.");
+        } catch (queueError) {
+          console.error("Interrupted site update queue error:", queueError);
+          setSubmitError("The connection failed and this site update could not be saved on this device. Keep the form open and try again.");
+        }
+      } else {
+        setSubmitError(
+          getUserFriendlyFirebaseError(
+            error,
+            "Site update could not be submitted. Please try again."
+          )
+        );
+      }
+
+      if (uploadedPhotoPaths.length > 0 && !queuedAfterTemporaryFailure) {
         await Promise.all(
           uploadedPhotoPaths.map((storagePath) =>
             deleteObject(ref(storage, storagePath)).catch(() => undefined)
           )
         );
       }
-
-      setSubmitError(
-        getUserFriendlyFirebaseError(
-          error,
-          "Site update could not be submitted. Please try again."
-        )
-      );
     } finally {
       setIsSubmitting(false);
       submitGuardRef.current.release();
@@ -500,10 +529,30 @@ function FieldUpdate() {
       <div className="field-update-page">
         <div className="field-update-heading">
           <h1>📱 Site Update</h1>
-          <p>Submit today&apos;s work progress directly from site. Your draft stays on this device until Firestore confirms submission.</p>
+          <p>Submit today&apos;s work progress directly from site. Drafts and queued updates stay on this device until Firestore confirms submission.</p>
         </div>
 
         {!isOnline && <p className="field-network-state field-feedback-error" role="alert">{getOfflineFieldMessage()}</p>}
+        {fieldOnly && (
+          <section className="field-outbox-status" aria-live="polite">
+            <div>
+              <strong>{isOnline ? "● Online" : "○ Offline"}</strong>
+              <span>
+                {isOutboxSyncing
+                  ? "Synchronizing local site updates..."
+                  : outboxSummary.total === 0
+                    ? "All local site updates are synchronized."
+                    : `${outboxSummary.pending} pending · ${outboxSummary.failed} need attention`}
+              </span>
+            </div>
+            {outboxSummary.total > 0 && canRetryOutbox && (
+              <button type="button" onClick={() => { void retryPending(); }} disabled={!isOnline || isOutboxSyncing}>
+                {isOutboxSyncing ? "Syncing..." : "Retry Sync"}
+              </button>
+            )}
+          </section>
+        )}
+        {outboxSyncMessage && <p className="field-feedback field-feedback-draft" role="status">{outboxSyncMessage}</p>}
         {reportsLoading && !loadError && <p className="field-network-state" role="status">Loading your site updates and operational references...</p>}
 
         <div className="field-update-card">
@@ -618,7 +667,7 @@ function FieldUpdate() {
 
             <div className="field-submit-action-bar">
               <button className="field-submit-btn" type="submit" disabled={!canSubmit || isSubmitting}>
-                {isSubmitting ? "⏳ Submitting..." : !isOnline ? "📶 Offline — reconnect to submit" : "✅ Submit Site Update"}
+                {isSubmitting ? "⏳ Saving..." : !isOnline ? "💾 Save on this device" : "✅ Submit Site Update"}
               </button>
             </div>
           </form>

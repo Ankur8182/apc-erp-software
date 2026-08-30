@@ -33,6 +33,6 @@ describe("PWA and mobile network helpers", () => {
   it("reports offline state without claiming that a Firestore write was saved", () => {
     expect(getNetworkStatus({ onLine: true })).toBe(true);
     expect(getNetworkStatus({ onLine: false })).toBe(false);
-    expect(getOfflineFieldMessage()).toMatch(/offline.*local draft.*Reconnect/i);
+    expect(getOfflineFieldMessage()).toMatch(/offline.*save.*device.*synchronize/i);
   });
 });

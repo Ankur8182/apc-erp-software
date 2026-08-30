@@ -10,7 +10,7 @@ export const getNetworkStatus = (navigatorObject = getBrowserNavigator()) =>
   navigatorObject?.onLine !== false;
 
 export const getOfflineFieldMessage = () =>
-  "You’re offline. Your entered site update remains saved as a local draft. Reconnect before submitting it.";
+  "You’re offline. Complete the form and save the site update on this device; it will synchronize after a connection returns.";
 
 export const registerPwaServiceWorker = ({
   navigatorObject = getBrowserNavigator(),

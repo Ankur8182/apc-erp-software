@@ -2,12 +2,14 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import FieldDashboard from "./FieldDashboard";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
 
 jest.mock("../Components/Layout", () => ({ children }) => <>{children}</>);
 jest.mock("../auth/AuthProvider", () => ({
   useAuth: () => ({ role: "supervisor", user: { uid: "supervisor-1", email: "supervisor@example.com" } }),
 }));
 jest.mock("../firebase", () => ({ db: {} }));
+jest.mock("../hooks/useDprOutboxSync", () => ({ useDprOutboxSync: jest.fn() }));
 jest.mock("react-router-dom", () => ({ useNavigate: () => jest.fn() }));
 jest.mock("../utils/fieldUpdateDrafts", () => ({
   FIELD_DRAFT_EVENT: "apc-field-draft-change",
@@ -22,6 +24,14 @@ jest.mock("firebase/firestore", () => ({
 
 describe("FieldDashboard mobile operational view", () => {
   beforeEach(() => {
+    useDprOutboxSync.mockReturnValue({
+      isOnline: false,
+      entries: [{ clientSubmissionId: "local-dpr", retryable: true }],
+      summary: { pending: 1, syncing: 0, failed: 0, total: 1 },
+      isSyncing: false,
+      syncMessage: "",
+      retryPending: jest.fn(),
+    });
     collection.mockImplementation((database, name) => ({ name }));
     query.mockImplementation((source) => source);
     onSnapshot.mockImplementation((source, onNext) => {
@@ -56,6 +66,8 @@ describe("FieldDashboard mobile operational view", () => {
     expect(screen.getByText("Concrete work")).toBeInTheDocument();
     expect(screen.getByText("Civil Site")).toBeInTheDocument();
     expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.getByText("○ Offline sync")).toBeInTheDocument();
+    expect(screen.getByText(/1 pending/)).toBeInTheDocument();
     expect(screen.queryByText(/Revenue/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Budget/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Payroll/)).not.toBeInTheDocument();

@@ -17,6 +17,7 @@ import {
 } from "../utils/fieldUpdateDrafts";
 import { getRecordDate, getSiteName } from "../utils/financialReporting";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
 import "../Styles/FieldDashboard.css";
 
 const getAvailableSiteNames = (sites = []) => {
@@ -42,6 +43,15 @@ function FieldDashboard() {
   const [sitesError, setSitesError] = useState("");
   const [draftAvailable, setDraftAvailable] = useState(false);
   const dprReadScope = getDprReadScope(role, user?.uid);
+  const {
+    isOnline,
+    entries: outboxEntries,
+    summary: outboxSummary,
+    isSyncing: isOutboxSyncing,
+    syncMessage: outboxSyncMessage,
+    retryPending,
+  } = useDprOutboxSync({ userId: user?.uid, role });
+  const canRetryOutbox = outboxEntries.some((entry) => entry.retryable !== false);
 
   useEffect(() => {
     if (!dprReadScope.canRead) {
@@ -172,6 +182,25 @@ function FieldDashboard() {
           </div>
           {draftAvailable && <button type="button" onClick={() => navigate("/field-update")}>Continue draft</button>}
         </section>
+
+        <section className="field-dashboard-outbox" aria-live="polite">
+          <div>
+            <strong>{isOnline ? "● Online sync" : "○ Offline sync"}</strong>
+            <span>
+              {isOutboxSyncing
+                ? "Synchronizing local site updates..."
+                : outboxSummary.total === 0
+                  ? "All local site updates are synchronized."
+                  : `${outboxSummary.pending} pending · ${outboxSummary.failed} need attention`}
+            </span>
+          </div>
+          {outboxSummary.total > 0 && canRetryOutbox && (
+            <button type="button" onClick={() => { void retryPending(); }} disabled={!isOnline || isOutboxSyncing}>
+              {isOutboxSyncing ? "Syncing..." : "Retry Sync"}
+            </button>
+          )}
+        </section>
+        {outboxSyncMessage && <p className="field-dashboard-sync-message" role="status">{outboxSyncMessage}</p>}
 
         <section className="field-dashboard-sites" aria-labelledby="field-available-sites">
           <div className="field-dashboard-section-heading">
