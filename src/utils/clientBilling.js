@@ -84,7 +84,7 @@ export const validateBillingProfile = (form = {}) => {
 export const createInitialRABillForm = () => ({
   siteId: "", clientId: "", billingPeriodFrom: new Date().toISOString().slice(0, 10), billingPeriodTo: new Date().toISOString().slice(0, 10),
   billDate: new Date().toISOString().slice(0, 10), paymentDueDate: "", currentWorkValue: "", variationAmount: "0",
-  materialAdvanceRecovery: "0", advanceAdjustment: "0", otherDeductions: "0", tdsPercent: "0", remarks: "",
+  materialAdvanceRecovery: "0", advanceAdjustment: "0", otherDeductions: "0", tdsPercent: "0", remarks: "", boqLineItems: [],
 });
 
 export const calculateRABill = (form = {}, profile = {}) => {

@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { normaliseMoney } from "../utils/financialReporting";
+import { getBoqItemProgressRows, validateBoqBillingLines } from "../utils/boqReporting";
 import {
   BILLING_TYPES, buildRABillNumber, canManageClientBilling, canTransitionRABill, calculateRABill,
   CLIENT_STATUSES, createInitialBillingProfileForm, createInitialClientForm, createInitialRABillForm,
@@ -40,6 +41,11 @@ function ClientBilling() {
   const [receipts, setReceipts] = useState([]);
   const [retentionReleases, setRetentionReleases] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [boqItems, setBoqItems] = useState([]);
+  const [boqMeasurements, setBoqMeasurements] = useState([]);
+  const [boqVariations, setBoqVariations] = useState([]);
+  const [boqLineItemId, setBoqLineItemId] = useState("");
+  const [boqLineQuantity, setBoqLineQuantity] = useState("");
   const [clientForm, setClientForm] = useState(createInitialClientForm);
   const [profileForm, setProfileForm] = useState(createInitialBillingProfileForm);
   const [billForm, setBillForm] = useState(createInitialRABillForm);
@@ -56,7 +62,7 @@ function ClientBilling() {
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    const collections = ["sites", "clients", "siteBillingProfiles", "raBills", "clientReceipts", "raRetentionReleases", "invoices"];
+    const collections = ["sites", "clients", "siteBillingProfiles", "raBills", "clientReceipts", "raRetentionReleases", "invoices", "boqItems", "boqMeasurements", "boqVariations"];
     let remaining = collections.length;
     const complete = () => { remaining -= 1; if (remaining <= 0) setLoading(false); };
     const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name)),
@@ -68,6 +74,9 @@ function ClientBilling() {
       subscribe("siteBillingProfiles", setProfiles, "Billing profiles could not be loaded."), subscribe("raBills", setBills, "RA bills could not be loaded."),
       subscribe("clientReceipts", setReceipts, "Client receipts could not be loaded."), subscribe("raRetentionReleases", setRetentionReleases, "Retention releases could not be loaded."),
       subscribe("invoices", setInvoices, "Invoices could not be loaded."),
+      subscribe("boqItems", setBoqItems, "BOQ items could not be loaded."),
+      subscribe("boqMeasurements", setBoqMeasurements, "BOQ measurements could not be loaded."),
+      subscribe("boqVariations", setBoqVariations, "BOQ variations could not be loaded."),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
@@ -77,6 +86,8 @@ function ClientBilling() {
   const selectedProfile = useMemo(() => profiles.find((profile) => profile.id === billForm.siteId || profile.siteId === billForm.siteId), [profiles, billForm.siteId]);
   const calculatedBill = useMemo(() => calculateRABill(billForm, selectedProfile || {}), [billForm, selectedProfile]);
   const billingSummary = useMemo(() => getClientBillingSummary({ invoices, raBills: bills }), [invoices, bills]);
+  const boqProgressRows = useMemo(() => getBoqItemProgressRows({ items: boqItems, measurements: boqMeasurements, variations: boqVariations, raBills: bills }), [boqItems, boqMeasurements, boqVariations, bills]);
+  const billableBoqRows = useMemo(() => boqProgressRows.filter((item) => !selectedProfile || item.siteId === selectedProfile.siteId || item.site === selectedProfile.siteName), [boqProgressRows, selectedProfile]);
   const billableReceipts = useMemo(() => bills.filter((bill) => ["Certified", "Partially Paid"].includes(bill.status) && normaliseMoney(bill.pendingAmount) > 0), [bills]);
   const retentionBills = useMemo(() => bills.filter((bill) => normaliseMoney(bill.retentionBalance) > 0), [bills]);
   const siteNames = useMemo(() => getDistinctValues(sites, (site) => site.siteName || site.name || site.site), [sites]);
@@ -92,7 +103,7 @@ function ClientBilling() {
 
   const resetClient = () => { setClientForm(createInitialClientForm()); setEditingClientId(""); };
   const resetProfile = () => setProfileForm(createInitialBillingProfileForm());
-  const resetBill = () => { setBillForm(createInitialRABillForm()); setEditingBillId(""); };
+  const resetBill = () => { setBillForm(createInitialRABillForm()); setEditingBillId(""); setBoqLineItemId(""); setBoqLineQuantity(""); };
   const selectProfile = (siteId) => setBillForm((current) => ({ ...current, siteId }));
 
   const saveClient = async (event) => {
@@ -151,14 +162,17 @@ function ClientBilling() {
     if (!canWrite || saving) return;
     const profile = profiles.find((item) => item.id === billForm.siteId || item.siteId === billForm.siteId);
     const validation = validateRABill({ form: billForm, profile });
+    const boqValidation = validateBoqBillingLines({ lines: billForm.boqLineItems, progressRows: boqProgressRows, existingBillId: editingBillId });
     if (!validation.isValid) { setFeedback(validation.error); return; }
+    if (!boqValidation.isValid) { setFeedback(boqValidation.error); return; }
+    const billPayload = { ...validation.value, boqLineItems: boqValidation.value };
     try {
       setSaving(true); setFeedback("");
       if (editingBillId) {
         const existing = bills.find((item) => item.id === editingBillId);
         if (!existing || existing.status !== "Draft") { setFeedback("Only draft RA bills can be edited."); return; }
-        await updateDoc(doc(db, "raBills", editingBillId), { ...validation.value, raBillNumber: existing.raBillNumber, updatedAt: serverTimestamp() });
-        await logAuditEvent({ action: "update", module: "raBills", recordId: editingBillId, recordLabel: existing.raBillNumber, details: "Draft RA bill updated.", site: validation.value.site });
+        await updateDoc(doc(db, "raBills", editingBillId), { ...billPayload, raBillNumber: existing.raBillNumber, updatedAt: serverTimestamp() });
+        await logAuditEvent({ action: "update", module: "raBills", recordId: editingBillId, recordLabel: existing.raBillNumber, details: `Draft RA bill updated.${boqValidation.value.length ? ` ${boqValidation.value.length} BOQ quantity line(s) linked.` : ""}`, site: validation.value.site });
         setFeedback("Draft RA bill updated.");
       } else {
         const raBillNumber = buildRABillNumber(bills);
@@ -166,9 +180,9 @@ function ClientBilling() {
         await runTransaction(db, async (transaction) => {
           const existing = await transaction.get(billReference);
           if (existing.exists()) throw new Error("A bill with this generated number already exists. Please try again.");
-          transaction.set(billReference, { ...validation.value, raBillNumber, createdBy: user?.uid || "", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          transaction.set(billReference, { ...billPayload, raBillNumber, createdBy: user?.uid || "", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
         });
-        const audit = await logAuditEvent({ action: "create", module: "raBills", recordId: billReference.id, recordLabel: raBillNumber, details: "Draft RA bill created.", site: validation.value.site });
+        const audit = await logAuditEvent({ action: "create", module: "raBills", recordId: billReference.id, recordLabel: raBillNumber, details: `Draft RA bill created.${boqValidation.value.length ? ` ${boqValidation.value.length} BOQ quantity line(s) linked.` : ""}`, site: validation.value.site });
         setFeedback(audit.success ? "Draft RA bill created." : getAuditFailureMessage());
       }
       resetBill();
@@ -289,6 +303,12 @@ function ClientBilling() {
     setBillForm({ ...createInitialRABillForm(), ...bill }); setEditingBillId(bill.id); window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const setFormValue = (setter, field) => (event) => setter((current) => ({ ...current, [field]: event.target.value }));
+  const addBoqBillingLine = () => {
+    const item = billableBoqRows.find((row) => row.itemId === boqLineItemId);
+    if (!item || !boqLineQuantity) { setFeedback("Select a BOQ item and positive current billed quantity."); return; }
+    setBillForm((current) => ({ ...current, boqLineItems: [...(Array.isArray(current.boqLineItems) ? current.boqLineItems : []), { boqItemId: item.itemId, currentBilledQuantity: boqLineQuantity }] }));
+    setBoqLineItemId(""); setBoqLineQuantity("");
+  };
 
   return (
     <Layout>
@@ -363,6 +383,7 @@ function ClientBilling() {
               <label>Client advance adjustment<input type="number" min="0" step="0.01" value={billForm.advanceAdjustment} onChange={setFormValue(setBillForm, "advanceAdjustment")} /></label>
               <label>Other deductions<input type="number" min="0" step="0.01" value={billForm.otherDeductions} onChange={setFormValue(setBillForm, "otherDeductions")} /></label>
               <label>TDS %<input type="number" min="0" max="100" step="0.01" value={billForm.tdsPercent} onChange={setFormValue(setBillForm, "tdsPercent")} /></label>
+              <div className="procurement-line-items procurement-span-two"><div className="procurement-line-heading"><h3>Optional BOQ billing lines</h3><span>Quantity tracking only — it does not alter the canonical RA bill value.</span></div><div className="procurement-line-row"><label>BOQ item<select value={boqLineItemId} onChange={(event) => setBoqLineItemId(event.target.value)}><option value="">Select site BOQ item</option>{billableBoqRows.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemNumber} · balance {item.authorizedQuantity - item.billedQuantity} {item.unit}</option>)}</select></label><label>Current billed quantity<input type="number" min="0.001" step="0.001" value={boqLineQuantity} onChange={(event) => setBoqLineQuantity(event.target.value)} /></label><button className="procurement-secondary" type="button" onClick={addBoqBillingLine}>Add line</button></div>{(Array.isArray(billForm.boqLineItems) ? billForm.boqLineItems : []).map((line, index) => { const item = boqProgressRows.find((row) => row.itemId === line.boqItemId); return <div className="procurement-line-row" key={`${line.boqItemId}-${index}`}><span>{item?.itemNumber || line.boqItemId}<small>{item?.description || ""}</small></span><span>{line.currentBilledQuantity} {item?.unit || ""}<small>{formatMoney(Number(line.currentBilledQuantity || 0) * Number(item?.rate || 0))}</small></span><button className="procurement-text-button danger" type="button" onClick={() => setBillForm((current) => ({ ...current, boqLineItems: current.boqLineItems.filter((_, lineIndex) => lineIndex !== index) }))}>Remove</button></div>; })}</div>
               <label className="procurement-span-two">Remarks<textarea value={billForm.remarks} onChange={setFormValue(setBillForm, "remarks")} /></label>
               {calculatedBill && <div className="procurement-callout procurement-span-two"><strong>RA bill calculation</strong><span>Gross work: {formatMoney(calculatedBill.grossWorkValue)} · GST: {formatMoney(calculatedBill.gstAmount)} · Retention: {formatMoney(calculatedBill.retentionAmount)} · TDS: {formatMoney(calculatedBill.tdsAmount)} · Recoveries: {formatMoney(calculatedBill.recoveries)} · Net receivable: {formatMoney(calculatedBill.netBillAmount)}</span></div>}
               <div className="procurement-actions"><button disabled={saving} type="submit">{saving ? "Saving…" : editingBillId ? "Update Draft" : "Save Draft"}</button>{editingBillId && <button type="button" className="secondary" onClick={resetBill}>Cancel</button>}</div>

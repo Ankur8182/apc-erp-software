@@ -16,6 +16,7 @@ import {
 import { FIELD_USER_ROLES, STANDARD_ERP_ROLES } from "../auth/authorization";
 import { calculateProjectFinancialSummary } from "./projectFinancials";
 import { summariseInventory } from "./inventory";
+import { buildBoqAlerts } from "./boqReporting";
 
 export const NOTIFICATION_SEVERITIES = {
   info: "info",
@@ -141,8 +142,12 @@ const createCoreAlerts = ({
   workOrders = [],
   contractorBills = [],
   raBills = [],
+  boqItems = [],
+  boqMeasurements = [],
+  boqVariations = [],
 }) => {
   const alerts = [];
+  buildBoqAlerts({ items: boqItems, measurements: boqMeasurements, variations: boqVariations, raBills }).forEach((alert) => addAlert(alerts, { ...alert, module: "BOQ" }));
 
   const inventorySummary = summariseInventory(
     inventoryItems,
@@ -639,6 +644,9 @@ export const generateNotifications = ({
   workOrders = [],
   contractorBills = [],
   raBills = [],
+  boqItems = [],
+  boqMeasurements = [],
+  boqVariations = [],
 } = {}) => {
   const currentDate = normaliseDate(today) || getDprTodayDate();
   const normalisedRole = cleanRole(role);
@@ -694,6 +702,9 @@ export const generateNotifications = ({
       workOrders,
       contractorBills,
       raBills,
+      boqItems,
+      boqMeasurements,
+      boqVariations,
     })
   );
 };

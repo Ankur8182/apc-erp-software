@@ -174,6 +174,20 @@ describe("notification generation", () => {
   });
 
 
+  it("adds BOQ control alerts only for standard ERP roles", () => {
+    const boqData = {
+      boqItems: [{ id: "boq-1", site: "River View", itemNumber: "1.1", description: "Concrete", unit: "Cum", plannedQuantity: 100, rate: 100 }],
+      boqMeasurements: [{ id: "measurement-1", boqItemId: "boq-1", quantity: 95, status: "Pending" }],
+      boqVariations: [{ id: "variation-1", site: "River View", variationReference: "V-1", status: "Submitted" }],
+    };
+    const alerts = generateNotifications({ role: "manager", today: TODAY, ...boqData });
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "BOQ quantity nearing limit", href: "/boq" }),
+      expect.objectContaining({ title: "Measurement pending certification", href: "/boq" }),
+      expect.objectContaining({ title: "BOQ variation awaiting approval", href: "/boq" }),
+    ]));
+    expect(generateNotifications({ role: "supervisor", today: TODAY, ...boqData }).every((alert) => alert.href === "/field-update")).toBe(true);
+  });
   it("creates client-billing alerts only from submitted or overdue RA bills", () => {
     const alerts = generateNotifications({
       role: "manager", today: TODAY,

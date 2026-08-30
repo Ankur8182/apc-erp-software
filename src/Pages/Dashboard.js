@@ -46,6 +46,7 @@ import { getTodayWorkforceSummary } from "../utils/payrollReporting";
 import { summariseEquipment } from "../utils/equipment";
 import { getSubcontractingSummary } from "../utils/subcontracting";
 import { getClientBillingSummary } from "../utils/clientBilling";
+import { getSiteBoqSummary } from "../utils/boqReporting";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
@@ -69,6 +70,9 @@ function Dashboard() {
   const [workOrders, setWorkOrders] = useState([]);
   const [contractorBills, setContractorBills] = useState([]);
   const [raBills, setRaBills] = useState([]);
+  const [boqItems, setBoqItems] = useState([]);
+  const [boqMeasurements, setBoqMeasurements] = useState([]);
+  const [boqVariations, setBoqVariations] = useState([]);
   const [dprLoading, setDprLoading] = useState(true);
   const [dprError, setDprError] = useState("");
 
@@ -298,6 +302,9 @@ function Dashboard() {
       (snapshot) => setRaBills(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
       (error) => console.error("RA bill Error:", error)
     );
+    const unsubscribeBoqItems = onSnapshot(collection(db, "boqItems"), (snapshot) => setBoqItems(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), (error) => console.error("BOQ items Error:", error));
+    const unsubscribeBoqMeasurements = onSnapshot(collection(db, "boqMeasurements"), (snapshot) => setBoqMeasurements(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), (error) => console.error("BOQ measurements Error:", error));
+    const unsubscribeBoqVariations = onSnapshot(collection(db, "boqVariations"), (snapshot) => setBoqVariations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), (error) => console.error("BOQ variations Error:", error));
     const unsubscribeContractorBills = onSnapshot(
       collection(db, "contractorBills"),
       (snapshot) => setContractorBills(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
@@ -322,6 +329,9 @@ function Dashboard() {
       unsubscribeGoodsReceipts();
       unsubscribeWorkOrders();
       unsubscribeRaBills();
+      unsubscribeBoqItems();
+      unsubscribeBoqMeasurements();
+      unsubscribeBoqVariations();
       unsubscribeContractorBills();
     };
   }, []);
@@ -351,6 +361,11 @@ function Dashboard() {
     () => getClientBillingSummary({ invoices, raBills }),
     [invoices, raBills]
   );
+  const boqSummary = useMemo(
+    () => getSiteBoqSummary({ items: boqItems, measurements: boqMeasurements, variations: boqVariations, raBills }),
+    [boqItems, boqMeasurements, boqVariations, raBills]
+  );
+  const lowProgressBoqSites = useMemo(() => Array.from(new Set(boqSummary.incompleteItems.filter((item) => item.progressPercent <= 25).map((item) => item.site).filter(Boolean))), [boqSummary]);
   const equipmentSummary = useMemo(
     () => summariseEquipment({ vehicles, vehicleExpenses }),
     [vehicles, vehicleExpenses]
@@ -873,7 +888,16 @@ function Dashboard() {
             <article className="dashboard-status-card status-inventory-out"><span>⚠️ Overdue Orders</span><strong>{subcontractingSummary.overdueWorkOrders}</strong><small>Review expected completion dates</small></article>
           </div>
         </section>
-        <section aria-labelledby="client-billing-overview">
+        <section aria-labelledby="boq-overview">
+          <div className="dashboard-section-header"><div><span className="dashboard-eyebrow">Quantity control</span><h2 id="boq-overview">📐 BOQ &amp; Measurement Overview</h2></div></div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-inventory"><span>📋 BOQ Items</span><strong>{boqSummary.itemCount}</strong><small>Original BOQ: {formatMoney(boqSummary.originalBoqValue)}</small></article>
+            <article className="dashboard-status-card status-running"><span>📈 Measured Progress</span><strong>{boqSummary.overallProgressPercent}%</strong><small>{formatMoney(boqSummary.measuredWorkValue)} measured value</small></article>
+            <article className="dashboard-status-card status-pending"><span>✅ Pending Certification</span><strong>{boqSummary.pendingCertificationQuantity}</strong><small>{formatMoney(boqSummary.certifiedWorkValue)} certified value</small></article>
+            <article className="dashboard-status-card status-budget"><span>🧾 Approved Variations</span><strong>{formatMoney(boqSummary.approvedVariationValue)}</strong><small>{boqSummary.pendingVariationCount} variation(s) awaiting approval</small></article>
+            <article className="dashboard-status-card status-inventory-low"><span>⚠️ Low Progress Sites</span><strong>{lowProgressBoqSites.length}</strong><small>{lowProgressBoqSites.slice(0, 3).join(", ") || "No BOQ items yet"}</small></article>
+          </div>
+        </section>        <section aria-labelledby="client-billing-overview">
           <div className="dashboard-section-header"><div><span className="dashboard-eyebrow">Client receivables</span><h2 id="client-billing-overview">🧾 Client Billing Overview</h2></div></div>
           <div className="dashboard-status-grid">
             <article className="dashboard-status-card status-inventory"><span>🧾 Certified RA Bills</span><strong>{clientBillingSummary.certifiedRABillCount}</strong><small>Operational bills with a canonical invoice</small></article>

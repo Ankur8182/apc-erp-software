@@ -18,6 +18,7 @@ import {
 import { formatBudgetUsagePercent } from "../utils/siteBudget";
 import { calculateProjectFinancialSummary } from "../utils/projectFinancials";
 import { getClientBillingSummary } from "../utils/clientBilling";
+import { getSiteBoqSummary } from "../utils/boqReporting";
 
 import {
   collection,
@@ -40,6 +41,9 @@ function SiteDetails() {
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
   const [dailyProgressReports, setDailyProgressReports] = useState([]);
   const [raBills, setRaBills] = useState([]);
+  const [boqItems, setBoqItems] = useState([]);
+  const [boqMeasurements, setBoqMeasurements] = useState([]);
+  const [boqVariations, setBoqVariations] = useState([]);
   const [dprLoading, setDprLoading] = useState(true);
   const [dprError, setDprError] = useState("");
 
@@ -82,7 +86,7 @@ function SiteDetails() {
       vehicleExpenses,
       dailyProgressReports,
       raBills,
-    ].$1((records) => records.forEach(addSite));
+    ].forEach((records) => records.forEach(addSite));
 
     return Array.from(siteMap.values()).sort((first, second) =>
       first.siteName.localeCompare(second.siteName)
@@ -401,6 +405,20 @@ function SiteDetails() {
   }, []);
 
 
+  // BOQ quantity records remain operational/commercial progress data and do
+  // not flow into the existing project financial calculation.
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "boqItems"), (snapshot) => setBoqItems(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), () => {});
+    return () => unsubscribe();
+  }, []);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "boqMeasurements"), (snapshot) => setBoqMeasurements(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), () => {});
+    return () => unsubscribe();
+  }, []);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "boqVariations"), (snapshot) => setBoqVariations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), () => {});
+    return () => unsubscribe();
+  }, []);
   // =========================
   // SITE REPORT CALCULATION
   // =========================
@@ -482,6 +500,8 @@ function SiteDetails() {
   // =========================
   // SITE DPR OPERATIONAL SUMMARY
   // =========================
+
+  const siteBoqSummary = useMemo(() => getSiteBoqSummary({ site: selectedSite, items: boqItems, measurements: boqMeasurements, variations: boqVariations, raBills }), [selectedSite, boqItems, boqMeasurements, boqVariations, raBills]);
 
   const siteDprSummary = useMemo(
     () =>
@@ -1110,11 +1130,14 @@ function SiteDetails() {
                   </>
                 )}
               </section>
-
+              <section className="site-dpr-section">
+                <div className="site-dpr-heading"><div><h2>📐 BOQ &amp; Quantity Progress</h2><p>Measured and certified quantities are operational progress only; they are not added to site expenses or income.</p></div></div>
+                {siteBoqSummary.itemCount === 0 ? <p className="site-dpr-empty">No BOQ items have been registered for this site.</p> : <><div className="site-dpr-summary-grid"><div className="site-dpr-summary-card"><h3>BOQ Items</h3><p>{siteBoqSummary.itemCount}</p></div><div className="site-dpr-summary-card"><h3>Measured Progress</h3><p>{siteBoqSummary.overallProgressPercent}%</p></div><div className="site-dpr-summary-card"><h3>Certified Value</h3><p>{formatMoney(siteBoqSummary.certifiedWorkValue)}</p></div></div><div className="site-dpr-history-card"><h3>Key Incomplete Items</h3><div className="site-dpr-table-responsive"><table className="site-dpr-table"><thead><tr><th>BOQ Item</th><th>Planned / Authorised</th><th>Measured / Certified</th><th>Billed</th><th>Balance</th><th>Progress</th></tr></thead><tbody>{siteBoqSummary.incompleteItems.slice(0, 8).map((item) => <tr key={item.itemId}><td>{item.itemNumber}<br /><small>{item.description}</small></td><td>{item.plannedQuantity} / {item.authorizedQuantity} {item.unit}</td><td>{item.measuredQuantity} / {item.certifiedQuantity} {item.unit}</td><td>{item.billedQuantity} {item.unit}</td><td>{item.balanceQuantity} {item.unit}</td><td>{item.progressPercent}%</td></tr>)}</tbody></table></div></div></>}
+              </section>
 
               {/* =========================
                   DAILY PROGRESS REPORT
-              ========================= */}
+              ========================= */}}
 
               <section className="site-dpr-section">
 

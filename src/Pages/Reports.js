@@ -30,6 +30,7 @@ import { getProcurementSummary } from "../utils/procurement";
 import { getEquipmentLabel, getFuelEfficiencyHistory, summariseEquipment } from "../utils/equipment";
 import { getSubcontractingSummary } from "../utils/subcontracting";
 import { getClientBillingSummary } from "../utils/clientBilling";
+import { BOQ_STATUSES, getBoqItemProgressRows, getSiteBoqSummary } from "../utils/boqReporting";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -78,6 +79,9 @@ function Reports() {
   const [raBills, setRaBills] = useState([]);
   const [clientReceipts, setClientReceipts] = useState([]);
   const [billingProfiles, setBillingProfiles] = useState([]);
+  const [boqItems, setBoqItems] = useState([]);
+  const [boqMeasurements, setBoqMeasurements] = useState([]);
+  const [boqVariations, setBoqVariations] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -86,6 +90,9 @@ function Reports() {
   const [vendorFilter, setVendorFilter] = useState("");
   const [materialFilter, setMaterialFilter] = useState("");
   const [purchaseOrderStatusFilter, setPurchaseOrderStatusFilter] = useState("");
+  const [boqItemFilter, setBoqItemFilter] = useState("");
+  const [boqCategoryFilter, setBoqCategoryFilter] = useState("");
+  const [boqStatusFilter, setBoqStatusFilter] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [dprError, setDprError] = useState("");
@@ -97,7 +104,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 25;
+    const totalCollections = 28;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -174,6 +181,9 @@ function Reports() {
     loadCollection("raBills", setRaBills);
     loadCollection("clientReceipts", setClientReceipts);
     loadCollection("siteBillingProfiles", setBillingProfiles);
+    loadCollection("boqItems", setBoqItems);
+    loadCollection("boqMeasurements", setBoqMeasurements);
+    loadCollection("boqVariations", setBoqVariations);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -458,6 +468,23 @@ function Reports() {
     [dailyProgressReports, selectedSite, fromDate, toDate, workActivity]
   );
 
+  const boqCategories = useMemo(() => Array.from(new Set(boqItems.map((item) => String(item.workCategory || "").trim()).filter(Boolean))).sort(), [boqItems]);
+  const filteredBoqItems = useMemo(() => boqItems.filter((item) =>
+    (selectedSite === "all" || isSameSite(item, selectedSite)) &&
+    (!boqItemFilter || item.id === boqItemFilter) &&
+    (!boqCategoryFilter || item.workCategory === boqCategoryFilter) &&
+    (!boqStatusFilter || item.status === boqStatusFilter)
+  ), [boqItems, selectedSite, boqItemFilter, boqCategoryFilter, boqStatusFilter]);
+  const filteredBoqMeasurements = useMemo(() => boqMeasurements.filter((record) =>
+    (selectedSite === "all" || isSameSite(record, selectedSite)) &&
+    (!boqItemFilter || record.boqItemId === boqItemFilter) &&
+    isDateInRange(getRecordDate(record), fromDate, toDate)
+  ), [boqMeasurements, selectedSite, boqItemFilter, fromDate, toDate]);
+  const filteredBoqVariations = useMemo(() => boqVariations.filter((record) =>
+    (selectedSite === "all" || isSameSite(record, selectedSite)) &&
+    (!boqItemFilter || record.boqItemId === boqItemFilter) &&
+    isDateInRange(getRecordDate(record), fromDate, toDate)
+  ), [boqVariations, selectedSite, boqItemFilter, fromDate, toDate]);
   // Inventory is a current stock position, not a historical-cost report. The
   // selected site narrows it; date filters intentionally do not change stock.
   const inventorySummary = useMemo(
@@ -535,6 +562,8 @@ function Reports() {
     () => raBills.filter((bill) => (selectedSite === "all" || isSameSite(bill, selectedSite)) && isDateInRange({ ...bill, date: bill.billDate }, fromDate, toDate)),
     [raBills, selectedSite, fromDate, toDate]
   );
+  const boqProgressRows = useMemo(() => getBoqItemProgressRows({ items: filteredBoqItems, measurements: filteredBoqMeasurements, variations: filteredBoqVariations, raBills: filteredRABills }), [filteredBoqItems, filteredBoqMeasurements, filteredBoqVariations, filteredRABills]);
+  const boqSummary = useMemo(() => getSiteBoqSummary({ items: filteredBoqItems, measurements: filteredBoqMeasurements, variations: filteredBoqVariations, raBills: filteredRABills }), [filteredBoqItems, filteredBoqMeasurements, filteredBoqVariations, filteredRABills]);
   const clientBillingSummary = useMemo(
     () => getClientBillingSummary({ invoices: filteredInvoices, raBills: filteredRABills }),
     [filteredInvoices, filteredRABills]
@@ -714,6 +743,9 @@ function Reports() {
     setVendorFilter("");
     setMaterialFilter("");
     setPurchaseOrderStatusFilter("");
+    setBoqItemFilter("");
+    setBoqCategoryFilter("");
+    setBoqStatusFilter("");
   };
 
   /* =========================================
@@ -1198,6 +1230,30 @@ function Reports() {
       ...filteredContractorPayments.map((payment) => ({ recordType: "Contractor Payment", date: payment.paymentDate || "-", reference: payment.workOrderNumber || payment.contractorBillId || "-", vendor: payment.vendorName || "-", site: getSiteName(payment) || "-", details: `${payment.paymentType || "Payment"} / ${payment.paymentMode || "-"}`, amount: toNumber(payment.amount), status: "Recorded" })),
     ],
   };
+  const boqExportFilters = [...baseExportFilters, { label: "BOQ Item", value: boqItemFilter || "All Items" }, { label: "BOQ Category", value: boqCategoryFilter || "All Categories" }, { label: "BOQ Status", value: boqStatusFilter || "All Statuses" }];
+  const boqExport = {
+    title: "BOQ Quantity Progress Report", filters: boqExportFilters,
+    summary: [
+      { label: "BOQ Items", value: boqSummary.itemCount }, { label: "Original BOQ Value", value: formatExportMoney(boqSummary.originalBoqValue) },
+      { label: "Approved Variation Value", value: formatExportMoney(boqSummary.approvedVariationValue) }, { label: "Revised BOQ Value", value: formatExportMoney(boqSummary.revisedBoqValue) },
+      { label: "Measured Work Value", value: formatExportMoney(boqSummary.measuredWorkValue) }, { label: "Certified Work Value", value: formatExportMoney(boqSummary.certifiedWorkValue) },
+      { label: "Billed Work Value", value: formatExportMoney(boqSummary.billedWorkValue) }, { label: "Measured Progress", value: `${boqSummary.overallProgressPercent}%` },
+    ],
+    columns: [
+      { key: "site", label: "Site" }, { key: "itemNumber", label: "BOQ Item" }, { key: "itemCode", label: "Item Code" }, { key: "category", label: "Category" }, { key: "description", label: "Description", width: 1.8 }, { key: "unit", label: "Unit" },
+      { key: "planned", label: "Planned Qty" }, { key: "authorised", label: "Authorised Qty" }, { key: "measured", label: "Measured Qty" }, { key: "certified", label: "Certified Qty" }, { key: "billed", label: "Billed Qty" }, { key: "balance", label: "Balance Qty" }, { key: "progress", label: "Progress %" }, { key: "status", label: "Status" },
+    ],
+    rows: boqProgressRows.map((item) => ({ site: item.site, itemNumber: item.itemNumber, itemCode: item.itemCode || "-", category: item.workCategory || "-", description: item.description, unit: item.unit, planned: item.plannedQuantity, authorised: item.authorizedQuantity, measured: item.measuredQuantity, certified: item.certifiedQuantity, billed: item.billedQuantity, balance: item.balanceQuantity, progress: item.progressPercent, status: item.status })),
+  };
+  const measurementBookExport = {
+    title: "BOQ Measurement Book & Variation Register", filters: boqExportFilters,
+    summary: [{ label: "Measurement Entries", value: filteredBoqMeasurements.length }, { label: "Pending Certification Quantity", value: boqSummary.pendingCertificationQuantity }, { label: "Variations", value: filteredBoqVariations.length }, { label: "Pending Variation Approval", value: boqSummary.pendingVariationCount }],
+    columns: [{ key: "recordType", label: "Record Type" }, { key: "date", label: "Date" }, { key: "site", label: "Site" }, { key: "reference", label: "Item / Variation" }, { key: "location", label: "Location / Reason", width: 1.5 }, { key: "quantity", label: "Quantity / Unit" }, { key: "status", label: "Status" }],
+    rows: [
+      ...filteredBoqMeasurements.map((record) => ({ recordType: "Measurement", date: record.date || "-", site: getSiteName(record) || "-", reference: record.boqItemNumber || record.boqItemId, location: record.location || "-", quantity: `${toNumber(record.quantity)} ${record.unit || ""}`, status: record.status || "Pending" })),
+      ...filteredBoqVariations.map((record) => ({ recordType: "Variation", date: getRecordDate(record) || "-", site: getSiteName(record) || "-", reference: record.variationReference || record.id, location: record.reason || "-", quantity: `${toNumber(record.quantityChange)} ${record.unit || ""}`, status: record.status || "Draft" })),
+    ],
+  };
   const handlePrint = () => {
     printReport(financialSummaryExport);
   };
@@ -1331,6 +1387,18 @@ function Reports() {
               </select>
             </div>
 
+            <div className="filter-group">
+              <label>BOQ Item</label>
+              <select value={boqItemFilter} onChange={(event) => setBoqItemFilter(event.target.value)}><option value="">All BOQ Items</option>{boqItems.filter((item) => selectedSite === "all" || isSameSite(item, selectedSite)).map((item) => <option key={item.id} value={item.id}>{item.itemNumber} · {item.description}</option>)}</select>
+            </div>
+            <div className="filter-group">
+              <label>BOQ Category</label>
+              <select value={boqCategoryFilter} onChange={(event) => setBoqCategoryFilter(event.target.value)}><option value="">All Categories</option>{boqCategories.map((category) => <option key={category}>{category}</option>)}</select>
+            </div>
+            <div className="filter-group">
+              <label>BOQ Status</label>
+              <select value={boqStatusFilter} onChange={(event) => setBoqStatusFilter(event.target.value)}><option value="">All Statuses</option>{BOQ_STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
+            </div>
             <div className="report-buttons">
               <button
                 type="button"
@@ -1362,6 +1430,8 @@ function Reports() {
             <ReportExportActions report={siteFinancialExport} disabled={loading} />
              <ReportExportActions report={projectFinancialExport} disabled={loading} />
             <ReportExportActions report={dprExport} disabled={loading || Boolean(dprError)} />
+            <ReportExportActions report={boqExport} disabled={loading} />
+            <ReportExportActions report={measurementBookExport} disabled={loading} />
             <ReportExportActions report={expensesExport} disabled={loading} />
             <ReportExportActions report={attendanceExport} disabled={loading} />
             <ReportExportActions report={payrollExport} disabled={loading} />
@@ -1651,6 +1721,14 @@ function Reports() {
               </tbody></table></div>
             </div>
 
+            <div className="report-section-title"><h2>📐 BOQ &amp; Quantity Progress</h2></div>
+            <div className="inventory-report-note">Measurement Book entries are the source for measured/certified quantities. DPR is an optional operational reference only. BOQ and RA line quantities do not add a second income or expense.</div>
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card"><span>BOQ Items</span><h3>{boqSummary.itemCount}</h3></div><div className="dpr-report-summary-card"><span>Original / Revised Value</span><h3>{formatMoney(boqSummary.originalBoqValue)} / {formatMoney(boqSummary.revisedBoqValue)}</h3></div><div className="dpr-report-summary-card"><span>Measured / Certified</span><h3>{formatMoney(boqSummary.measuredWorkValue)} / {formatMoney(boqSummary.certifiedWorkValue)}</h3></div><div className="dpr-report-summary-card"><span>Measured Progress</span><h3>{boqSummary.overallProgressPercent}%</h3></div><div className="dpr-report-summary-card"><span>Pending Certification</span><h3>{boqSummary.pendingCertificationQuantity}</h3></div><div className="dpr-report-summary-card"><span>Pending Variations</span><h3>{boqSummary.pendingVariationCount}</h3></div>
+            </div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Site</th><th>BOQ Item</th><th>Category / Unit</th><th>Planned / Authorised</th><th>Measured / Certified</th><th>Billed / Balance</th><th>Progress</th><th>Status</th></tr></thead><tbody>{boqProgressRows.length === 0 ? <tr><td colSpan="8" className="no-report-data">No BOQ items match the selected site, item, category, status, or date filters.</td></tr> : boqProgressRows.map((item) => <tr key={item.itemId}><td>{item.site || "-"}</td><td>{item.itemNumber || item.itemId}<small>{item.description || "-"}</small></td><td>{item.workCategory || "-"}<small>{item.unit}</small></td><td>{item.plannedQuantity} / {item.authorizedQuantity}</td><td>{item.measuredQuantity} / {item.certifiedQuantity}</td><td>{item.billedQuantity} / {item.balanceQuantity}</td><td>{item.progressPercent}%</td><td>{item.status || "Draft"}</td></tr>)}</tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Date</th><th>Site</th><th>BOQ Item</th><th>Location</th><th>Quantity / Unit</th><th>DPR Reference</th><th>Status</th></tr></thead><tbody>{filteredBoqMeasurements.length === 0 ? <tr><td colSpan="7" className="no-report-data">No Measurement Book entries match the selected filters.</td></tr> : filteredBoqMeasurements.map((record) => <tr key={record.id}><td>{record.date || "-"}</td><td>{getSiteName(record) || "-"}</td><td>{record.boqItemNumber || record.boqItemId}<small>{record.boqItemDescription || "-"}</small></td><td>{record.location || "-"}</td><td>{toNumber(record.quantity)} {record.unit || ""}</td><td>{record.dprId || "-"}</td><td>{record.status || "Pending"}</td></tr>)}</tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Variation</th><th>Site</th><th>Item</th><th>Quantity / Unit</th><th>Value</th><th>Reason</th><th>Status</th></tr></thead><tbody>{filteredBoqVariations.length === 0 ? <tr><td colSpan="7" className="no-report-data">No BOQ variations match the selected filters.</td></tr> : filteredBoqVariations.map((record) => <tr key={record.id}><td>{record.variationReference || record.id}</td><td>{getSiteName(record) || "-"}</td><td>{record.itemNumber || record.description || "Extra item"}</td><td>{toNumber(record.quantityChange)} {record.unit || ""}</td><td>{formatMoney(record.variationValue)}</td><td>{record.reason || "-"}</td><td>{record.status || "Draft"}</td></tr>)}</tbody></table></div></div>
             <div className="report-section-title"><h2>🧱 Subcontracting &amp; Work Orders</h2></div>
             <div className="inventory-report-note">Work-order value and certified progress are operational/commitment figures. Financial expense is recorded once from each linked certified contractor bill in <strong>Expenses</strong>; contractor payments do not create a second expense.</div>
             <div className="dpr-report-summary-grid">

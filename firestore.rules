@@ -192,7 +192,10 @@ service cloud.firestore {
           "siteBillingProfiles",
           "raBills",
           "clientReceipts",
-          "raRetentionReleases"
+          "raRetentionReleases",
+          "boqItems",
+          "boqMeasurements",
+          "boqVariations"
         ] &&
         request.resource.data.recordId is string &&
           request.resource.data.recordId.size() > 0 && request.resource.data.recordId.size() <= 200 &&
@@ -241,9 +244,17 @@ service cloud.firestore {
         request.resource.data.lastCertifiedBillId is string && request.resource.data.lastCertifiedBillId.size() <= 200 && request.resource.data.paymentTerms is string && request.resource.data.paymentTerms.size() <= 1000 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000;
     }
 
+    function hasValidOptionalBoqBillingLines() {
+      // Line details are validation snapshots only. RA bill and invoice values
+      // remain the existing canonical income source. Firestore Rules cannot
+      // iterate every list map, so shape/quantity validation is performed by
+      // the shared client helper; writes remain manager/admin-only.
+      return !request.resource.data.keys().hasAll(["boqLineItems"]) ||
+        (request.resource.data.boqLineItems is list && request.resource.data.boqLineItems.size() <= 50);
+    }
     function hasValidRABillFields() {
       return request.resource.data.keys().hasAll(["raBillNumber", "siteId", "site", "clientId", "clientName", "agreementNumber", "billingPeriodFrom", "billingPeriodTo", "billDate", "paymentDueDate", "previousCertifiedAmount", "cumulativeCertifiedAmount", "currentWorkValue", "variationAmount", "grossWorkValue", "materialAdvanceRecovery", "advanceAdjustment", "otherDeductions", "recoveries", "retentionPercent", "retentionAmount", "tdsPercent", "tdsAmount", "gstRate", "gstAmount", "netBillAmount", "status", "receivedAmount", "pendingAmount", "retentionReleased", "retentionBalance", "linkedInvoiceId", "lastReceiptId", "lastRetentionReleaseId", "remarks", "createdBy", "createdAt", "updatedAt"]) &&
-        request.resource.data.keys().hasOnly(["raBillNumber", "siteId", "site", "clientId", "clientName", "agreementNumber", "billingPeriodFrom", "billingPeriodTo", "billDate", "paymentDueDate", "previousCertifiedAmount", "cumulativeCertifiedAmount", "currentWorkValue", "variationAmount", "grossWorkValue", "materialAdvanceRecovery", "advanceAdjustment", "otherDeductions", "recoveries", "retentionPercent", "retentionAmount", "tdsPercent", "tdsAmount", "gstRate", "gstAmount", "netBillAmount", "status", "receivedAmount", "pendingAmount", "retentionReleased", "retentionBalance", "linkedInvoiceId", "lastReceiptId", "lastRetentionReleaseId", "remarks", "certifiedAt", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.keys().hasOnly(["raBillNumber", "siteId", "site", "clientId", "clientName", "agreementNumber", "billingPeriodFrom", "billingPeriodTo", "billDate", "paymentDueDate", "previousCertifiedAmount", "cumulativeCertifiedAmount", "currentWorkValue", "variationAmount", "grossWorkValue", "materialAdvanceRecovery", "advanceAdjustment", "otherDeductions", "recoveries", "retentionPercent", "retentionAmount", "tdsPercent", "tdsAmount", "gstRate", "gstAmount", "netBillAmount", "status", "receivedAmount", "pendingAmount", "retentionReleased", "retentionBalance", "linkedInvoiceId", "lastReceiptId", "lastRetentionReleaseId", "remarks", "boqLineItems", "certifiedAt", "createdBy", "createdAt", "updatedAt"]) &&
         request.resource.data.raBillNumber is string && request.resource.data.raBillNumber.size() > 0 && request.resource.data.raBillNumber.size() <= 100 && request.resource.data.siteId is string && request.resource.data.siteId.size() > 0 && request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.site.size() <= 200 &&
         request.resource.data.clientId is string && request.resource.data.clientId.size() > 0 && request.resource.data.clientName is string && request.resource.data.clientName.size() > 0 && request.resource.data.clientName.size() <= 200 && request.resource.data.agreementNumber is string && request.resource.data.agreementNumber.size() > 0 && request.resource.data.agreementNumber.size() <= 200 &&
         request.resource.data.billingPeriodFrom is string && request.resource.data.billingPeriodFrom.size() > 0 && request.resource.data.billingPeriodTo is string && request.resource.data.billingPeriodTo.size() > 0 && request.resource.data.billDate is string && request.resource.data.billDate.size() > 0 && request.resource.data.paymentDueDate is string && request.resource.data.paymentDueDate.size() > 0 &&
@@ -253,6 +264,7 @@ service cloud.firestore {
         request.resource.data.materialAdvanceRecovery is number && request.resource.data.materialAdvanceRecovery >= 0 && request.resource.data.advanceAdjustment is number && request.resource.data.advanceAdjustment >= 0 && request.resource.data.otherDeductions is number && request.resource.data.otherDeductions >= 0 && request.resource.data.recoveries is number && request.resource.data.recoveries >= 0 &&
         request.resource.data.retentionPercent is number && request.resource.data.retentionPercent >= 0 && request.resource.data.retentionPercent <= 100 && request.resource.data.retentionAmount is number && request.resource.data.retentionAmount >= 0 && request.resource.data.tdsPercent is number && request.resource.data.tdsPercent >= 0 && request.resource.data.tdsPercent <= 100 && request.resource.data.tdsAmount is number && request.resource.data.tdsAmount >= 0 && request.resource.data.gstRate is number && request.resource.data.gstRate >= 0 && request.resource.data.gstRate <= 100 && request.resource.data.gstAmount is number && request.resource.data.gstAmount >= 0 &&
         request.resource.data.netBillAmount is number && request.resource.data.netBillAmount >= 0 && request.resource.data.receivedAmount is number && request.resource.data.receivedAmount >= 0 && request.resource.data.receivedAmount <= request.resource.data.netBillAmount && request.resource.data.pendingAmount is number && request.resource.data.pendingAmount >= 0 && request.resource.data.retentionReleased is number && request.resource.data.retentionReleased >= 0 && request.resource.data.retentionReleased <= request.resource.data.retentionAmount && request.resource.data.retentionBalance is number && request.resource.data.retentionBalance >= 0 &&
+        hasValidOptionalBoqBillingLines() &&
         request.resource.data.linkedInvoiceId is string && request.resource.data.linkedInvoiceId.size() <= 200 && request.resource.data.lastReceiptId is string && request.resource.data.lastReceiptId.size() <= 250 && request.resource.data.lastRetentionReleaseId is string && request.resource.data.lastRetentionReleaseId.size() <= 250 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000;
     }
 
@@ -491,6 +503,13 @@ service cloud.firestore {
           material.inventoryTransactionId == transactionId;
     }
 
+    function hasValidWorkOrderBoqLink() {
+      return !request.resource.data.keys().hasAll(["boqItemId"]) || request.resource.data.boqItemId == "" ||
+        (request.resource.data.boqItemId is string && request.resource.data.boqItemId.size() > 0 && request.resource.data.boqItemId.size() <= 200 &&
+          exists(/databases/$(database)/documents/boqItems/$(request.resource.data.boqItemId)) &&
+          request.resource.data.site == get(/databases/$(database)/documents/boqItems/$(request.resource.data.boqItemId)).data.site &&
+          (!request.resource.data.keys().hasAll(["siteId"]) || request.resource.data.siteId == get(/databases/$(database)/documents/boqItems/$(request.resource.data.boqItemId)).data.siteId));
+    }
     // Work orders keep approved commercial terms immutable. Certified progress,
     // bills and payments are separate append-only ledgers.
     function hasValidWorkOrderData(orderId) {
@@ -501,7 +520,7 @@ service cloud.firestore {
           "progressPercent", "certifiedAmount", "billedAmount", "terms", "remarks", "status", "createdBy", "createdAt", "updatedAt"
         ]) &&
         request.resource.data.keys().hasOnly([
-          "workOrderNumber", "vendorId", "vendorName", "site", "siteId", "workTrade", "workDescription",
+          "workOrderNumber", "vendorId", "vendorName", "site", "siteId", "boqItemId", "workTrade", "workDescription",
           "startDate", "expectedCompletionDate", "rateType", "contractValue", "quantity", "unit",
           "rate", "retentionPercent", "advanceAmount", "advanceRecovered", "progressQuantity",
           "progressPercent", "certifiedAmount", "billedAmount", "terms", "remarks", "status", "createdBy", "createdAt", "updatedAt"
@@ -510,6 +529,7 @@ service cloud.firestore {
         request.resource.data.vendorId is string && request.resource.data.vendorId.size() > 0 &&
         request.resource.data.vendorName is string && request.resource.data.vendorName.size() > 0 &&
         request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        hasValidWorkOrderBoqLink() &&
         request.resource.data.workTrade is string && request.resource.data.workTrade.size() > 0 &&
         request.resource.data.workDescription is string && request.resource.data.workDescription.size() > 0 &&
         request.resource.data.startDate is string && request.resource.data.startDate.size() >= 10 &&
@@ -548,6 +568,7 @@ service cloud.firestore {
       return request.resource.data.workOrderNumber == resource.data.workOrderNumber &&
         request.resource.data.vendorId == resource.data.vendorId && request.resource.data.vendorName == resource.data.vendorName &&
         request.resource.data.site == resource.data.site && request.resource.data.siteId == resource.data.siteId &&
+        ((!resource.data.keys().hasAll(["boqItemId"]) && (!request.resource.data.keys().hasAll(["boqItemId"]) || request.resource.data.boqItemId == "")) || (resource.data.keys().hasAll(["boqItemId"]) && request.resource.data.boqItemId == resource.data.boqItemId)) &&
         request.resource.data.workTrade == resource.data.workTrade && request.resource.data.workDescription == resource.data.workDescription &&
         request.resource.data.startDate == resource.data.startDate && request.resource.data.expectedCompletionDate == resource.data.expectedCompletionDate &&
         request.resource.data.rateType == resource.data.rateType && request.resource.data.contractValue == resource.data.contractValue &&
@@ -903,6 +924,112 @@ service cloud.firestore {
             request.resource.data.currentStock == resource.data.currentStock - quantity));
     }
 
+    // BOQ commercial master data is intentionally unavailable to field-only
+    // users. A measurement is append-preserved; only its certification state
+    // may change after creation.
+    function hasValidBoqItemData() {
+      return request.resource.data.keys().hasAll([
+          "siteId", "site", "itemNumber", "itemCode", "workCategory", "description", "unit",
+          "plannedQuantity", "rate", "amount", "remarks", "status", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.keys().hasOnly([
+          "siteId", "site", "itemNumber", "itemCode", "workCategory", "description", "unit",
+          "plannedQuantity", "rate", "amount", "remarks", "status", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.siteId is string && request.resource.data.siteId.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.site.size() <= 200 &&
+        request.resource.data.itemNumber is string && request.resource.data.itemNumber.size() > 0 && request.resource.data.itemNumber.size() <= 100 &&
+        request.resource.data.itemCode is string && request.resource.data.itemCode.size() <= 100 &&
+        request.resource.data.workCategory is string && request.resource.data.workCategory.size() <= 150 &&
+        request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 1000 &&
+        request.resource.data.unit in ["Nos", "Sqm", "Cum", "Rmt", "Kg", "MT", "Litre", "Job", "LS"] &&
+        request.resource.data.plannedQuantity is number && request.resource.data.plannedQuantity > 0 &&
+        request.resource.data.rate is number && request.resource.data.rate >= 0 &&
+        request.resource.data.amount is number && request.resource.data.amount >= 0 &&
+        request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000 &&
+        request.resource.data.status in ["Draft", "Active", "Completed", "Archived"] &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0;
+    }
+
+    function hasImmutableActiveBoqCommercialFields() {
+      return request.resource.data.siteId == resource.data.siteId && request.resource.data.site == resource.data.site &&
+        request.resource.data.itemNumber == resource.data.itemNumber && request.resource.data.itemCode == resource.data.itemCode &&
+        request.resource.data.workCategory == resource.data.workCategory && request.resource.data.description == resource.data.description &&
+        request.resource.data.unit == resource.data.unit && request.resource.data.plannedQuantity == resource.data.plannedQuantity &&
+        request.resource.data.rate == resource.data.rate && request.resource.data.amount == resource.data.amount &&
+        request.resource.data.remarks == resource.data.remarks;
+    }
+
+    function hasValidBoqItemTransition() {
+      return (resource.data.status == "Draft" && request.resource.data.status in ["Draft", "Active", "Archived"]) ||
+        (resource.data.status == "Active" && request.resource.data.status in ["Active", "Completed", "Archived"]) ||
+        (resource.data.status == "Completed" && request.resource.data.status in ["Completed", "Archived"]) ||
+        (resource.data.status == "Archived" && request.resource.data.status == "Archived");
+    }
+
+    function hasValidBoqMeasurementDimensions() {
+      let dimensions = request.resource.data.dimensions;
+      return (request.resource.data.measurementType == "Direct quantity" && dimensions.keys().hasOnly([])) ||
+        (request.resource.data.measurementType == "Area (L × W)" && dimensions.keys().hasOnly(["length", "width"]) &&
+          dimensions.keys().hasAll(["length", "width"]) && dimensions.length is number && dimensions.length > 0 && dimensions.width is number && dimensions.width > 0) ||
+        (request.resource.data.measurementType == "Volume (L × W × H)" && dimensions.keys().hasOnly(["length", "width", "height"]) &&
+          dimensions.keys().hasAll(["length", "width", "height"]) && dimensions.length is number && dimensions.length > 0 && dimensions.width is number && dimensions.width > 0 && dimensions.height is number && dimensions.height > 0) ||
+        (request.resource.data.measurementType == "Count × per-unit quantity" && dimensions.keys().hasOnly(["count", "perUnitQuantity"]) &&
+          dimensions.keys().hasAll(["count", "perUnitQuantity"]) && dimensions.count is number && dimensions.count > 0 && dimensions.perUnitQuantity is number && dimensions.perUnitQuantity > 0);
+    }
+    function hasValidBoqMeasurementData() {
+      let itemPath = /databases/$(database)/documents/boqItems/$(request.resource.data.boqItemId);
+      return request.resource.data.keys().hasAll([
+          "siteId", "site", "boqItemId", "boqItemNumber", "boqItemCode", "boqItemDescription", "unit",
+          "date", "location", "measurementType", "quantity", "dimensions", "remarks", "dprId", "status",
+          "measuredBy", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.keys().hasOnly([
+          "siteId", "site", "boqItemId", "boqItemNumber", "boqItemCode", "boqItemDescription", "unit",
+          "date", "location", "measurementType", "quantity", "dimensions", "remarks", "dprId", "status",
+          "measuredBy", "createdBy", "createdAt", "updatedAt", "certifiedBy", "certifiedAt"
+        ]) && request.resource.data.siteId is string && request.resource.data.siteId.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.boqItemId is string && request.resource.data.boqItemId.size() > 0 &&
+        exists(itemPath) && request.resource.data.siteId == get(itemPath).data.siteId && request.resource.data.site == get(itemPath).data.site &&
+        request.resource.data.boqItemNumber == get(itemPath).data.itemNumber && request.resource.data.boqItemCode == get(itemPath).data.itemCode &&
+        request.resource.data.boqItemDescription == get(itemPath).data.description && request.resource.data.unit == get(itemPath).data.unit &&
+        request.resource.data.date is string && request.resource.data.date.size() >= 10 && request.resource.data.location is string && request.resource.data.location.size() > 0 && request.resource.data.location.size() <= 500 &&
+        request.resource.data.measurementType in ["Direct quantity", "Area (L × W)", "Volume (L × W × H)", "Count × per-unit quantity"] &&
+        request.resource.data.quantity is number && request.resource.data.quantity > 0 && request.resource.data.dimensions is map &&
+        hasValidBoqMeasurementDimensions() &&
+        request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000 && request.resource.data.dprId is string && request.resource.data.dprId.size() <= 200 &&
+        request.resource.data.status in ["Pending", "Certified", "Rejected"] && request.resource.data.measuredBy == request.resource.data.createdBy &&
+        request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0;
+    }
+
+    function hasValidBoqMeasurementTransition() {
+      return resource.data.status == "Pending" && request.resource.data.status in ["Certified", "Rejected"] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "certifiedBy", "certifiedAt", "updatedAt"]) &&
+        request.resource.data.certifiedBy == request.auth.uid && request.resource.data.certifiedAt == request.time;
+    }
+
+    function hasValidBoqVariationData() {
+      let itemPath = /databases/$(database)/documents/boqItems/$(request.resource.data.boqItemId);
+      return request.resource.data.keys().hasAll([
+          "siteId", "site", "boqItemId", "variationReference", "itemNumber", "itemCode", "description", "unit",
+          "quantityChange", "revisedRate", "variationValue", "reason", "status", "createdBy", "createdAt", "updatedAt"
+        ]) && request.resource.data.keys().hasOnly([
+          "siteId", "site", "boqItemId", "variationReference", "itemNumber", "itemCode", "description", "unit",
+          "quantityChange", "revisedRate", "variationValue", "reason", "status", "createdBy", "createdAt", "updatedAt", "approvedBy", "approvedAt"
+        ]) && request.resource.data.siteId is string && request.resource.data.siteId.size() > 0 && request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.boqItemId is string && request.resource.data.variationReference is string && request.resource.data.variationReference.size() > 0 && request.resource.data.variationReference.size() <= 120 &&
+        request.resource.data.itemNumber is string && request.resource.data.itemNumber.size() <= 100 && request.resource.data.itemCode is string && request.resource.data.itemCode.size() <= 100 &&
+        request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 1000 &&
+        request.resource.data.unit in ["Nos", "Sqm", "Cum", "Rmt", "Kg", "MT", "Litre", "Job", "LS"] &&
+        request.resource.data.quantityChange is number && request.resource.data.quantityChange != 0 && request.resource.data.revisedRate is number && request.resource.data.revisedRate >= 0 &&
+        request.resource.data.variationValue is number && request.resource.data.reason is string && request.resource.data.reason.size() > 0 && request.resource.data.reason.size() <= 1000 &&
+        request.resource.data.status in ["Draft", "Submitted", "Approved", "Rejected"] && request.resource.data.createdBy is string && request.resource.data.createdBy.size() > 0 &&
+        (request.resource.data.boqItemId == "" || (exists(itemPath) && request.resource.data.siteId == get(itemPath).data.siteId && request.resource.data.site == get(itemPath).data.site && request.resource.data.itemNumber == get(itemPath).data.itemNumber && request.resource.data.unit == get(itemPath).data.unit));
+    }
+
+    function hasValidBoqVariationTransition() {
+      return ((resource.data.status == "Draft" && request.resource.data.status == "Submitted") ||
+          (resource.data.status == "Submitted" && request.resource.data.status in ["Approved", "Rejected"])) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "approvedBy", "approvedAt", "updatedAt"]) &&
+        (request.resource.data.status == "Submitted" || (request.resource.data.approvedBy == request.auth.uid && request.resource.data.approvedAt == request.time));
+    }
     // Users may read only their own authorization profile. Roles can only be
     // assigned or changed from the Firebase Console/Admin SDK, never by a client.
     match /users/{userId} {
@@ -1233,6 +1360,37 @@ service cloud.firestore {
       allow update, delete: if canWriteErpData();
     }
 
+    // BOQ rates and commercial quantities are limited to standard ERP roles.
+    // Field-only users receive neither the BOQ master nor its billing/value data.
+    match /boqItems/{itemId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidBoqItemData() && request.resource.data.status == "Draft" &&
+        request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidBoqItemData() && hasValidBoqItemTransition() &&
+        request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time &&
+        (resource.data.status == "Draft" || hasImmutableActiveBoqCommercialFields());
+      allow delete: if false;
+    }
+
+    match /boqMeasurements/{measurementId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidBoqMeasurementData() && request.resource.data.status == "Pending" &&
+        !request.resource.data.keys().hasAll(["certifiedBy"]) && !request.resource.data.keys().hasAll(["certifiedAt"]) && request.resource.data.createdBy == request.auth.uid && request.resource.data.measuredBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidBoqMeasurementData() && hasValidBoqMeasurementTransition() &&
+        request.resource.data.createdBy == resource.data.createdBy && request.resource.data.measuredBy == resource.data.measuredBy &&
+        request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /boqVariations/{variationId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidBoqVariationData() && request.resource.data.status == "Draft" &&
+        !request.resource.data.keys().hasAll(["approvedBy"]) && !request.resource.data.keys().hasAll(["approvedAt"]) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidBoqVariationData() && hasValidBoqVariationTransition() &&
+        request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
     // Audit entries are immutable. The client can append an identity-validated
     // entry after a successful action, but only an active administrator can read it.
     match /auditLogs/{documentId} {

@@ -39,6 +39,9 @@ export const AUDIT_MODULES = [
   "raBills",
   "clientReceipts",
   "raRetentionReleases",
+  "boqItems",
+  "boqMeasurements",
+  "boqVariations",
   "users",
 ];
 
@@ -107,6 +110,12 @@ const MODULE_ALIASES = {
   raretentionreleases: "raRetentionReleases",
   "ra-retention-releases": "raRetentionReleases",
   retentionrelease: "raRetentionReleases",
+  boqitems: "boqItems",
+  "boq-items": "boqItems",
+  boqmeasurements: "boqMeasurements",
+  "boq-measurements": "boqMeasurements",
+  boqvariations: "boqVariations",
+  "boq-variations": "boqVariations",
   users: "users",
   user: "users",
 };

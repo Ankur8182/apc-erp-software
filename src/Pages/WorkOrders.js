@@ -31,6 +31,7 @@ function WorkOrders() {
   const [progressRecords, setProgressRecords] = useState([]);
   const [bills, setBills] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [boqItems, setBoqItems] = useState([]);
   const [orderForm, setOrderForm] = useState(createInitialWorkOrderForm);
   const [progressForm, setProgressForm] = useState(initialProgressForm);
   const [billForm, setBillForm] = useState(initialBillForm);
@@ -45,7 +46,7 @@ function WorkOrders() {
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    const names = ["vendors", "sites", "workOrders", "workOrderProgress", "contractorBills", "contractorPayments"];
+    const names = ["vendors", "sites", "workOrders", "workOrderProgress", "contractorBills", "contractorPayments", "boqItems"];
     let remaining = names.length;
     const complete = () => { remaining -= 1; if (remaining <= 0) setLoading(false); };
     const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name)),
@@ -59,6 +60,7 @@ function WorkOrders() {
       subscribe("workOrderProgress", setProgressRecords, "Work progress history could not be loaded."),
       subscribe("contractorBills", setBills, "Contractor bills could not be loaded."),
       subscribe("contractorPayments", setPayments, "Contractor payment history could not be loaded."),
+      subscribe("boqItems", setBoqItems, "BOQ items could not be loaded."),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
@@ -70,6 +72,7 @@ function WorkOrders() {
   }), [vendors, orderForm.vendorId]);
   const siteNames = useMemo(() => getDistinctValues([...sites, ...orders], (item) => getSiteName(item) || item.siteName || item.name), [sites, orders]);
   const approvedOrders = useMemo(() => orders.filter((order) => ["Approved", "Active"].includes(order.status)), [orders]);
+  const availableBoqItems = useMemo(() => boqItems.filter((item) => item.status === "Active" && (!orderForm.site || item.site === orderForm.site)), [boqItems, orderForm.site]);
   const billableOrders = useMemo(() => orders.filter((order) => ["Approved", "Active", "Completed", "Closed"].includes(order.status)), [orders]);
   const paymentableBills = useMemo(() => bills.filter((bill) => normaliseMoney(bill.pendingAmount) > 0 || normaliseMoney(bill.retentionBalance) > 0), [bills]);
   const summary = useMemo(() => getSubcontractingSummary(orders, bills), [orders, bills]);
@@ -239,6 +242,7 @@ function WorkOrders() {
     <section className="procurement-card"><h2>{editId ? "Edit Draft Work Order" : "Create Work Order"}</h2>{canWrite ? <form onSubmit={submitWorkOrder}><div className="procurement-form-grid">
       <label>Vendor / Contractor <b>*</b><select value={orderForm.vendorId} onChange={(event) => chooseVendor(event.target.value)} disabled={saving || Boolean(editId)}><option value="">Select Vendor</option>{activeVendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.vendorName} · {vendor.vendorType || "Supplier"}</option>)}</select></label>
       <label>Site <b>*</b><input list="work-order-sites" value={orderForm.site} onChange={(event) => chooseSite(event.target.value)} disabled={saving || Boolean(editId)} /><datalist id="work-order-sites">{siteNames.map((site) => <option key={site} value={site} />)}</datalist></label>
+      <label>Linked BOQ Item<select value={orderForm.boqItemId || ""} onChange={(event) => changeOrder("boqItemId", event.target.value)} disabled={saving || Boolean(editId)}><option value="">No BOQ link</option>{availableBoqItems.map((item) => <option key={item.id} value={item.id}>{item.itemNumber} · {item.description}</option>)}</select></label>
       <label>Trade / Work Type <b>*</b><input value={orderForm.workTrade} onChange={(event) => changeOrder("workTrade", event.target.value)} placeholder="Civil, electrical, plumbing..." disabled={saving || Boolean(editId)} /></label>
       <label>Rate Type <b>*</b><select value={orderForm.rateType} onChange={(event) => changeOrder("rateType", event.target.value)} disabled={saving || Boolean(editId)}>{WORK_ORDER_RATE_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
       <label>Start Date <b>*</b><input type="date" value={orderForm.startDate} onChange={(event) => changeOrder("startDate", event.target.value)} disabled={saving || Boolean(editId)} /></label>
