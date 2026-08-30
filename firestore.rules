@@ -87,6 +87,53 @@ service cloud.firestore {
         hasValidFieldDailyProgressReport();
     }
 
+    // New equipment masters keep a verified owner and safe operational values.
+    // Existing legacy vehicle documents remain readable and editable by their
+    // existing manager/admin policy.
+    function hasValidVehicleMasterData() {
+      return request.resource.data.keys().hasAll([
+          "vehicleNumber", "vehicleType", "site", "fuel", "status",
+          "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.vehicleNumber is string && request.resource.data.vehicleNumber.size() > 0 &&
+        request.resource.data.vehicleType is string && request.resource.data.vehicleType.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.fuel is number && request.resource.data.fuel >= 0 &&
+        request.resource.data.status in ["Active", "Idle", "Under Maintenance", "Breakdown", "Off Hire"] &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+    }
+
+    // vehicleExpenses is the sole financial source for new fuel and
+    // maintenance entries. Fuel totals are checked from quantity × rate so a
+    // client cannot submit a forged amount. Legacy records are unaffected.
+    function hasValidVehicleExpenseData() {
+      return request.resource.data.keys().hasAll([
+          "vehicleId", "vehicleNumber", "vehicleName", "site", "date",
+          "expenseType", "amount", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.vehicleId is string && request.resource.data.vehicleId.size() > 0 &&
+        request.resource.data.vehicleNumber is string && request.resource.data.vehicleNumber.size() > 0 &&
+        request.resource.data.vehicleName is string && request.resource.data.vehicleName.size() > 0 &&
+        request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.date is string && request.resource.data.date.size() > 0 &&
+        request.resource.data.expenseType in ["Fuel", "Maintenance", "Repair", "Driver Payment", "Toll", "Insurance", "Other"] &&
+        request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        (!request.resource.data.keys().hasAll(["totalAmount"]) ||
+          (request.resource.data.totalAmount is number && request.resource.data.totalAmount == request.resource.data.amount)) &&
+        (!request.resource.data.keys().hasAll(["meterReading"]) ||
+          (request.resource.data.meterReading is number && request.resource.data.meterReading >= 0)) &&
+        (request.resource.data.expenseType != "Fuel" ||
+          (request.resource.data.keys().hasAll(["fuelType", "quantity", "ratePerLitre"]) &&
+            request.resource.data.fuelType in ["Diesel", "Petrol", "CNG", "Electric", "Other"] &&
+            request.resource.data.quantity is number && request.resource.data.quantity > 0 &&
+            request.resource.data.ratePerLitre is number && request.resource.data.ratePerLitre > 0 &&
+            request.resource.data.amount == request.resource.data.quantity * request.resource.data.ratePerLitre &&
+            (!request.resource.data.keys().hasAll(["fuelQuantity"]) ||
+              (request.resource.data.fuelQuantity is number && request.resource.data.fuelQuantity == request.resource.data.quantity)))) &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+    }
     function hasValidAuditLogData() {
       return request.resource.data.keys().hasAll([
           "userId",
@@ -127,6 +174,8 @@ service cloud.firestore {
           "labourAdvances",
           "vehicle",
           "vehicleExpenses",
+          "vehicleAssignments",
+          "vehicleMaintenance",
           "invoices",
           "dailyProgressReports",
           "inventoryItems",
@@ -799,12 +848,66 @@ service cloud.firestore {
 
     match /vehicles/{document=**} {
       allow read: if isAuthorizedErpUser() || isFieldUser();
-      allow create, update, delete: if canWriteErpData();
+      allow create: if canWriteErpData() && hasValidVehicleMasterData();
+      allow update, delete: if canWriteErpData();
     }
 
     match /vehicleExpenses/{document=**} {
       allow read: if isAuthorizedErpUser();
-      allow create, update, delete: if canWriteErpData();
+      allow create: if canWriteErpData() && hasValidVehicleExpenseData();
+      // Retain existing manager/admin edit/delete behavior for legacy expense
+      // documents that predate the normalized ledger fields.
+      allow update, delete: if canWriteErpData();
+    }
+
+    // Assignment movements retain a release trail. A manager can close the
+    // current assignment but cannot rewrite where/when it was assigned.
+    match /vehicleAssignments/{assignmentId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() &&
+        request.resource.data.keys().hasAll([
+          "vehicleId", "vehicleNumber", "site", "assignmentDate", "releaseDate",
+          "assignmentStatus", "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.vehicleId is string && request.resource.data.vehicleId.size() > 0 &&
+        request.resource.data.vehicleNumber is string && request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.assignmentDate is string && request.resource.data.assignmentDate.size() > 0 &&
+        request.resource.data.releaseDate is string && request.resource.data.assignmentStatus == "Assigned" &&
+        request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() &&
+        request.resource.data.vehicleId == resource.data.vehicleId &&
+        request.resource.data.vehicleNumber == resource.data.vehicleNumber &&
+        request.resource.data.site == resource.data.site &&
+        request.resource.data.assignmentDate == resource.data.assignmentDate &&
+        request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.releaseDate is string && request.resource.data.releaseDate.size() > 0 &&
+        request.resource.data.assignmentStatus == "Released" && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Maintenance records are append-only operational history. Its optional
+    // linked vehicleExpenses document is the single financial cost source.
+    match /vehicleMaintenance/{maintenanceId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() &&
+        request.resource.data.keys().hasAll([
+          "vehicleId", "vehicleNumber", "site", "maintenanceType", "serviceDate",
+          "labourCost", "partsCost", "otherCost", "totalCost", "status", "linkedExpenseId",
+          "createdBy", "createdAt", "updatedAt"
+        ]) &&
+        request.resource.data.vehicleId is string && request.resource.data.vehicleId.size() > 0 &&
+        request.resource.data.vehicleNumber is string && request.resource.data.site is string && request.resource.data.site.size() > 0 &&
+        request.resource.data.maintenanceType is string && request.resource.data.maintenanceType.size() > 0 &&
+        request.resource.data.serviceDate is string && request.resource.data.serviceDate.size() > 0 &&
+        request.resource.data.labourCost is number && request.resource.data.labourCost >= 0 &&
+        request.resource.data.partsCost is number && request.resource.data.partsCost >= 0 &&
+        request.resource.data.otherCost is number && request.resource.data.otherCost >= 0 &&
+        request.resource.data.totalCost is number && request.resource.data.totalCost >= 0 &&
+        request.resource.data.totalCost == request.resource.data.labourCost + request.resource.data.partsCost + request.resource.data.otherCost &&
+        request.resource.data.status in ["Open", "In Progress", "Completed"] &&
+        request.resource.data.linkedExpenseId is string && request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update, delete: if false;
     }
 
     match /dailyProgressReports/{document=**} {

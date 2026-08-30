@@ -160,6 +160,23 @@ describe("notification generation", () => {
     ]));
   });
 
+  it("adds non-duplicated equipment breakdown and certificate-expiry alerts for ERP roles", () => {
+    const alerts = generateNotifications({
+      role: "manager",
+      today: TODAY,
+      vehicles: [{
+        id: "equipment-1", vehicleNumber: "JCB-01", site: "River View", status: "Breakdown",
+        insuranceExpiry: "2026-08-15", fitnessExpiry: "2026-09-10", permitExpiry: "2026-12-31",
+      }],
+    });
+
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Equipment breakdown reported", severity: "critical", href: "/vehicle" }),
+      expect.objectContaining({ title: "Insurance expired", severity: "critical" }),
+      expect.objectContaining({ title: "Fitness certificate expiry approaching", severity: "warning" }),
+    ]));
+    expect(alerts.filter((alert) => alert.title === "Equipment breakdown reported")).toHaveLength(1);
+  });
   it("keeps field users on their own operational DPR alert only", () => {
     const alerts = generateNotifications({
       role: "supervisor",

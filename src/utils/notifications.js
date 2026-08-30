@@ -90,6 +90,25 @@ const getMaintenanceDueDate = (vehicle = {}) =>
       vehicle.nextServiceDate
   );
 
+const getVehicleExpiryAlerts = (vehicle = {}, today = "") => {
+  const safeToday = normaliseDate(today);
+  if (!safeToday) return [];
+  const limit = new Date(`${safeToday}T00:00:00Z`);
+  limit.setUTCDate(limit.getUTCDate() + 30);
+  const threshold = limit.toISOString().slice(0, 10);
+  const fields = [
+    ["Insurance", ["insuranceExpiry", "insuranceExpiryDate"]],
+    ["Fitness certificate", ["fitnessExpiry", "fitnessExpiryDate"]],
+    ["Pollution certificate", ["pollutionExpiry", "pollutionCertificateExpiry", "pucExpiry"]],
+    ["Permit", ["permitExpiry", "permitExpiryDate"]],
+  ];
+
+  return fields.map(([label, names]) => {
+    const date = normaliseDate(names.map((name) => vehicle[name]).find(Boolean));
+    if (!date || date > threshold) return null;
+    return { label, date, expired: date < safeToday };
+  }).filter(Boolean);
+};
 const orderAlerts = (alerts) => {
   const severityOrder = { critical: 0, warning: 1, info: 2 };
 
@@ -469,25 +488,47 @@ const createCoreAlerts = ({
     if (!vehicle || typeof vehicle !== "object") return;
 
     const label = getRecordLabel(vehicle, "Vehicle");
+    const vehicleId = normaliseId(vehicle.id || label);
     const maintenanceDueDate = getMaintenanceDueDate(vehicle);
     const status = normaliseStatus(vehicle.status);
-    const maintenanceRequired = status === "maintenance";
+    const maintenanceRequired = ["maintenance", "under maintenance"].includes(status);
     const maintenanceOverdue = maintenanceDueDate && maintenanceDueDate <= today;
 
-    if (!maintenanceRequired && !maintenanceOverdue) return;
+    if (status === "breakdown") {
+      addAlert(alerts, {
+        id: `vehicle-breakdown-${vehicleId}`,
+        severity: NOTIFICATION_SEVERITIES.critical,
+        title: "Equipment breakdown reported",
+        message: `${label} is marked as breakdown and needs operational attention.`,
+        date: getDateValue(vehicle, today), href: "/vehicle", module: "Vehicle", site: getSiteName(vehicle),
+      });
+    }
 
-    addAlert(alerts, {
-      id: `vehicle-maintenance-${normaliseId(vehicle.id || label)}-${maintenanceDueDate || status}`,
-      severity: maintenanceOverdue
-        ? NOTIFICATION_SEVERITIES.critical
-        : NOTIFICATION_SEVERITIES.warning,
-      title: "Vehicle maintenance reminder",
-      message: maintenanceOverdue
-        ? `${label} maintenance is due${maintenanceDueDate ? ` since ${maintenanceDueDate}` : ""}.`
-        : `${label} is marked for maintenance.`,
-      date: maintenanceDueDate || getDateValue(vehicle, today),
-      href: "/vehicle",
-      module: "Vehicle",
+    if (maintenanceRequired || maintenanceOverdue) {
+      addAlert(alerts, {
+        id: `vehicle-maintenance-${vehicleId}-${maintenanceDueDate || status}`,
+        severity: maintenanceOverdue
+          ? NOTIFICATION_SEVERITIES.critical
+          : NOTIFICATION_SEVERITIES.warning,
+        title: "Vehicle maintenance reminder",
+        message: maintenanceOverdue
+          ? `${label} maintenance is due${maintenanceDueDate ? ` since ${maintenanceDueDate}` : ""}.`
+          : `${label} is marked for maintenance.`,
+        date: maintenanceDueDate || getDateValue(vehicle, today),
+        href: "/vehicle", module: "Vehicle", site: getSiteName(vehicle),
+      });
+    }
+
+    getVehicleExpiryAlerts(vehicle, today).forEach((expiry) => {
+      addAlert(alerts, {
+        id: `vehicle-${normaliseId(expiry.label)}-${vehicleId}-${expiry.date}`,
+        severity: expiry.expired ? NOTIFICATION_SEVERITIES.critical : NOTIFICATION_SEVERITIES.warning,
+        title: `${expiry.label} ${expiry.expired ? "expired" : "expiry approaching"}`,
+        message: expiry.expired
+          ? `${label} ${expiry.label.toLowerCase()} expired on ${expiry.date}.`
+          : `${label} ${expiry.label.toLowerCase()} expires on ${expiry.date}.`,
+        date: expiry.date, href: "/vehicle", module: "Vehicle", site: getSiteName(vehicle),
+      });
     });
   });
 

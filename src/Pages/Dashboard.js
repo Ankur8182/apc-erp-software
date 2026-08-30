@@ -37,6 +37,7 @@ import {
 import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
 import { getTodayWorkforceSummary } from "../utils/payrollReporting";
+import { summariseEquipment } from "../utils/equipment";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
@@ -317,6 +318,10 @@ function Dashboard() {
   const procurementSummary = useMemo(
     () => getProcurementSummary(purchaseRequests, purchaseOrders, goodsReceipts),
     [purchaseRequests, purchaseOrders, goodsReceipts]
+  );
+  const equipmentSummary = useMemo(
+    () => summariseEquipment({ vehicles, vehicleExpenses }),
+    [vehicles, vehicleExpenses]
   );
 
   const recentProcurement = useMemo(() => [
@@ -918,6 +923,24 @@ function Dashboard() {
               </div>
             )}
           </article>
+        </section>
+
+        <section aria-labelledby="equipment-overview">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Plant and transport operations</span>
+              <h2 id="equipment-overview">🚚 Equipment &amp; Vehicle Overview</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid dashboard-equipment-grid">
+            <article className="dashboard-status-card status-inventory"><span>🚚 Total Equipment</span><strong>{equipmentSummary.total}</strong><small>Registered vehicles and equipment</small></article>
+            <article className="dashboard-status-card status-running"><span>🟢 Active</span><strong>{equipmentSummary.active}</strong><small>Available for site operations</small></article>
+            <article className="dashboard-status-card status-pending"><span>⏸️ Idle</span><strong>{equipmentSummary.idle}</strong><small>Not currently deployed</small></article>
+            <article className="dashboard-status-card status-budget"><span>🛠️ Under Maintenance</span><strong>{equipmentSummary.underMaintenance}</strong><small>Service work in progress</small></article>
+            <article className="dashboard-status-card status-inventory-out"><span>⚠️ Breakdown</span><strong>{equipmentSummary.breakdown}</strong><small>Requires operational attention</small></article>
+            <article className="dashboard-status-card status-labour"><span>⛽ Fuel Cost</span><strong>{formatMoney(equipmentSummary.fuelCost)}</strong><small>From dated fuel ledger entries</small></article>
+            <article className="dashboard-status-card status-inventory-low"><span>🔧 Maintenance Cost</span><strong>{formatMoney(equipmentSummary.maintenanceCost)}</strong><small>Linked vehicle-expense entries only</small></article>
+          </div>
         </section>
 
         <section aria-labelledby="attendance-overview">

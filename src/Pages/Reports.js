@@ -25,6 +25,7 @@ import {
 } from "../utils/siteBudget";
 import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
+import { getEquipmentLabel, getFuelEfficiencyHistory, summariseEquipment } from "../utils/equipment";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -58,6 +59,7 @@ function Reports() {
   const [attendance, setAttendance] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
+  const [vehicleMaintenance, setVehicleMaintenance] = useState([]);
   const [dailyProgressReports, setDailyProgressReports] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [inventoryTransactions, setInventoryTransactions] = useState([]);
@@ -84,7 +86,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 17;
+    const totalCollections = 18;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -142,6 +144,7 @@ function Reports() {
     loadCollection("attendance", setAttendance);
     loadCollection("vehicles", setVehicles);
     loadCollection("vehicleExpenses", setVehicleExpenses);
+    loadCollection("vehicleMaintenance", setVehicleMaintenance);
     loadCollection(
       "dailyProgressReports",
       setDailyProgressReports,
@@ -219,6 +222,9 @@ function Reports() {
     vehicleExpenses.forEach((item) =>
       addSite(getSiteName(item))
     );
+    vehicleMaintenance.forEach((item) =>
+      addSite(getSiteName(item))
+    );
 
     inventoryItems.forEach((item) =>
       addSite(getSiteName(item))
@@ -241,6 +247,7 @@ function Reports() {
     attendance,
     vehicles,
     vehicleExpenses,
+    vehicleMaintenance,
     inventoryItems,
     purchaseRequests,
     purchaseOrders,
@@ -336,15 +343,77 @@ function Reports() {
     [attendance, filterRecords]
   );
 
+  // Equipment master records are a current register. Site filters apply, but
+  // a historical date range must not hide currently registered equipment.
   const filteredVehicles = useMemo(
+    () => vehicles.filter((item) => selectedSite === "all" || isSameSite(item, selectedSite)),
+    [vehicles, selectedSite]
+  );
+
+  // Financial reporting keeps the existing dated-master behavior for legacy
+  // vehicle fuel fallback. The current equipment register above is separate.
+  const financialFilteredVehicles = useMemo(
     () => filterRecords(vehicles),
     [vehicles, filterRecords]
   );
-
   const filteredVehicleExpenses = useMemo(
     () => filterRecords(vehicleExpenses),
     [vehicleExpenses, filterRecords]
   );
+
+  const filteredVehicleMaintenance = useMemo(
+    () => vehicleMaintenance.filter((item) => {
+      const dateMatched = isDateInRange({ ...item, date: item.serviceDate || item.date }, fromDate, toDate);
+      return (selectedSite === "all" || isSameSite(item, selectedSite)) && dateMatched;
+    }),
+    [vehicleMaintenance, selectedSite, fromDate, toDate]
+  );
+
+  const equipmentSummary = useMemo(
+    () => summariseEquipment({ vehicles: filteredVehicles, vehicleExpenses: filteredVehicleExpenses }),
+    [filteredVehicles, filteredVehicleExpenses]
+  );
+
+  const siteEquipmentRows = useMemo(
+    () => allSiteNames.map((siteName) => {
+      const siteVehicles = vehicles.filter((item) => isSameSite(item, siteName));
+      const siteExpenses = filteredVehicleExpenses.filter((item) => isSameSite(item, siteName));
+      const siteMaintenance = filteredVehicleMaintenance.filter((item) => isSameSite(item, siteName));
+      const summary = summariseEquipment({ vehicles: siteVehicles, vehicleExpenses: siteExpenses });
+      return { site: siteName, ...summary, maintenanceRecords: siteMaintenance.length };
+    }).filter((item) => selectedSite === "all" || item.site.toLowerCase() === selectedSite.toLowerCase()),
+    [allSiteNames, vehicles, filteredVehicleExpenses, filteredVehicleMaintenance, selectedSite]
+  );
+
+  const fuelEfficiencyRows = useMemo(() => {
+    const selectedFuelEntries = filteredVehicleExpenses.filter((item) => String(item.expenseType || "").toLowerCase() === "fuel");
+    const selectedEntryIds = new Set(selectedFuelEntries.map((item) => item.id));
+    const groups = new Map();
+    selectedFuelEntries.forEach((entry) => {
+      const vehicleKey = entry.vehicleId || String(entry.vehicleNumber || "").trim().toLowerCase();
+      if (vehicleKey && !groups.has(vehicleKey)) groups.set(vehicleKey, entry);
+    });
+    return Array.from(groups.entries()).flatMap(([vehicleKey, fallback]) => {
+      const vehicle = vehicles.find((item) => item.id === fallback.vehicleId) || fallback;
+      const completeHistory = vehicleExpenses.filter((entry) =>
+        entry && String(entry.expenseType || "").toLowerCase() === "fuel" &&
+        (entry.vehicleId === fallback.vehicleId || (!fallback.vehicleId && String(entry.vehicleNumber || "").trim().toLowerCase() === vehicleKey))
+      );
+      return getFuelEfficiencyHistory(completeHistory, vehicle)
+        .filter((entry) => selectedEntryIds.has(entry.id))
+        .map((entry) => {
+          const sourceEntry = completeHistory.find((item) => item.id === entry.id) || fallback;
+          return {
+            ...entry,
+            vehicle: getEquipmentLabel(vehicle) || fallback.vehicleNumber || "-",
+            site: getSiteName(sourceEntry) || "-",
+            amount: toNumber(sourceEntry.amount ?? sourceEntry.totalAmount),
+            vendor: sourceEntry.vendorPump || sourceEntry.vendor || "-",
+            billReference: sourceEntry.billReference || "-",
+          };
+        });
+    }).sort((left, right) => String(right.date).localeCompare(String(left.date)));
+  }, [filteredVehicleExpenses, vehicleExpenses, vehicles]);
 
   const dprSummary = useMemo(
     () =>
@@ -451,7 +520,7 @@ function Reports() {
         salaries: filteredSalaries,
         attendance: filteredAttendance,
         attendanceSalaryCoverage,
-        vehicles: filteredVehicles,
+        vehicles: financialFilteredVehicles,
         vehicleExpenses: filteredVehicleExpenses,
         vehicleExpenseCoverage,
       }),
@@ -463,7 +532,7 @@ function Reports() {
       filteredSalaries,
       filteredAttendance,
       attendanceSalaryCoverage,
-      filteredVehicles,
+      financialFilteredVehicles,
       filteredVehicleExpenses,
       vehicleExpenseCoverage,
     ]
@@ -486,7 +555,7 @@ function Reports() {
           attendanceSalaryCoverage: salaries.filter((item) =>
             isSameSite(item, siteName)
           ),
-          vehicles: filteredVehicles.filter((item) => isSameSite(item, siteName)),
+          vehicles: financialFilteredVehicles.filter((item) => isSameSite(item, siteName)),
           vehicleExpenses: filteredVehicleExpenses.filter((item) =>
             isSameSite(item, siteName)
           ),
@@ -533,7 +602,7 @@ function Reports() {
     filteredLabours,
     filteredSalaries,
     filteredAttendance,
-    filteredVehicles,
+    financialFilteredVehicles,
     filteredVehicleExpenses,
     salaries,
     vehicleExpenses,
@@ -752,6 +821,131 @@ function Reports() {
     })),
   };
 
+  const equipmentRegisterExport = {
+    title: "Vehicle / Equipment Register",
+    filters: [
+      { label: "Site", value: selectedSite === "all" ? "All Sites" : selectedSite },
+      { label: "Date Range", value: "Current register (date independent)" },
+    ],
+    summary: [
+      { label: "Total Equipment", value: equipmentSummary.total },
+      { label: "Active", value: equipmentSummary.active },
+      { label: "Under Maintenance", value: equipmentSummary.underMaintenance },
+      { label: "Breakdown", value: equipmentSummary.breakdown },
+    ],
+    columns: [
+      { key: "number", label: "Registration / ID" }, { key: "name", label: "Equipment" },
+      { key: "type", label: "Type / Category" }, { key: "site", label: "Current Site" },
+      { key: "ownership", label: "Ownership" }, { key: "status", label: "Status" },
+      { key: "driver", label: "Operator / Driver" }, { key: "meter", label: "Meter Type" },
+    ],
+    rows: filteredVehicles.map((vehicle) => ({
+      number: vehicle.vehicleNumber || vehicle.assetId || vehicle.id,
+      name: vehicle.equipmentName || vehicle.name || "-",
+      type: vehicle.category || vehicle.vehicleType || "-",
+      site: getSiteName(vehicle) || "-", ownership: vehicle.ownershipType || "-",
+      status: vehicle.status || "-", driver: vehicle.driverName || "-", meter: vehicle.meterType || "Odometer",
+    })),
+  };
+
+  const siteEquipmentExport = {
+    title: "Site-wise Equipment Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Sites", value: siteEquipmentRows.length },
+      { label: "Equipment", value: siteEquipmentRows.reduce((total, row) => total + row.total, 0) },
+      { label: "Fuel Cost", value: formatExportMoney(siteEquipmentRows.reduce((total, row) => total + row.fuelCost, 0)) },
+      { label: "Maintenance Cost", value: formatExportMoney(siteEquipmentRows.reduce((total, row) => total + row.maintenanceCost, 0)) },
+    ],
+    columns: [
+      { key: "site", label: "Site" }, { key: "total", label: "Equipment" },
+      { key: "active", label: "Active" }, { key: "idle", label: "Idle" },
+      { key: "maintenance", label: "Under Maintenance" }, { key: "breakdown", label: "Breakdown" },
+      { key: "fuel", label: "Fuel Cost (INR)", format: formatExportMoney },
+      { key: "maintenanceCost", label: "Maintenance Cost (INR)", format: formatExportMoney },
+      { key: "records", label: "Maintenance Records" },
+    ],
+    rows: siteEquipmentRows.map((row) => ({
+      site: row.site, total: row.total, active: row.active, idle: row.idle,
+      maintenance: row.underMaintenance, breakdown: row.breakdown, fuel: row.fuelCost,
+      maintenanceCost: row.maintenanceCost, records: row.maintenanceRecords,
+    })),
+  };
+
+  const fuelConsumptionExport = {
+    title: "Fuel Cost & Consumption Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Fuel Entries", value: filteredVehicleExpenses.filter((item) => String(item.expenseType || "").toLowerCase() === "fuel").length },
+      { label: "Fuel Cost", value: formatExportMoney(equipmentSummary.fuelCost) },
+      { label: "Efficiency", value: "Shown only for valid consecutive meter readings" },
+    ],
+    columns: [
+      { key: "date", label: "Date" }, { key: "vehicle", label: "Vehicle / Equipment" },
+      { key: "site", label: "Site" }, { key: "meterKind", label: "Meter" },
+      { key: "meterReading", label: "Reading" }, { key: "quantity", label: "Fuel (L)" },
+      { key: "amount", label: "Amount (INR)", format: formatExportMoney },
+      { key: "distanceOrHours", label: "Distance / Hours" }, { key: "efficiency", label: "Efficiency" },
+      { key: "vendor", label: "Vendor / Pump" }, { key: "billReference", label: "Bill / Reference" },
+    ],
+    rows: (() => {
+      const efficiencyByEntryId = new Map(fuelEfficiencyRows.map((entry) => [entry.id, entry]));
+      return filteredVehicleExpenses
+        .filter((item) => String(item.expenseType || "").toLowerCase() === "fuel")
+        .map((entry) => {
+          const efficiency = efficiencyByEntryId.get(entry.id);
+          const meterKind = entry.meterType === "hour-meter" ? "hour-meter" : "odometer";
+          return {
+            date: normaliseDate(entry.date) || "-", vehicle: entry.vehicleNumber || entry.vehicleName || "-",
+            site: getSiteName(entry) || "-", meterKind: meterKind === "hour-meter" ? "Hour Meter" : "Odometer",
+            meterReading: entry.meterReading ?? "Not recorded", quantity: toNumber(entry.quantity ?? entry.fuelQuantity),
+            amount: toNumber(entry.amount ?? entry.totalAmount),
+            distanceOrHours: efficiency?.distanceOrHours ?? "Insufficient reading",
+            efficiency: efficiency?.efficiency === null || !efficiency ? "Insufficient reading" : `${efficiency.efficiency} ${meterKind === "hour-meter" ? "L/hour" : "km/L"}`,
+            vendor: entry.vendorPump || entry.vendor || "-", billReference: entry.billReference || "-",
+          };
+        });
+    })(),
+  };
+
+  const maintenanceExport = {
+    title: "Maintenance & Breakdown Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Maintenance Records", value: filteredVehicleMaintenance.length },
+      { label: "Breakdown Records", value: filteredVehicleMaintenance.filter((item) => `${item.maintenanceType || ""} ${item.issueDescription || ""}`.toLowerCase().includes("breakdown")).length },
+      { label: "Linked Financial Cost", value: formatExportMoney(equipmentSummary.maintenanceCost) },
+    ],
+    columns: [
+      { key: "date", label: "Service Date" }, { key: "vehicle", label: "Vehicle / Equipment" },
+      { key: "site", label: "Site" }, { key: "type", label: "Maintenance Type" },
+      { key: "issue", label: "Issue / Breakdown" }, { key: "status", label: "Status" },
+      { key: "vendor", label: "Vendor / Workshop" }, { key: "cost", label: "Operational Cost (INR)", format: formatExportMoney },
+      { key: "nextService", label: "Next Service" },
+    ],
+    rows: filteredVehicleMaintenance.map((item) => ({
+      date: normaliseDate(item.serviceDate || item.date) || "-",
+      vehicle: item.vehicleNumber || item.vehicleName || "-", site: getSiteName(item) || "-",
+      type: item.maintenanceType || "-", issue: item.issueDescription || "-", status: item.status || "-",
+      vendor: item.vendorWorkshop || "-", cost: toNumber(item.totalCost), nextService: normaliseDate(item.nextServiceDate) || "-",
+    })),
+  };
+
+  const equipmentCostExport = {
+    title: "Equipment Cost Report",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Fuel Cost", value: formatExportMoney(equipmentSummary.fuelCost) },
+      { label: "Maintenance / Repair Cost", value: formatExportMoney(equipmentSummary.maintenanceCost) },
+      { label: "Equipment Cost", value: formatExportMoney(equipmentSummary.fuelCost + equipmentSummary.maintenanceCost) },
+    ],
+    columns: [{ key: "category", label: "Cost Category" }, { key: "amount", label: "Amount (INR)", format: formatExportMoney }],
+    rows: [
+      { category: "Fuel", amount: equipmentSummary.fuelCost },
+      { category: "Maintenance / Repair", amount: equipmentSummary.maintenanceCost },
+      { category: "Total Equipment Cost", amount: equipmentSummary.fuelCost + equipmentSummary.maintenanceCost },
+    ],
+  };
   const procurementExport = {
     title: "Procurement Report",
     filters: [
@@ -1055,6 +1249,11 @@ function Reports() {
             <ReportExportActions report={expensesExport} disabled={loading} />
             <ReportExportActions report={attendanceExport} disabled={loading} />
             <ReportExportActions report={payrollExport} disabled={loading} />
+            <ReportExportActions report={equipmentRegisterExport} disabled={loading} />
+            <ReportExportActions report={siteEquipmentExport} disabled={loading} />
+            <ReportExportActions report={fuelConsumptionExport} disabled={loading} />
+            <ReportExportActions report={maintenanceExport} disabled={loading} />
+            <ReportExportActions report={equipmentCostExport} disabled={loading} />
             <ReportExportActions report={inventoryExport} disabled={loading} />
             <ReportExportActions report={procurementExport} disabled={loading} />
           </div>
@@ -1260,6 +1459,41 @@ function Reports() {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <div className="report-section-title">
+              <h2>🚚 Equipment, Fuel &amp; Maintenance</h2>
+            </div>
+            <div className="inventory-report-note">
+              Fuel and maintenance costs use dated <strong>Vehicle Expenses</strong> entries as the single financial source.
+              Maintenance records provide history only and are not added a second time to expense or profit.
+            </div>
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card"><span>🚚 Total Equipment</span><h3>{equipmentSummary.total}</h3></div>
+              <div className="dpr-report-summary-card"><span>🟢 Active</span><h3>{equipmentSummary.active}</h3></div>
+              <div className="dpr-report-summary-card"><span>⏸️ Idle</span><h3>{equipmentSummary.idle}</h3></div>
+              <div className="dpr-report-summary-card"><span>🛠️ Under Maintenance</span><h3>{equipmentSummary.underMaintenance}</h3></div>
+              <div className="dpr-report-summary-card"><span>⚠️ Breakdown</span><h3>{equipmentSummary.breakdown}</h3></div>
+              <div className="dpr-report-summary-card"><span>⛽ Fuel Cost</span><h3>{formatMoney(equipmentSummary.fuelCost)}</h3></div>
+              <div className="dpr-report-summary-card"><span>🔧 Maintenance Cost</span><h3>{formatMoney(equipmentSummary.maintenanceCost)}</h3></div>
+            </div>
+
+            <div className="reports-table-card">
+              <div className="table-responsive"><table className="reports-table"><thead><tr><th>Site</th><th>Equipment</th><th>Active</th><th>Idle</th><th>Maintenance</th><th>Breakdown</th><th>Fuel Cost</th><th>Maintenance Cost</th></tr></thead><tbody>
+                {siteEquipmentRows.length === 0 ? <tr><td colSpan="8" className="no-report-data">No equipment records match the selected site.</td></tr> : siteEquipmentRows.map((row) => <tr key={row.site}><td className="site-name-cell">{row.site}</td><td>{row.total}</td><td>{row.active}</td><td>{row.idle}</td><td>{row.underMaintenance}</td><td>{row.breakdown}</td><td>{formatMoney(row.fuelCost)}</td><td>{formatMoney(row.maintenanceCost)}</td></tr>)}
+              </tbody></table></div>
+            </div>
+
+            <div className="reports-table-card">
+              <div className="table-responsive"><table className="reports-table"><thead><tr><th>Date</th><th>Vehicle / Equipment</th><th>Site</th><th>Fuel (L)</th><th>Amount</th><th>Reading</th><th>Efficiency</th></tr></thead><tbody>
+                {filteredVehicleExpenses.filter((item) => String(item.expenseType || "").toLowerCase() === "fuel").length === 0 ? <tr><td colSpan="7" className="no-report-data">No fuel entries match the current filters.</td></tr> : (() => { const efficiencyById = new Map(fuelEfficiencyRows.map((entry) => [entry.id, entry])); return filteredVehicleExpenses.filter((item) => String(item.expenseType || "").toLowerCase() === "fuel").map((entry) => { const efficiency = efficiencyById.get(entry.id); return <tr key={entry.id}><td>{normaliseDate(entry.date) || "-"}</td><td>{entry.vehicleNumber || entry.vehicleName || "-"}</td><td>{getSiteName(entry) || "-"}</td><td>{toNumber(entry.quantity ?? entry.fuelQuantity)}</td><td>{formatMoney(entry.amount ?? entry.totalAmount)}</td><td>{entry.meterReading ?? "Not recorded"}</td><td>{efficiency?.efficiency === null || !efficiency ? "Insufficient reading" : `${efficiency.efficiency} ${efficiency.meterKind === "hour-meter" ? "L/hour" : "km/L"}`}</td></tr>; }); })()}
+              </tbody></table></div>
+            </div>
+
+            <div className="reports-table-card">
+              <div className="table-responsive"><table className="reports-table"><thead><tr><th>Service Date</th><th>Vehicle / Equipment</th><th>Site</th><th>Type</th><th>Issue</th><th>Status</th><th>Operational Cost</th><th>Next Service</th></tr></thead><tbody>
+                {filteredVehicleMaintenance.length === 0 ? <tr><td colSpan="8" className="no-report-data">No maintenance or breakdown records match the current filters.</td></tr> : filteredVehicleMaintenance.map((item) => <tr key={item.id}><td>{normaliseDate(item.serviceDate || item.date) || "-"}</td><td>{item.vehicleNumber || item.vehicleName || "-"}</td><td>{getSiteName(item) || "-"}</td><td>{item.maintenanceType || "-"}</td><td>{item.issueDescription || "-"}</td><td>{item.status || "-"}</td><td>{formatMoney(item.totalCost)}</td><td>{normaliseDate(item.nextServiceDate) || "-"}</td></tr>)}
+              </tbody></table></div>
             </div>
 
             {/* PROCUREMENT */}
