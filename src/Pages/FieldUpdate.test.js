@@ -17,6 +17,7 @@ import {
   uploadBytesResumable,
 } from "firebase/storage";
 import { logAuditEvent } from "../utils/auditLogging";
+import { hasFieldUpdateDraftContent, saveFieldUpdateDraft } from "../utils/fieldUpdateDrafts";
 
 const mockUser = { uid: "supervisor-1", email: "supervisor@example.com" };
 
@@ -174,5 +175,33 @@ describe("FieldUpdate submission", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Site update submitted successfully without photos."
     );
+  });
+  test("keeps an offline field entry as a local draft without attempting a Firestore write", async () => {
+    const originalOnline = window.navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: false });
+
+    try {
+      hasFieldUpdateDraftContent.mockReturnValue(true);
+      renderFieldUpdate();
+      completeRequiredForm();
+      fireEvent.click(screen.getByRole("button", { name: /offline.*reconnect/i }));
+
+      expect(screen.getByRole("alert")).toHaveTextContent("Your entered site update remains saved as a local draft");
+      expect(await screen.findByRole("status")).toHaveTextContent("Draft saved on this device");
+      expect(saveFieldUpdateDraft).toHaveBeenCalled();
+      expect(setDoc).not.toHaveBeenCalled();
+    } finally {
+      hasFieldUpdateDraftContent.mockReturnValue(false);
+      Object.defineProperty(window.navigator, "onLine", { configurable: true, value: originalOnline });
+    }
+  });
+
+  test("uses touch-friendly numeric input modes without exposing financial fields", () => {
+    renderFieldUpdate();
+
+    expect(screen.getByLabelText(/^Manpower Count/)).toHaveAttribute("inputmode", "numeric");
+    expect(screen.getByLabelText(/^Output Quantity/)).toHaveAttribute("inputmode", "decimal");
+    expect(screen.queryByText(/Revenue/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Budget/)).not.toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthProvider";
 import {
   ADMIN_ROLES,
   FIELD_UPDATE_ROLES,
+  isFieldOnlyRole,
   STANDARD_ERP_ROLES,
 } from "../auth/authorization";
 import BrandLogo from "./BrandLogo";
@@ -13,6 +14,7 @@ import { COMPANY_NAME, ERP_NAME } from "../config/branding";
 function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { role } = useAuth();
+  const fieldOnly = isFieldOnlyRole(role);
 
   const menuItems = [
     { path: "/dashboard", icon: "🏠", label: "Dashboard", roles: STANDARD_ERP_ROLES },
@@ -34,33 +36,33 @@ function Sidebar() {
     { path: "/invoice", icon: "📜", label: "Invoice", roles: STANDARD_ERP_ROLES },
     { path: "/daily-progress-report", icon: "📋", label: "Daily Progress", roles: STANDARD_ERP_ROLES },
     { path: "/field-dashboard", icon: "📱", label: "Field Home", roles: FIELD_UPDATE_ROLES },
-    { path: "/field-update", icon: "📱", label: "Field Update", roles: FIELD_UPDATE_ROLES },
+    { path: "/field-update", icon: "✍️", label: "Field Update", roles: FIELD_UPDATE_ROLES },
     { path: "/reports", icon: "📊", label: "Reports", roles: STANDARD_ERP_ROLES },
     { path: "/audit-logs", icon: "🛡️", label: "Audit Log", roles: ADMIN_ROLES },
     { path: "/user-management", icon: "👥", label: "User Management", roles: ADMIN_ROLES },
   ];
+  const visibleMenuItems = menuItems.filter((item) => item.roles.includes(role));
+  const fieldMenuItems = visibleMenuItems.filter((item) =>
+    ["/field-dashboard", "/field-update"].includes(item.path)
+  );
 
-  const closeSidebar = () => {
-    setMobileOpen(false);
-  };
+  const closeSidebar = () => setMobileOpen(false);
 
   return (
     <>
       <button
-        className="mobile-menu-btn"
-        onClick={() => setMobileOpen(!mobileOpen)}
+        type="button"
+        className={`mobile-menu-btn${fieldOnly ? " field-mobile-menu-btn" : ""}`}
+        aria-label="Open navigation menu"
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((open) => !open)}
       >
         ☰
       </button>
 
-      {mobileOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={closeSidebar}
-        />
-      )}
+      {mobileOpen && <div className="sidebar-overlay" onClick={closeSidebar} />}
 
-      <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
+      <aside className={`sidebar${mobileOpen ? " sidebar-open" : ""}${fieldOnly ? " field-sidebar" : ""}`}>
         <div className="sidebar-logo">
           <BrandLogo className="sidebar-brand-logo" />
           <div className="logo-text">
@@ -71,23 +73,16 @@ function Sidebar() {
 
         <div className="sidebar-divider" />
 
-        <nav className="sidebar-menu">
-          {menuItems.filter((item) => item.roles.includes(role)).map((item) => (
+        <nav className="sidebar-menu" aria-label="ERP navigation">
+          {visibleMenuItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               onClick={closeSidebar}
-              className={({ isActive }) =>
-                `sidebar-link ${isActive ? "active" : ""}`
-              }
+              className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
             >
-              <span className="sidebar-menu-icon">
-                {item.icon}
-              </span>
-
-              <span className="sidebar-menu-text">
-                {item.label}
-              </span>
+              <span className="sidebar-menu-icon">{item.icon}</span>
+              <span className="sidebar-menu-text">{item.label}</span>
             </NavLink>
           ))}
         </nav>
@@ -95,14 +90,29 @@ function Sidebar() {
         <div className="sidebar-footer">
           <div className="sidebar-footer-box">
             <span>🏢</span>
-
             <div>
               <strong>{COMPANY_NAME}</strong>
-              <small>{ERP_NAME}</small>
+              <small>{fieldOnly ? "Field operations" : ERP_NAME}</small>
             </div>
           </div>
         </div>
       </aside>
+
+      {fieldOnly && (
+        <nav className="field-mobile-nav" aria-label="Field mobile navigation">
+          {fieldMenuItems.map((item) => (
+            <NavLink
+              key={`mobile-${item.path}`}
+              to={item.path}
+              className={({ isActive }) => `field-mobile-nav-link ${isActive ? "active" : ""}`}
+              aria-label={item.label}
+            >
+              <span aria-hidden="true">{item.icon}</span>
+              <span>{item.path === "/field-dashboard" ? "Home" : "Update"}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </>
   );
 }

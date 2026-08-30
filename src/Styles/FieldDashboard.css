@@ -203,3 +203,118 @@
     padding: 18px;
   }
 }
+
+.field-dashboard-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.field-dashboard-card:nth-child(4) {
+  border-left-color: #16a34a;
+}
+
+.field-dashboard-operational,
+.field-dashboard-sites {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: #eff6ff;
+  box-sizing: border-box;
+}
+
+.field-dashboard-operational {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: #1e3a8a;
+}
+
+.field-dashboard-operational strong,
+.field-dashboard-operational span {
+  display: block;
+}
+
+.field-dashboard-operational span {
+  margin-top: 4px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.field-dashboard-operational button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 1px solid #2563eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.field-dashboard-sites {
+  border-color: #dbe3ef;
+  background: #fff;
+  box-shadow: 0 8px 25px rgba(20, 40, 80, 0.06);
+}
+
+.field-dashboard-section-heading h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 18px;
+}
+
+.field-dashboard-section-heading p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.field-site-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.field-site-chip {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .field-dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .field-dashboard-operational {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-dashboard-operational button {
+    width: 100%;
+  }
+
+  .field-dashboard-sites {
+    padding: 16px;
+  }
+}
+@media (max-width: 700px) {
+  .field-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}

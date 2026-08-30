@@ -105,3 +105,32 @@ table td{
 }
 
 }
+
+.field-access-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 11px 13px;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.field-access-notice strong {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+    .field-layout .layout-content {
+        padding: 16px 14px calc(84px + env(safe-area-inset-bottom));
+    }
+
+    .field-access-notice {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+    }
+}

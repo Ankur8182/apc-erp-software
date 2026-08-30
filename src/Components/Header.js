@@ -78,6 +78,7 @@ function Header() {
   const roleLabel = role
     ? `${role.charAt(0).toUpperCase()}${role.slice(1)}`
     : "User";
+  const fieldOnly = isFieldOnlyRole(role);
 
   useEffect(() => {
     setReadNotificationIds(loadReadNotificationIds(user?.uid));
@@ -196,7 +197,7 @@ function Header() {
   };
 
   return (
-    <div className="header">
+    <div className={`header${fieldOnly ? " header-field" : ""}`}>
       <div className="header-left">
         <BrandLogo className="header-brand-logo" />
         <div className="header-brand-copy">
@@ -206,11 +207,14 @@ function Header() {
       </div>
 
       <div className="header-right">
-        <input
-          type="text"
-          placeholder="Search..."
-        />
-
+        {!fieldOnly && (
+          <input
+            type="text"
+            placeholder="Search..."
+            aria-label="Search ERP"
+          />
+        )}
+        {fieldOnly && <span className="header-field-mode">Field mode</span>}
         <div className="header-notification-wrap">
           <button
             type="button"

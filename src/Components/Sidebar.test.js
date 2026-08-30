@@ -47,3 +47,13 @@ test("uses the compact official brand in the sidebar without changing role menus
   expect(screen.getAllByText("A P CONSTRUCTION").length).toBeGreaterThan(0);
   expect(screen.getByText("Dashboard")).toBeInTheDocument();
 });
+test("adds a compact field-only mobile navigation without financial destinations", () => {
+  useAuth.mockReturnValue({ role: "engineer" });
+  render(<Sidebar />);
+
+  const mobileNavigation = screen.getByRole("navigation", { name: "Field mobile navigation" });
+  expect(mobileNavigation).toHaveTextContent("Home");
+  expect(mobileNavigation).toHaveTextContent("Update");
+  expect(screen.queryByRole("link", { name: "Reports" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Client Billing" })).not.toBeInTheDocument();
+});

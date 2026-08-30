@@ -1,6 +1,14 @@
 {
-  "short_name": "AP ERP",
+  "short_name": "AP Field",
   "name": "AP Construction ERP",
+  "description": "AP Construction ERP field operations and construction management.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1d4ed8",
+  "background_color": "#f6f8fc",
   "icons": [
     {
       "src": "ap-construction-logo.jpg",
@@ -8,9 +16,5 @@
       "type": "image/jpeg",
       "purpose": "any"
     }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#1d4ed8",
-  "background_color": "#ffffff"
+  ]
 }

@@ -47,6 +47,7 @@ import {
 import { getRecordDate, getSiteName, isSameSite } from "../utils/financialReporting";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { getNetworkStatus, getOfflineFieldMessage } from "../utils/pwa";
 import "../Styles/FieldUpdate.css";
 
 const getUniqueValues = (records, getValues) => {
@@ -142,12 +143,26 @@ function FieldUpdate() {
   const [draftUserId, setDraftUserId] = useState("");
   const [draftAvailable, setDraftAvailable] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOnline, setIsOnline] = useState(getNetworkStatus);
   const submitGuardRef = useRef(createDprSubmitGuard());
 
   const canSubmit = canSubmitFieldUpdate(role);
   const fieldOnly = isFieldOnlyRole(role);
   const userId = user?.uid || "";
   const dprReadScope = getDprReadScope(role, userId);
+
+  useEffect(() => {
+    const updateNetworkStatus = () => setIsOnline(getNetworkStatus());
+
+    updateNetworkStatus();
+    window.addEventListener("online", updateNetworkStatus);
+    window.addEventListener("offline", updateNetworkStatus);
+
+    return () => {
+      window.removeEventListener("online", updateNetworkStatus);
+      window.removeEventListener("offline", updateNetworkStatus);
+    };
+  }, []);
 
   useEffect(() => {
     if (!dprReadScope.canRead) {
@@ -372,6 +387,15 @@ function FieldUpdate() {
       return;
     }
 
+    if (!isOnline) {
+      const hasDraft = hasFieldUpdateDraftContent(formData);
+      setDraftAvailable(hasDraft ? saveFieldUpdateDraft(userId, formData) : false);
+      setSubmitSuccess("");
+      setSubmitError("");
+      setDraftMessage(hasDraft ? "Draft saved on this device. Reconnect to submit it." : "Reconnect before submitting this site update.");
+      return;
+    }
+
     if (isSubmitting || !submitGuardRef.current.begin()) return;
 
     const payload = createFieldUpdateDprPayload(formData, userId);
@@ -476,11 +500,14 @@ function FieldUpdate() {
       <div className="field-update-page">
         <div className="field-update-heading">
           <h1>📱 Site Update</h1>
-          <p>Submit today&apos;s work progress directly from site.</p>
+          <p>Submit today&apos;s work progress directly from site. Your draft stays on this device until Firestore confirms submission.</p>
         </div>
 
+        {!isOnline && <p className="field-network-state field-feedback-error" role="alert">{getOfflineFieldMessage()}</p>}
+        {reportsLoading && !loadError && <p className="field-network-state" role="status">Loading your site updates and operational references...</p>}
+
         <div className="field-update-card">
-          <form onSubmit={handleSubmit} noValidate>
+          <form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
             <div className="field-update-grid">
               <div className="field-update-group">
                 <label htmlFor="field-site">Site <span>*</span></label>
@@ -497,22 +524,22 @@ function FieldUpdate() {
 
               <div className="field-update-group">
                 <label htmlFor="field-activity">Work Activity <span>*</span></label>
-                <input id="field-activity" type="text" name="workActivity" value={formData.workActivity} onChange={handleChange} placeholder="e.g. Concrete work" disabled={!canSubmit || isSubmitting} />
+                <input id="field-activity" type="text" name="workActivity" autoCapitalize="sentences" enterKeyHint="next" value={formData.workActivity} onChange={handleChange} placeholder="e.g. Concrete work" disabled={!canSubmit || isSubmitting} />
               </div>
 
               <div className="field-update-group">
                 <label htmlFor="field-location">Work Location <span>*</span></label>
-                <input id="field-location" type="text" name="workLocation" value={formData.workLocation} onChange={handleChange} placeholder="e.g. Block A" disabled={!canSubmit || isSubmitting} />
+                <input id="field-location" type="text" name="workLocation" autoCapitalize="sentences" enterKeyHint="next" value={formData.workLocation} onChange={handleChange} placeholder="e.g. Block A" disabled={!canSubmit || isSubmitting} />
               </div>
 
               <div className="field-update-group">
                 <label htmlFor="field-manpower">Manpower Count <span>*</span></label>
-                <input id="field-manpower" type="number" min="0" step="1" name="manpowerCount" value={formData.manpowerCount} onChange={handleChange} placeholder="0" disabled={!canSubmit || isSubmitting} />
+                <input id="field-manpower" type="number" min="0" step="1" inputMode="numeric" name="manpowerCount" value={formData.manpowerCount} onChange={handleChange} placeholder="0" disabled={!canSubmit || isSubmitting} />
               </div>
 
               <div className="field-update-group">
                 <label htmlFor="field-quantity">Output Quantity <span>*</span></label>
-                <input id="field-quantity" type="number" min="0" step="0.01" name="quantity" value={formData.quantity} onChange={handleChange} placeholder="0" disabled={!canSubmit || isSubmitting} />
+                <input id="field-quantity" type="number" min="0" step="0.01" inputMode="decimal" name="quantity" value={formData.quantity} onChange={handleChange} placeholder="0" disabled={!canSubmit || isSubmitting} />
               </div>
 
               <div className="field-update-group">
@@ -532,7 +559,7 @@ function FieldUpdate() {
 
               <div className="field-update-group">
                 <label htmlFor="field-material-quantity">Material Quantity</label>
-                <input id="field-material-quantity" type="number" min="0" step="0.01" name="materialQuantity" value={formData.materialQuantity} onChange={handleChange} placeholder="Optional" disabled={!canSubmit || isSubmitting} />
+                <input id="field-material-quantity" type="number" min="0" step="0.01" inputMode="decimal" name="materialQuantity" value={formData.materialQuantity} onChange={handleChange} placeholder="Optional" disabled={!canSubmit || isSubmitting} />
               </div>
 
               {fieldOnly && formData.site && (
@@ -560,18 +587,18 @@ function FieldUpdate() {
 
               <div className="field-update-group">
                 <label htmlFor="field-equipment-usage">Equipment Usage</label>
-                <input id="field-equipment-usage" type="number" min="0" step="0.01" name="equipmentUsage" value={formData.equipmentUsage} onChange={handleChange} placeholder="Optional" disabled={!canSubmit || isSubmitting} />
+                <input id="field-equipment-usage" type="number" min="0" step="0.01" inputMode="decimal" name="equipmentUsage" value={formData.equipmentUsage} onChange={handleChange} placeholder="Optional" disabled={!canSubmit || isSubmitting} />
               </div>
 
               <div className="field-update-group field-update-full-width">
                 <label htmlFor="field-remarks">Remarks</label>
-                <textarea id="field-remarks" name="remarks" value={formData.remarks} onChange={handleChange} placeholder="Safety, delay, weather or other notes" disabled={!canSubmit || isSubmitting} />
+                <textarea id="field-remarks" name="remarks" autoCapitalize="sentences" value={formData.remarks} onChange={handleChange} placeholder="Safety, delay, weather or other notes" disabled={!canSubmit || isSubmitting} />
               </div>
             </div>
 
             <div className="field-photo-upload">
               <label htmlFor="field-photos">📷 Site Progress Photos</label>
-              <input id="field-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handlePhotoChange} disabled={!canSubmit || isSubmitting} />
+              <input id="field-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" onChange={handlePhotoChange} disabled={!canSubmit || isSubmitting} />
               <p>Up to 5 JPG, PNG, or WebP photos. Maximum 5 MB each. Photos are not stored in drafts. If photo upload is unavailable, the site update will still be saved without photos.</p>
               {photoFiles.length > 0 && <p className="field-photo-selected">{photoFiles.length} photo{photoFiles.length > 1 ? "s" : ""} selected.</p>}
               {isSubmitting && photoFiles.length > 0 && <progress className="field-photo-progress" value={photoProgress} max="100">{photoProgress}%</progress>}
@@ -589,9 +616,11 @@ function FieldUpdate() {
             {submitSuccess && <p className="field-feedback field-feedback-success" role="status">{submitSuccess}</p>}
             {draftMessage && <p className="field-feedback field-feedback-draft" role="status">{draftMessage}</p>}
 
-            <button className="field-submit-btn" type="submit" disabled={!canSubmit || isSubmitting}>
-              {isSubmitting ? "⏳ Submitting..." : "✅ Submit Site Update"}
-            </button>
+            <div className="field-submit-action-bar">
+              <button className="field-submit-btn" type="submit" disabled={!canSubmit || isSubmitting}>
+                {isSubmitting ? "⏳ Submitting..." : !isOnline ? "📶 Offline — reconnect to submit" : "✅ Submit Site Update"}
+              </button>
+            </div>
           </form>
         </div>
 

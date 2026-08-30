@@ -349,3 +349,76 @@
 .header-brand-copy h2{ font-size:17px; }
 .header-brand-copy span{ font-size:9px; }
 }
+
+.header-field-mode {
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .header-field {
+        flex-direction: row;
+        gap: 10px;
+        padding: 12px 14px;
+    }
+
+    .header-field .header-left,
+    .header-field .header-right {
+        width: auto;
+    }
+
+    .header-field .header-right {
+        margin-left: auto;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .header-field .header-logout-btn {
+        width: auto;
+        min-height: 42px;
+        padding: 7px 9px;
+    }
+
+    .header-field .header-user-identity,
+    .header-field .header-logout-btn strong {
+        display: none;
+    }
+
+    .header-field .header-logout-btn small {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 540px) {
+    .header-field {
+        min-height: 60px;
+        padding: 10px 12px;
+    }
+
+    .header-field .header-brand-logo {
+        width: 32px;
+        height: 32px;
+        flex-basis: 32px;
+    }
+
+    .header-field .header-brand-copy h2 {
+        font-size: 15px;
+    }
+
+    .header-field .header-brand-copy span,
+    .header-field-mode {
+        display: none;
+    }
+
+    .header-field .header-notification-btn {
+        width: 42px;
+        height: 42px;
+    }
+}

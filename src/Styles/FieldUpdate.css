@@ -300,3 +300,71 @@
     text-align: left;
   }
 }
+
+.field-network-state {
+  margin: 0 0 14px;
+  padding: 11px 13px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.field-network-state.field-feedback-error {
+  border-color: #fecaca;
+}
+
+.field-submit-action-bar {
+  background: #ffffff;
+}
+
+@media (max-width: 700px) {
+  .field-update-page {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .field-update-heading p {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .field-update-group input,
+  .field-update-group select {
+    min-height: 54px;
+    font-size: 16px;
+  }
+
+  .field-update-group textarea {
+    min-height: 116px;
+    font-size: 16px;
+  }
+
+  .field-photo-upload {
+    padding: 14px;
+  }
+
+  .field-photo-upload input {
+    min-height: 42px;
+  }
+
+  .field-discard-draft-btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .field-submit-action-bar {
+    position: sticky;
+    bottom: calc(6px + env(safe-area-inset-bottom));
+    z-index: 4;
+    margin: 18px -2px -2px;
+    padding: 10px 2px calc(2px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 18px rgba(255, 255, 255, 0.94);
+  }
+
+  .field-submit-btn {
+    min-height: 58px;
+    font-size: 16px;
+  }
+}
