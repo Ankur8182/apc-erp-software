@@ -17,6 +17,11 @@ export const SITE_BUDGET_FIELDS = [
     aliases: ["labourBudget", "laborBudget", "salaryBudget"],
   },
   {
+    key: "contractorBudget",
+    label: "Contractor / Subcontractor Budget",
+    aliases: ["contractorBudget", "subcontractorBudget", "subContractorBudget"],
+  },
+  {
     key: "vehicleBudget",
     label: "Vehicle / Equipment Budget",
     aliases: ["vehicleBudget", "equipmentBudget"],
@@ -112,6 +117,7 @@ export const getSiteBudget = (site = {}) => {
   const hasCategoryBudget = [
     fields.materialBudget,
     fields.labourBudget,
+    fields.contractorBudget,
     fields.vehicleBudget,
     fields.otherExpenseBudget,
   ].some((field) => field.isSet);
@@ -121,6 +127,7 @@ export const getSiteBudget = (site = {}) => {
   const categoryBudgetTotal =
     fields.materialBudget.value +
     fields.labourBudget.value +
+    fields.contractorBudget.value +
     fields.vehicleBudget.value +
     fields.otherExpenseBudget.value;
   const baseBudget = fields.totalProjectBudget.isSet
@@ -135,10 +142,12 @@ export const getSiteBudget = (site = {}) => {
     contingencyBudget,
     materialBudget: fields.materialBudget.value,
     labourBudget: fields.labourBudget.value,
+    contractorBudget: fields.contractorBudget.value,
     vehicleBudget: fields.vehicleBudget.value,
     otherExpenseBudget: fields.otherExpenseBudget.value,
     hasMaterialBudget: fields.materialBudget.isSet,
     hasLabourBudget: fields.labourBudget.isSet,
+    hasContractorBudget: fields.contractorBudget.isSet,
     hasVehicleBudget: fields.vehicleBudget.isSet,
     hasOtherExpenseBudget: fields.otherExpenseBudget.isSet,
   };
@@ -162,13 +171,23 @@ export const calculateSiteBudgetSummary = (site = {}, financialSummary = {}) => 
   const actual = {
     material: normaliseMoney(financialSummary.materialExpense),
     labour: normaliseMoney(financialSummary.labourExpense),
+    contractor: normaliseMoney(financialSummary.contractorExpense),
     vehicle: normaliseMoney(financialSummary.vehicleExpense),
     // Other expense deliberately excludes vehicle cost because vehicle is a
     // separate budget category. Together these categories reconcile exactly
     // to calculateFinancialSummary(...).totalExpense.
-    other: normaliseMoney(financialSummary.otherExpenseFromExpenses),
+    other: Math.max(
+      normaliseMoney(financialSummary.otherExpenseFromExpenses) -
+        normaliseMoney(financialSummary.contractorExpense),
+      0
+    ),
   };
-  actual.total = actual.material + actual.labour + actual.vehicle + actual.other;
+  actual.total =
+    actual.material +
+    actual.labour +
+    actual.contractor +
+    actual.vehicle +
+    actual.other;
   const totalBudget = budget.totalBudget;
   const remainingBudget = budget.hasBudget ? totalBudget - actual.total : null;
   const usagePercent = budget.hasBudget
@@ -203,6 +222,11 @@ export const calculateSiteBudgetSummary = (site = {}, financialSummary = {}) => 
         budget.labourBudget,
         actual.labour,
         budget.hasLabourBudget
+      ),
+      contractor: createCategorySummary(
+        budget.contractorBudget,
+        actual.contractor,
+        budget.hasContractorBudget
       ),
       vehicle: createCategorySummary(
         budget.vehicleBudget,

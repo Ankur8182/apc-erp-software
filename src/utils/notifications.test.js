@@ -100,6 +100,19 @@ describe("notification generation", () => {
     });
   });
 
+  it("adds one loss and high-outstanding alert from the shared project financial summary", () => {
+    const alerts = generateNotifications({
+      role: "manager",
+      today: TODAY,
+      sites: [{ id: "river", siteName: "River View" }],
+      invoices: [{ site: "River View", totalAmount: 1000, paidAmount: 200 }],
+      expenses: [{ site: "River View", expenseType: "Other", amount: 1200 }],
+    });
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Project is running at a loss", module: "Project Financials", href: "/site-details/river" }),
+      expect.objectContaining({ title: "High client receivable outstanding", module: "Project Financials", href: "/site-details/river" }),
+    ]));
+  });
   it("uses inventory movements for low and out-of-stock alerts without duplicating legacy material alerts", () => {
     const alerts = generateNotifications({
       role: "admin",

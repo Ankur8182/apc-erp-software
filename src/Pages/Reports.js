@@ -5,7 +5,6 @@ import "../Styles/Reports.css";
 import { db } from "../firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import {
-  calculateFinancialSummary,
   getExpenseAmount,
   getRecordDate,
   getSiteName,
@@ -19,10 +18,13 @@ import {
   summariseDailyProgressReports,
 } from "../utils/dailyProgressReporting";
 import { printReport } from "../utils/reportExporting";
+import { formatBudgetUsagePercent } from "../utils/siteBudget";
 import {
-  calculateSiteBudgetSummary,
-  formatBudgetUsagePercent,
-} from "../utils/siteBudget";
+  buildMonthlyFinancialTrend,
+  buildSiteFinancialRows,
+  calculatePortfolioFinancialSummary,
+  calculateProjectFinancialSummary,
+} from "../utils/projectFinancials";
 import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
 import { getEquipmentLabel, getFuelEfficiencyHistory, summariseEquipment } from "../utils/equipment";
@@ -601,7 +603,7 @@ function Reports() {
 
   const financialSummary = useMemo(
     () =>
-      calculateFinancialSummary({
+      calculateProjectFinancialSummary({
         invoices: filteredInvoices,
         expenses: filteredExpenses,
         materials: filteredMaterials,
@@ -612,6 +614,7 @@ function Reports() {
         vehicles: financialFilteredVehicles,
         vehicleExpenses: filteredVehicleExpenses,
         vehicleExpenseCoverage,
+        raBills: filteredRABills,
       }),
     [
       filteredInvoices,
@@ -624,82 +627,81 @@ function Reports() {
       financialFilteredVehicles,
       filteredVehicleExpenses,
       vehicleExpenseCoverage,
+      filteredRABills,
     ]
   );
-
   /* =========================================
      SITE WISE REPORT
   ========================================= */
 
   const reportRows = useMemo(() => {
-    return allSiteNames
-      .map((siteName) => {
-        const siteRecords = {
-          invoices: filteredInvoices.filter((item) => isSameSite(item, siteName)),
-          expenses: filteredExpenses.filter((item) => isSameSite(item, siteName)),
-          materials: filteredMaterials.filter((item) => isSameSite(item, siteName)),
-          labours: filteredLabours.filter((item) => isSameSite(item, siteName)),
-          salaries: filteredSalaries.filter((item) => isSameSite(item, siteName)),
-          attendance: filteredAttendance.filter((item) => isSameSite(item, siteName)),
-          attendanceSalaryCoverage: salaries.filter((item) =>
-            isSameSite(item, siteName)
-          ),
-          vehicles: financialFilteredVehicles.filter((item) => isSameSite(item, siteName)),
-          vehicleExpenses: filteredVehicleExpenses.filter((item) =>
-            isSameSite(item, siteName)
-          ),
-          vehicleExpenseCoverage: vehicleExpenses.filter((item) =>
-            isSameSite(item, siteName)
-          ),
-        };
-        const summary = calculateFinancialSummary(siteRecords);
-        const siteRecord = sites.find((item) => isSameSite(item, siteName)) || {
-          siteName,
-        };
-        const budgetRecord = siteBudgets.find((item) =>
-          item.siteId === siteRecord.id || item.id === siteRecord.id
-        );
-        const budgetSummary = calculateSiteBudgetSummary(
-          budgetRecord || siteRecord,
-          summary
-        );
-
-        return {
-          siteName,
-          income: summary.income,
-          received: summary.received,
-          expense: summary.totalExpense,
-          profit: summary.profit,
-          budgetSummary,
-        };
-      })
-      .filter((item) => {
-        if (selectedSite === "all") {
-          return true;
-        }
-
-        return (
-          item.siteName.toLowerCase() ===
-          selectedSite.toLowerCase()
-        );
-      });
+    const availableSiteKeys = new Set(allSiteNames.map((siteName) => siteName.toLowerCase()));
+    return buildSiteFinancialRows({
+      sites,
+      siteBudgets,
+      invoices: filteredInvoices,
+      expenses: filteredExpenses,
+      materials: filteredMaterials,
+      labours: filteredLabours,
+      salaries: filteredSalaries,
+      attendance: filteredAttendance,
+      attendanceSalaryCoverage: salaries,
+      vehicles: financialFilteredVehicles,
+      vehicleExpenses: filteredVehicleExpenses,
+      vehicleExpenseCoverage: vehicleExpenses,
+      raBills: filteredRABills,
+    }).filter((row) => {
+      const matchesKnownSite = availableSiteKeys.has(row.siteName.toLowerCase());
+      const matchesSelectedSite = selectedSite === "all" || isSameSite(row, selectedSite);
+      return matchesKnownSite && matchesSelectedSite;
+    }).map((row) => ({ ...row, expense: row.totalCost }));
   }, [
     allSiteNames,
+    sites,
+    siteBudgets,
     filteredInvoices,
     filteredExpenses,
     filteredMaterials,
     filteredLabours,
     filteredSalaries,
     filteredAttendance,
+    salaries,
     financialFilteredVehicles,
     filteredVehicleExpenses,
-    salaries,
     vehicleExpenses,
-    sites,
-    siteBudgets,
+    filteredRABills,
     selectedSite,
   ]);
 
+  const portfolioFinancial = useMemo(
+    () => calculatePortfolioFinancialSummary(reportRows),
+    [reportRows]
+  );
+
+  const monthlyFinancialTrend = useMemo(
+    () => buildMonthlyFinancialTrend({
+      invoices: filteredInvoices,
+      expenses: filteredExpenses,
+      materials: filteredMaterials,
+      labours: filteredLabours,
+      salaries: filteredSalaries,
+      attendance: filteredAttendance,
+      vehicles: financialFilteredVehicles,
+      vehicleExpenses: filteredVehicleExpenses,
+      raBills: filteredRABills,
+    }),
+    [
+      filteredInvoices,
+      filteredExpenses,
+      filteredMaterials,
+      filteredLabours,
+      filteredSalaries,
+      filteredAttendance,
+      financialFilteredVehicles,
+      filteredVehicleExpenses,
+      filteredRABills,
+    ]
+  );
   /* =========================================
      RESET
   ========================================= */
@@ -719,68 +721,22 @@ function Reports() {
   ========================================= */
 
   const financialCards = [
+    { title: "Total Revenue", value: financialSummary.revenue, icon: "💰", className: "income-card" },
+    { title: "Total Received", value: financialSummary.received, icon: "💵", className: "received-card" },
+    { title: "Outstanding Receivable", value: financialSummary.outstanding, icon: "⏳", className: "pending-card" },
+    { title: "Material Cost", value: financialSummary.materialCost, icon: "📦", className: "material-card" },
+    { title: "Labour Cost", value: financialSummary.labourCost, icon: "👷", className: "labour-card" },
+    { title: "Contractor Cost", value: financialSummary.contractorCost, icon: "🧱", className: "other-card" },
+    { title: "Vehicle Cost", value: financialSummary.vehicleCost, icon: "🚚", className: "other-card" },
+    { title: "Other Cost", value: financialSummary.otherCost, icon: "🛠️", className: "other-card" },
+    { title: "Actual Cost", value: financialSummary.totalCost, icon: "📉", className: "expense-card" },
     {
-      title: "Total Income",
-      value: financialSummary.income,
-      icon: "💰",
-      className: "income-card",
-    },
-    {
-      title: "Total Received",
-      value: financialSummary.received,
-      icon: "💵",
-      className: "received-card",
-    },
-    {
-      title: "Pending Payment",
-      value: financialSummary.pending,
-      icon: "⏳",
-      className: "pending-card",
-    },
-    {
-      title: "Material Expense",
-      value: financialSummary.materialExpense,
-      icon: "📦",
-      className: "material-card",
-    },
-    {
-      title: "Labour Expense",
-      value: financialSummary.labourExpense,
-      icon: "👷",
-      className: "labour-card",
-    },
-    {
-      title: "Other Expense",
-      value: financialSummary.otherExpense,
-      icon: "🛠️",
-      className: "other-card",
-    },
-    {
-      title: "Total Expense",
-      value: financialSummary.totalExpense,
-      icon: "📉",
-      className: "expense-card",
-    },
-    {
-      title:
-        financialSummary.profit >= 0
-          ? "Net Profit"
-          : "Net Loss",
-
+      title: financialSummary.profit >= 0 ? "Net Profit" : "Net Loss",
       value: Math.abs(financialSummary.profit),
-
-      icon:
-        financialSummary.profit >= 0
-          ? "📈"
-          : "📉",
-
-      className:
-        financialSummary.profit >= 0
-          ? "profit-card"
-          : "loss-card",
+      icon: financialSummary.profit >= 0 ? "📈" : "📉",
+      className: financialSummary.profit >= 0 ? "profit-card" : "loss-card",
     },
   ];
-
   const baseExportFilters = [
     { label: "Site", value: selectedSite === "all" ? "All Sites" : selectedSite },
     { label: "From Date", value: fromDate || "All Dates" },
@@ -809,39 +765,65 @@ function Reports() {
   };
 
   const siteFinancialExport = {
-    title: "Site-wise Financial Report",
+    title: "Site Profitability & Budget Report",
     filters: baseExportFilters,
     summary: [
       { label: "Sites", value: reportRows.length },
-      { label: "Total Income", value: formatExportMoney(financialSummary.income) },
+      { label: "Total Revenue", value: formatExportMoney(financialSummary.revenue) },
       { label: "Total Received", value: formatExportMoney(financialSummary.received) },
-      { label: "Total Expense", value: formatExportMoney(financialSummary.totalExpense) },
+      { label: "Outstanding", value: formatExportMoney(financialSummary.outstanding) },
+      { label: "Actual Cost", value: formatExportMoney(financialSummary.totalCost) },
       { label: financialSummary.profit >= 0 ? "Net Profit" : "Net Loss", value: formatExportMoney(Math.abs(financialSummary.profit)) },
     ],
     columns: [
       { key: "siteName", label: "Site", width: 1.5 },
-      { key: "income", label: "Income (INR)", format: formatExportMoney },
+      { key: "revenue", label: "Revenue (INR)", format: formatExportMoney },
       { key: "received", label: "Received (INR)", format: formatExportMoney },
-      { key: "expense", label: "Expense (INR)", format: formatExportMoney },
+      { key: "outstanding", label: "Outstanding (INR)", format: formatExportMoney },
+      { key: "materialCost", label: "Material (INR)", format: formatExportMoney },
+      { key: "labourCost", label: "Labour (INR)", format: formatExportMoney },
+      { key: "contractorCost", label: "Contractor (INR)", format: formatExportMoney },
+      { key: "vehicleCost", label: "Vehicle (INR)", format: formatExportMoney },
+      { key: "otherCost", label: "Other (INR)", format: formatExportMoney },
+      { key: "totalCost", label: "Actual Cost (INR)", format: formatExportMoney },
       { key: "budget", label: "Budget", width: 1.1 },
       { key: "budgetUsed", label: "Budget Used" },
-      { key: "remainingBudget", label: "Remaining Budget", width: 1.15 },
       { key: "profit", label: "Profit / Loss (INR)", format: formatExportMoney },
+      { key: "margin", label: "Margin %" },
     ],
     rows: reportRows.map((row) => ({
       ...row,
-      budget: row.budgetSummary.hasBudget
-        ? formatExportMoney(row.budgetSummary.totalBudget)
-        : "Not set",
-      budgetUsed: row.budgetSummary.hasBudget
-        ? formatBudgetUsagePercent(row.budgetSummary.usagePercent)
-        : "Not set",
-      remainingBudget: row.budgetSummary.hasBudget
-        ? formatExportMoney(row.budgetSummary.remainingBudget)
-        : "Not set",
+      budget: row.budgetSummary.hasBudget ? formatExportMoney(row.budgetSummary.totalBudget) : "Not set",
+      budgetUsed: row.budgetSummary.hasBudget ? formatBudgetUsagePercent(row.budgetSummary.usagePercent) : "Not set",
+      margin: row.marginPercent === null ? "N/A" : `${row.marginPercent}%`,
     })),
   };
 
+  const projectFinancialExport = {
+    title: "Portfolio Profitability & Cost Breakdown",
+    filters: baseExportFilters,
+    summary: [
+      { label: "Portfolio Revenue", value: formatExportMoney(portfolioFinancial.revenue) },
+      { label: "Actual Cost", value: formatExportMoney(portfolioFinancial.totalCost) },
+      { label: "Profit / Loss", value: formatExportMoney(portfolioFinancial.profit) },
+      { label: "Margin", value: portfolioFinancial.marginPercent === null ? "N/A" : `${portfolioFinancial.marginPercent}%` },
+      { label: "Outstanding", value: formatExportMoney(portfolioFinancial.outstanding) },
+      { label: "Sites Over Budget", value: portfolioFinancial.sitesOverBudget },
+    ],
+    columns: [
+      { key: "metric", label: "Metric", width: 1.7 },
+      { key: "amount", label: "Amount / Value" },
+    ],
+    rows: [
+      { metric: "Material Cost", amount: formatExportMoney(portfolioFinancial.materialCost) },
+      { metric: "Labour Cost", amount: formatExportMoney(portfolioFinancial.labourCost) },
+      { metric: "Contractor Cost", amount: formatExportMoney(portfolioFinancial.contractorCost) },
+      { metric: "Vehicle Cost", amount: formatExportMoney(portfolioFinancial.vehicleCost) },
+      { metric: "Other Cost", amount: formatExportMoney(portfolioFinancial.otherCost) },
+      { metric: "Retention Receivable", amount: formatExportMoney(portfolioFinancial.retention) },
+      ...monthlyFinancialTrend.map((trend) => ({ metric: `${trend.month} Profit / Loss`, amount: formatExportMoney(trend.profit) })),
+    ],
+  };
   const dprExport = {
     title: "Daily Progress Report",
     filters: dprExportFilters,
@@ -1378,6 +1360,7 @@ function Reports() {
           <div className="report-export-grid">
             <ReportExportActions report={financialSummaryExport} disabled={loading} />
             <ReportExportActions report={siteFinancialExport} disabled={loading} />
+             <ReportExportActions report={projectFinancialExport} disabled={loading} />
             <ReportExportActions report={dprExport} disabled={loading || Boolean(dprError)} />
             <ReportExportActions report={expensesExport} disabled={loading} />
             <ReportExportActions report={attendanceExport} disabled={loading} />
@@ -1432,7 +1415,44 @@ function Reports() {
               ))}
             </div>
 
-            {/* DAILY PROGRESS REPORT */}
+                         <div className="report-section-title">
+               <h2>💼 Project Costing, Profitability &amp; Budget Control</h2>
+             </div>
+
+             <div className="dpr-report-summary-grid">
+               <div className="dpr-report-summary-card"><span>💰 Portfolio Revenue</span><h3>{formatMoney(portfolioFinancial.revenue)}</h3></div>
+               <div className="dpr-report-summary-card"><span>📉 Actual Cost</span><h3>{formatMoney(portfolioFinancial.totalCost)}</h3></div>
+               <div className="dpr-report-summary-card"><span>{portfolioFinancial.profit >= 0 ? "📈 Profit" : "📉 Loss"}</span><h3 className={portfolioFinancial.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(Math.abs(portfolioFinancial.profit))}</h3></div>
+               <div className="dpr-report-summary-card"><span>📊 Margin</span><h3>{portfolioFinancial.marginPercent === null ? "N/A" : `${portfolioFinancial.marginPercent}%`}</h3></div>
+               <div className="dpr-report-summary-card"><span>⏳ Outstanding</span><h3>{formatMoney(portfolioFinancial.outstanding)}</h3></div>
+               <div className="dpr-report-summary-card"><span>⚠️ Over-budget Sites</span><h3>{portfolioFinancial.sitesOverBudget}</h3></div>
+             </div>
+
+             <div className="reports-table-card">
+               <div className="table-responsive">
+                 <table className="reports-table">
+                   <thead><tr><th>Site</th><th>Revenue</th><th>Received / Outstanding</th><th>Material</th><th>Labour</th><th>Contractor</th><th>Vehicle</th><th>Other</th><th>Actual Cost</th><th>Budget Used</th><th>Profit / Loss</th><th>Margin</th></tr></thead>
+                   <tbody>
+                     {reportRows.length === 0 ? <tr><td colSpan="12" className="no-report-data">No site financial records match the selected filters.</td></tr> : reportRows.map((row) => (
+                       <tr key={`profitability-${row.id}`}>
+                         <td><strong>{row.siteName}</strong></td><td>{formatMoney(row.revenue)}</td><td>{formatMoney(row.received)} / {formatMoney(row.outstanding)}</td><td>{formatMoney(row.materialCost)}</td><td>{formatMoney(row.labourCost)}</td><td>{formatMoney(row.contractorCost)}</td><td>{formatMoney(row.vehicleCost)}</td><td>{formatMoney(row.otherCost)}</td><td><strong>{formatMoney(row.totalCost)}</strong></td><td>{row.budgetSummary.hasBudget ? formatBudgetUsagePercent(row.budgetUsagePercent) : "Not set"}</td><td className={row.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(row.profit)}</td><td>{row.marginPercent === null ? "N/A" : `${row.marginPercent}%`}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             </div>
+
+             <div className="reports-table-card">
+               <div className="report-section-title"><h2>📈 Monthly Revenue, Cost &amp; Profit Trend</h2></div>
+               <div className="table-responsive">
+                 <table className="reports-table">
+                   <thead><tr><th>Month</th><th>Revenue</th><th>Actual Cost</th><th>Profit / Loss</th></tr></thead>
+                   <tbody>{monthlyFinancialTrend.length === 0 ? <tr><td colSpan="4" className="no-report-data">No dated canonical financial records match the selected filters.</td></tr> : monthlyFinancialTrend.map((trend) => <tr key={trend.month}><td>{trend.month}</td><td>{formatMoney(trend.revenue)}</td><td>{formatMoney(trend.cost)}</td><td className={trend.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(trend.profit)}</td></tr>)}</tbody>
+                 </table>
+               </div>
+             </div>
+{/* DAILY PROGRESS REPORT */}
 
             <div className="report-section-title">
               <h2>

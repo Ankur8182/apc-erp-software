@@ -18,7 +18,6 @@ import Layout from "../Components/Layout";
 import { db } from "../firebase";
 import "../Styles/Dashboard.css";
 import {
-  calculateFinancialSummary,
   getInvoiceSummary,
   getSiteName,
   isSameSite,
@@ -30,10 +29,12 @@ import {
   getDailyProgressOperationalSummary,
   getDprTodayDate,
 } from "../utils/dailyProgressReporting";
+import { formatBudgetUsagePercent } from "../utils/siteBudget";
 import {
-  calculateSiteBudgetSummary,
-  formatBudgetUsagePercent,
-} from "../utils/siteBudget";
+  buildSiteFinancialRows,
+  calculatePortfolioFinancialSummary,
+  calculateProjectFinancialSummary,
+} from "../utils/projectFinancials";
 import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
 import { getTodayWorkforceSummary } from "../utils/payrollReporting";
@@ -328,11 +329,6 @@ function Dashboard() {
     return `₹ ${toNumber(amount).toLocaleString("en-IN")}`;
   };
 
-  const siteBudgetBySiteId = useMemo(
-    () => new Map(siteBudgets.map((budget) => [budget.siteId || budget.id, budget])),
-    [siteBudgets]
-  );
-
   const inventorySummary = useMemo(
     () => summariseInventory(inventoryItems, inventoryTransactions),
     [inventoryItems, inventoryTransactions]
@@ -367,7 +363,7 @@ function Dashboard() {
 
   const summary = useMemo(
     () =>
-      calculateFinancialSummary({
+      calculateProjectFinancialSummary({
         invoices,
         expenses,
         materials,
@@ -376,6 +372,7 @@ function Dashboard() {
         attendance,
         vehicles,
         vehicleExpenses,
+        raBills,
       }),
     [
       invoices,
@@ -386,6 +383,7 @@ function Dashboard() {
       attendance,
       vehicles,
       vehicleExpenses,
+      raBills,
     ]
   );
 
@@ -419,83 +417,42 @@ function Dashboard() {
   // SITE SUMMARY
   // =========================
 
-  const siteSummary = useMemo(() => {
-    const siteMap = new Map();
-
-    const addSite = (item, siteDetails = {}) => {
-      const siteName = getSiteName(item);
-      const key = siteName.toLowerCase();
-
-      if (!siteName || siteMap.has(key)) return;
-
-      siteMap.set(key, {
-        id: siteDetails.id || key,
-        siteName,
-        location: siteDetails.location || "-",
-        status: siteDetails.status || "Running",
-      });
-    };
-
-    sites.forEach((site) => addSite(site, site));
+  const siteSummary = useMemo(
+    () =>
+      buildSiteFinancialRows({
+        sites,
+        siteBudgets,
+        invoices,
+        expenses,
+        materials,
+        labours,
+        salaries,
+        attendance,
+        attendanceSalaryCoverage: salaries,
+        vehicles,
+        vehicleExpenses,
+        vehicleExpenseCoverage: vehicleExpenses,
+        raBills,
+      }),
     [
+      sites,
+      siteBudgets,
       invoices,
       expenses,
       materials,
+      labours,
       salaries,
       attendance,
       vehicles,
       vehicleExpenses,
-    ].forEach((records) => records.forEach((record) => addSite(record)));
+      raBills,
+    ]
+  );
 
-    return Array.from(siteMap.values()).map((siteItem) => {
-      const siteName = getSiteName(siteItem) || "Unnamed Site";
-      const siteFinancialSummary = calculateFinancialSummary({
-        invoices: invoices.filter((item) => isSameSite(item, siteName)),
-        expenses: expenses.filter((item) => isSameSite(item, siteName)),
-        materials: materials.filter((item) => isSameSite(item, siteName)),
-        labours: labours.filter((item) => isSameSite(item, siteName)),
-        salaries: salaries.filter((item) => isSameSite(item, siteName)),
-        attendance: attendance.filter((item) => isSameSite(item, siteName)),
-        vehicles: vehicles.filter((item) => isSameSite(item, siteName)),
-        vehicleExpenses: vehicleExpenses.filter((item) =>
-          isSameSite(item, siteName)
-        ),
-      });
-      const budgetSummary = calculateSiteBudgetSummary(
-        siteBudgetBySiteId.get(siteItem.id) || siteItem,
-        siteFinancialSummary
-      );
-
-      return {
-        id: siteItem.id,
-        siteName,
-        location:
-          siteItem.location ||
-          "-",
-        status:
-          siteItem.status ||
-          "Running",
-        income: siteFinancialSummary.income,
-        otherExpense: siteFinancialSummary.otherExpense,
-        materialExpense: siteFinancialSummary.materialExpense,
-        salaryExpense: siteFinancialSummary.labourExpense,
-        totalExpense: siteFinancialSummary.totalExpense,
-        profit: siteFinancialSummary.profit,
-        budgetSummary,
-      };
-    });
-  }, [
-    sites,
-    invoices,
-    expenses,
-    materials,
-    labours,
-    salaries,
-    attendance,
-    vehicles,
-    vehicleExpenses,
-    siteBudgetBySiteId,
-  ]);
+  const portfolioInsights = useMemo(
+    () => calculatePortfolioFinancialSummary(siteSummary),
+    [siteSummary]
+  );
 
   // =========================
   // SITE STATUS COUNTS
@@ -565,8 +522,8 @@ function Dashboard() {
 
   const primaryKpis = [
     {
-      label: "Total Income",
-      value: formatMoney(summary.income),
+      label: "Total Revenue",
+      value: formatMoney(summary.revenue),
       icon: "🧾",
       tone: "income",
       helper: "Invoice value",
@@ -586,8 +543,8 @@ function Dashboard() {
       helper: "Awaiting collection",
     },
     {
-      label: "Total Expense",
-      value: formatMoney(summary.totalExpense),
+      label: "Actual Cost",
+      value: formatMoney(summary.totalCost),
       icon: "📉",
       tone: "expense",
       helper: "All recorded costs",
@@ -597,7 +554,7 @@ function Dashboard() {
       value: formatMoney(Math.abs(summary.profit)),
       icon: summary.profit >= 0 ? "📈" : "📉",
       tone: summary.profit >= 0 ? "profit" : "loss",
-      helper: summary.profit >= 0 ? "Income after expenses" : "Expenses exceed income",
+      helper: summary.profit >= 0 ? "Revenue after actual cost" : "Actual cost exceeds revenue",
     },
     {
       label: "Active Sites",
@@ -623,8 +580,8 @@ function Dashboard() {
   ];
 
   const incomeExpenseChartData = [
-    { name: "Income", amount: toNumber(summary.income) },
-    { name: "Expense", amount: toNumber(summary.totalExpense) },
+    { name: "Revenue", amount: toNumber(summary.revenue) },
+    { name: "Actual Cost", amount: toNumber(summary.totalCost) },
   ];
 
   const siteProfitChartData = siteSummary.map((site) => ({
@@ -633,10 +590,11 @@ function Dashboard() {
   }));
 
   const expenseBreakdownData = [
-    { name: "Material", value: toNumber(summary.materialExpense) },
-    { name: "Labour", value: toNumber(summary.labourExpense) },
-    { name: "Vehicle", value: toNumber(summary.vehicleExpense) },
-    { name: "Other", value: toNumber(summary.otherExpenseFromExpenses) },
+    { name: "Material", value: toNumber(summary.materialCost) },
+    { name: "Labour", value: toNumber(summary.labourCost) },
+    { name: "Contractor", value: toNumber(summary.contractorCost) },
+    { name: "Vehicle", value: toNumber(summary.vehicleCost) },
+    { name: "Other", value: toNumber(summary.otherCost) },
   ].filter((item) => item.value > 0);
 
   return (
@@ -708,6 +666,23 @@ function Dashboard() {
           </div>
         </section>
 
+        <section aria-labelledby="portfolio-financial-health">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Canonical financial ledger</span>
+              <h2 id="portfolio-financial-health">💼 Portfolio Profitability &amp; Cost Control</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-running"><span>💰 Portfolio Revenue</span><strong>{formatMoney(summary.revenue)}</strong><small>Certified invoices; receipts are not re-counted</small></article>
+            <article className="dashboard-status-card status-budget"><span>📉 Actual Cost</span><strong>{formatMoney(summary.totalCost)}</strong><small>Material, labour, contractor, vehicle and other</small></article>
+            <article className="dashboard-status-card status-inventory"><span>{summary.profit >= 0 ? "📈 Profit" : "📉 Loss"}</span><strong className={summary.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(Math.abs(summary.profit))}</strong><small>Margin: {summary.marginPercent === null ? "N/A" : `${summary.marginPercent}%`}</small></article>
+            <article className="dashboard-status-card status-pending"><span>⏳ Outstanding</span><strong>{formatMoney(summary.outstanding)}</strong><small>Cash received: {formatMoney(summary.received)}</small></article>
+            <article className="dashboard-status-card status-inventory-low"><span>⚠️ Over-budget Sites</span><strong>{portfolioInsights.sitesOverBudget}</strong><small>{portfolioInsights.budgetedSiteCount} site budgets in view</small></article>
+            <article className="dashboard-status-card status-inventory-out"><span>📉 Loss-making Sites</span><strong>{portfolioInsights.lossMakingSites}</strong><small>Only sites with recognized revenue</small></article>
+          </div>
+        </section>
+
         <section className="dashboard-table-card" aria-labelledby="site-financial-summary">
           <div className="dashboard-table-heading">
             <div>
@@ -724,21 +699,24 @@ function Dashboard() {
                   <th>Site</th>
                   <th>Location</th>
                   <th>Status</th>
-                  <th>Income</th>
+                                    <th>Revenue</th>
                   <th>Material</th>
-                  <th>Other Expense</th>
                   <th>Labour</th>
-                  <th>Total Expense</th>
+                  <th>Contractor</th>
+                  <th>Vehicle</th>
+                  <th>Other</th>
+                  <th>Actual Cost</th>
                   <th>Budget</th>
                   <th>Budget Used</th>
                   <th>Remaining</th>
                   <th>Profit/Loss</th>
+                  <th>Margin</th>
                 </tr>
               </thead>
               <tbody>
                 {siteSummary.length === 0 ? (
                   <tr>
-                    <td className="dashboard-table-empty" colSpan="13">No site financial records are available yet.</td>
+                    <td className="dashboard-table-empty" colSpan="16">No site financial records are available yet.</td>
                   </tr>
                 ) : (
                   siteSummary.map((item, index) => {
@@ -755,11 +733,13 @@ function Dashboard() {
                         <td><strong>{item.siteName}</strong></td>
                         <td>{item.location}</td>
                         <td><span className={statusClass}>{item.status}</span></td>
-                        <td>{formatMoney(item.income)}</td>
-                        <td>{formatMoney(item.materialExpense)}</td>
-                        <td>{formatMoney(item.otherExpense)}</td>
-                        <td>{formatMoney(item.salaryExpense)}</td>
-                        <td><strong>{formatMoney(item.totalExpense)}</strong></td>
+                                                <td>{formatMoney(item.revenue)}</td>
+                        <td>{formatMoney(item.materialCost)}</td>
+                        <td>{formatMoney(item.labourCost)}</td>
+                        <td>{formatMoney(item.contractorCost)}</td>
+                        <td>{formatMoney(item.vehicleCost)}</td>
+                        <td>{formatMoney(item.otherCost)}</td>
+                        <td><strong>{formatMoney(item.totalCost)}</strong></td>
                         <td>
                           {item.budgetSummary.hasBudget
                             ? formatMoney(item.budgetSummary.totalBudget)
@@ -782,6 +762,7 @@ function Dashboard() {
                             {formatMoney(item.profit)}
                           </strong>
                         </td>
+                        <td>{item.marginPercent === null ? "N/A" : `${item.marginPercent}%`}</td>
                       </tr>
                     );
                   })
@@ -855,8 +836,8 @@ function Dashboard() {
             <article className="dashboard-chart-card">
               <div className="dashboard-chart-heading">
                 <div>
-                  <h3>Income vs Expense</h3>
-                  <p>Live totals from invoices and recorded expenses.</p>
+                  <h3>Revenue vs Actual Cost</h3>
+                  <p>Canonical invoices compared with recorded project costs.</p>
                 </div>
               </div>
               {summary.income === 0 && summary.totalExpense === 0 ? (
@@ -870,7 +851,7 @@ function Dashboard() {
                     <Tooltip formatter={(value) => formatMoney(value)} cursor={{ fill: "#eff6ff" }} />
                     <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
                       {incomeExpenseChartData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.name === "Income" ? "#2563eb" : "#ef4444"} />
+                        <Cell key={entry.name} fill={entry.name === "Revenue" ? "#2563eb" : "#ef4444"} />
                       ))}
                     </Bar>
                   </BarChart>

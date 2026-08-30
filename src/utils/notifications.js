@@ -1,5 +1,4 @@
 import {
-  calculateFinancialSummary,
   getInvoiceSummary,
   getRecordDate,
   getSiteName,
@@ -15,7 +14,7 @@ import {
   summariseDailyProgressReports,
 } from "./dailyProgressReporting";
 import { FIELD_USER_ROLES, STANDARD_ERP_ROLES } from "../auth/authorization";
-import { calculateSiteBudgetSummary } from "./siteBudget";
+import { calculateProjectFinancialSummary } from "./projectFinancials";
 import { summariseInventory } from "./inventory";
 
 export const NOTIFICATION_SEVERITIES = {
@@ -349,9 +348,13 @@ const createCoreAlerts = ({
     const siteName = getSiteName(site) || cleanText(site.name);
     if (!siteName) return;
 
-    // Actual cost always comes from the canonical financial summary. This
-    // keeps a budget alert aligned with Dashboard, Reports, and SiteDetails.
-    const financialSummary = calculateFinancialSummary({
+    // The shared project summary keeps Dashboard, Reports, SiteDetails, and
+    // notifications on the identical cost/revenue classification.
+    const budgetRecord = siteBudgets.find((budget) =>
+      budget?.siteId === site.id || budget?.id === site.id || isSameSite(budget, siteName)
+    );
+    const financialSummary = calculateProjectFinancialSummary({
+      budgetRecord: budgetRecord || site,
       invoices: invoices.filter((item) => isSameSite(item, siteName)),
       expenses: expenses.filter((item) => isSameSite(item, siteName)),
       materials: materials.filter((item) => isSameSite(item, siteName)),
@@ -360,46 +363,66 @@ const createCoreAlerts = ({
       attendance: attendance.filter((item) => isSameSite(item, siteName)),
       vehicles: vehicles.filter((item) => isSameSite(item, siteName)),
       vehicleExpenses: vehicleExpenses.filter((item) => isSameSite(item, siteName)),
+      raBills: raBills.filter((item) => isSameSite(item, siteName)),
     });
-    const budgetRecord = siteBudgets.find((budget) =>
-      budget?.siteId === site.id || budget?.id === site.id
-    );
-    const budgetSummary = calculateSiteBudgetSummary(
-      budgetRecord || site,
-      financialSummary
-    );
+    const budgetSummary = financialSummary.budgetSummary;
+    const siteHref = site.id ? `/site-details/${site.id}` : "/sites";
 
-    if (!budgetSummary.hasBudget || budgetSummary.actualCost <= 0) return;
+    if (budgetSummary.hasBudget && budgetSummary.actualCost > 0) {
+      let title = "";
+      let severity = NOTIFICATION_SEVERITIES.warning;
+      if (budgetSummary.status === "over-budget") {
+        title = "Site budget exceeded";
+        severity = NOTIFICATION_SEVERITIES.critical;
+      } else if (budgetSummary.status === "critical") {
+        title = "Site budget is 90% used";
+        severity = NOTIFICATION_SEVERITIES.critical;
+      } else if (budgetSummary.status === "warning") {
+        title = "Site budget is 80% used";
+      }
 
-    let title = "";
-    let severity = NOTIFICATION_SEVERITIES.warning;
-    if (budgetSummary.status === "over-budget") {
-      title = "Site budget exceeded";
-      severity = NOTIFICATION_SEVERITIES.critical;
-    } else if (budgetSummary.status === "critical") {
-      title = "Site budget is 90% used";
-      severity = NOTIFICATION_SEVERITIES.critical;
-    } else if (budgetSummary.status === "warning") {
-      title = "Site budget is 80% used";
-    } else {
-      return;
+      if (title) {
+        addAlert(alerts, {
+          id: `site-budget-${budgetSummary.status}-${normaliseId(site.id || siteName)}`,
+          severity,
+          title,
+          message: budgetSummary.status === "over-budget"
+            ? `${siteName} is over budget by ${formatMoney(budgetSummary.overBudgetAmount)}.`
+            : `${siteName} has used ${formatMoney(budgetSummary.actualCost)} of ${formatMoney(budgetSummary.totalBudget)}.`,
+          date: today,
+          href: siteHref,
+          module: "Site Budget",
+          site: siteName,
+        });
+      }
     }
 
-    addAlert(alerts, {
-      id: `site-budget-${budgetSummary.status}-${normaliseId(site.id || siteName)}`,
-      severity,
-      title,
-      message:
-        budgetSummary.status === "over-budget"
-          ? `${siteName} is over budget by ${formatMoney(budgetSummary.overBudgetAmount)}.`
-          : `${siteName} has used ${formatMoney(budgetSummary.actualCost)} of ${formatMoney(budgetSummary.totalBudget)}.`,
-      date: today,
-      href: site.id ? `/site-details/${site.id}` : "/sites",
-      module: "Site Budget",
-      site: siteName,
-    });
-  });
+    if (financialSummary.revenue > 0 && financialSummary.profit < 0) {
+      addAlert(alerts, {
+        id: `site-negative-margin-${normaliseId(site.id || siteName)}`,
+        severity: NOTIFICATION_SEVERITIES.critical,
+        title: "Project is running at a loss",
+        message: `${siteName} has ${formatMoney(Math.abs(financialSummary.profit))} more actual cost than recognized revenue.`,
+        date: today,
+        href: siteHref,
+        module: "Project Financials",
+        site: siteName,
+      });
+    }
 
+    if (financialSummary.revenue > 0 && financialSummary.outstanding / financialSummary.revenue >= 0.5) {
+      addAlert(alerts, {
+        id: `site-high-outstanding-${normaliseId(site.id || siteName)}`,
+        severity: NOTIFICATION_SEVERITIES.warning,
+        title: "High client receivable outstanding",
+        message: `${siteName} has ${formatMoney(financialSummary.outstanding)} outstanding against ${formatMoney(financialSummary.revenue)} recognized revenue.`,
+        date: today,
+        href: siteHref,
+        module: "Project Financials",
+        site: siteName,
+      });
+    }
+  });
   attendance.forEach((entry) => {
     if (!entry || typeof entry !== "object") return;
     if (normaliseDate(entry.date) !== today) return;

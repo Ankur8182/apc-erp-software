@@ -331,6 +331,7 @@ service cloud.firestore {
           "totalProjectBudget",
           "materialBudget",
           "labourBudget",
+          "contractorBudget",
           "vehicleBudget",
           "otherExpenseBudget",
           "contingencyBudget"
@@ -344,6 +345,9 @@ service cloud.firestore {
         (!request.resource.data.budget.keys().hasAll(["labourBudget"]) ||
           (request.resource.data.budget.labourBudget is number &&
             request.resource.data.budget.labourBudget >= 0)) &&
+        (!request.resource.data.budget.keys().hasAll(["contractorBudget"]) ||
+          (request.resource.data.budget.contractorBudget is number &&
+            request.resource.data.budget.contractorBudget >= 0)) &&
         (!request.resource.data.budget.keys().hasAll(["vehicleBudget"]) ||
           (request.resource.data.budget.vehicleBudget is number &&
             request.resource.data.budget.vehicleBudget >= 0)) &&

@@ -6,7 +6,6 @@ import "../Styles/SiteDetails.css";
 
 import { db } from "../firebase";
 import {
-  calculateFinancialSummary,
   getRecordDate,
   getSiteName,
   isSameSite,
@@ -16,10 +15,8 @@ import {
   getDprTodayDate,
   getDprUsageValues,
 } from "../utils/dailyProgressReporting";
-import {
-  calculateSiteBudgetSummary,
-  formatBudgetUsagePercent,
-} from "../utils/siteBudget";
+import { formatBudgetUsagePercent } from "../utils/siteBudget";
+import { calculateProjectFinancialSummary } from "../utils/projectFinancials";
 import { getClientBillingSummary } from "../utils/clientBilling";
 
 import {
@@ -409,117 +406,68 @@ function SiteDetails() {
   // =========================
 
   const siteReport = useMemo(() => {
-
-    if (!selectedSite) {
-      return {
-        income: 0,
-        materialExpense: 0,
-        labourExpense: 0,
-        vehicleExpense: 0,
-        otherExpense: 0,
-        totalExpense: 0,
-        profitLoss: 0,
-        invoiceCount: 0,
-        materialCount: 0,
-        expenseCount: 0,
-        salaryCount: 0,
-        financialSummary: {}
-      };
-    }
-
-    const siteInvoices = invoices.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteMaterials = materials.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteLabours = labours.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteSalaries = salaries.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteAttendance = attendance.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteExpenses = expenses.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteVehicles = vehicles.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const siteVehicleExpenses = vehicleExpenses.filter((item) =>
-      isSameSite(item, selectedSite)
-    );
-    const summary = calculateFinancialSummary({
+    const siteInvoices = invoices.filter((item) => isSameSite(item, selectedSite));
+    const siteMaterials = materials.filter((item) => isSameSite(item, selectedSite));
+    const siteLabours = labours.filter((item) => isSameSite(item, selectedSite));
+    const siteSalaries = salaries.filter((item) => isSameSite(item, selectedSite));
+    const siteAttendance = attendance.filter((item) => isSameSite(item, selectedSite));
+    const siteExpenses = expenses.filter((item) => isSameSite(item, selectedSite));
+    const siteVehicles = vehicles.filter((item) => isSameSite(item, selectedSite));
+    const siteVehicleExpenses = vehicleExpenses.filter((item) => isSameSite(item, selectedSite));
+    const siteRecord = sites.find((item) => isSameSite(item, selectedSite)) || { siteName: selectedSite };
+    const budgetRecord = siteBudgets.find((budget) =>
+      budget.siteId === siteRecord.id || budget.id === siteRecord.id || isSameSite(budget, selectedSite)
+    ) || siteRecord;
+    const summary = calculateProjectFinancialSummary({
+      budgetRecord,
       invoices: siteInvoices,
       materials: siteMaterials,
       labours: siteLabours,
       salaries: siteSalaries,
       attendance: siteAttendance,
+      attendanceSalaryCoverage: siteSalaries,
       expenses: siteExpenses,
       vehicles: siteVehicles,
-      vehicleExpenses: siteVehicleExpenses
+      vehicleExpenses: siteVehicleExpenses,
+      vehicleExpenseCoverage: siteVehicleExpenses,
+      raBills: raBills.filter((item) => isSameSite(item, selectedSite)),
     });
 
     return {
-      income: summary.income,
-      materialExpense: summary.materialExpense,
-      labourExpense: summary.labourExpense,
-      vehicleExpense: summary.vehicleExpense,
-      otherExpense: summary.otherExpenseFromExpenses,
-      totalExpense: summary.totalExpense,
+      income: summary.revenue,
+      received: summary.received,
+      outstanding: summary.outstanding,
+      retention: summary.retention,
+      materialExpense: summary.materialCost,
+      labourExpense: summary.labourCost,
+      contractorExpense: summary.contractorCost,
+      vehicleExpense: summary.vehicleCost,
+      otherExpense: summary.otherCost,
+      totalExpense: summary.totalCost,
       profitLoss: summary.profit,
+      marginPercent: summary.marginPercent,
       invoiceCount: siteInvoices.length,
       materialCount: siteMaterials.length,
       expenseCount: siteExpenses.length,
       salaryCount: siteSalaries.length,
-      financialSummary: summary
+      financialSummary: summary,
     };
-
   }, [
-
     selectedSite,
-
+    sites,
+    siteBudgets,
     invoices,
-
     materials,
-
     labours,
-
     salaries,
-
     attendance,
-
     expenses,
-
     vehicles,
-
-    vehicleExpenses
-
+    vehicleExpenses,
+    raBills,
   ]);
 
-  const selectedSiteRecord = useMemo(
-    () =>
-      sites.find((site) => isSameSite(site, selectedSite)) || {
-        siteName: selectedSite,
-      },
-    [sites, selectedSite]
-  );
-
-  const selectedSiteBudgetRecord = useMemo(
-    () =>
-      siteBudgets.find((budget) =>
-        budget.siteId === selectedSiteRecord.id ||
-        budget.id === selectedSiteRecord.id
-      ) || selectedSiteRecord,
-    [siteBudgets, selectedSiteRecord]
-  );
-
-  const siteBudgetSummary = useMemo(
-    () => calculateSiteBudgetSummary(selectedSiteBudgetRecord, siteReport.financialSummary),
-    [selectedSiteBudgetRecord, siteReport.financialSummary]
-  );
+  const siteBudgetSummary = siteReport.financialSummary.budgetSummary;
   const siteClientBillingSummary = useMemo(
     () => getClientBillingSummary({
       invoices: invoices.filter((item) => isSameSite(item, selectedSite)),
@@ -531,8 +479,6 @@ function SiteDetails() {
     () => raBills.filter((item) => isSameSite(item, selectedSite)).sort((first, second) => String(second.billDate || "").localeCompare(String(first.billDate || ""))),
     [raBills, selectedSite]
   );
-
-
   // =========================
   // SITE DPR OPERATIONAL SUMMARY
   // =========================
@@ -700,7 +646,7 @@ function SiteDetails() {
                   </span>
 
                   <h3>
-                    Total Income
+                    Recognized Revenue
                   </h3>
 
                   <h2>
@@ -760,7 +706,13 @@ function SiteDetails() {
                 </div>
 
 
-                <div className="site-summary-card vehicle-card-report">
+                               <div className="site-summary-card expense-card">
+                 <span className="summary-icon">🧱</span>
+                 <h3>Contractor Cost</h3>
+                 <h2>{formatMoney(siteReport.contractorExpense)}</h2>
+                 <p>Certified contractor bills post one linked expense</p>
+               </div>
+<div className="site-summary-card vehicle-card-report">
 
                   <span className="summary-icon">
                     🚚
@@ -850,7 +802,7 @@ function SiteDetails() {
 
                   <p>
 
-                    Site: {selectedSite}
+                    Site: {selectedSite} · Margin: {siteReport.marginPercent === null ? "N/A" : `${siteReport.marginPercent}%`}
 
                   </p>
 
@@ -898,6 +850,18 @@ function SiteDetails() {
                       </th>
 
                     </tr>
+                    <tr>
+                      <td>Cash Received</td>
+                      <td>{formatMoney(siteReport.received)}</td>
+                    </tr>
+                    <tr>
+                      <td>Outstanding Receivable</td>
+                      <td>{formatMoney(siteReport.outstanding)}</td>
+                    </tr>
+                    <tr>
+                      <td>Retention Receivable</td>
+                      <td>{formatMoney(siteReport.retention)}</td>
+                    </tr>
 
                   </thead>
 
@@ -908,7 +872,7 @@ function SiteDetails() {
                     <tr>
 
                       <td>
-                        Total Income
+                        Recognized Revenue
                       </td>
 
                       <td>
@@ -947,6 +911,10 @@ function SiteDetails() {
                         )}
                       </td>
 
+                    </tr>
+                    <tr>
+                      <td>Contractor / Subcontractor Cost</td>
+                      <td>{formatMoney(siteReport.contractorExpense)}</td>
                     </tr>
 
 
@@ -1089,7 +1057,7 @@ function SiteDetails() {
                       <article className="site-budget-summary-card">
                         <span>Actual Cost</span>
                         <strong>{formatMoney(siteBudgetSummary.actualCost)}</strong>
-                        <small>Recorded materials, labour, vehicle and other costs</small>
+                        <small>Recorded materials, labour, contractor, vehicle and other costs</small>
                       </article>
                       <article className="site-budget-summary-card">
                         <span>Remaining Budget</span>
@@ -1122,6 +1090,7 @@ function SiteDetails() {
                           {[
                             ["Material", siteBudgetSummary.categories.material],
                             ["Labour / Salary", siteBudgetSummary.categories.labour],
+                            ["Contractor / Subcontractor", siteBudgetSummary.categories.contractor],
                             ["Vehicle / Equipment", siteBudgetSummary.categories.vehicle],
                             ["Other Expense", siteBudgetSummary.categories.other],
                           ].map(([label, category]) => (

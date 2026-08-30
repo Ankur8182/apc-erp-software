@@ -56,6 +56,15 @@ describe("site budget calculations", () => {
     expect(overBudget.remainingBudget).toBe(-1000);
   });
 
+  it("supports an optional contractor budget without changing legacy total-budget records", () => {
+    const summary = calculateSiteBudgetSummary(
+      { budget: { contractorBudget: 500 } },
+      { otherExpenseFromExpenses: 250, contractorExpense: 200 }
+    );
+    expect(summary).toMatchObject({ totalBudget: 500, actualCost: 250, remainingBudget: 250 });
+    expect(summary.categories.contractor).toMatchObject({ budget: 500, actual: 200, remaining: 300, hasBudget: true });
+    expect(summary.categories.other.actual).toBe(50);
+  });
   it("keeps missing and malformed legacy budgets out of comparisons", () => {
     const missing = calculateSiteBudgetSummary({}, { materialExpense: 400 });
     const malformed = getSiteBudget({
