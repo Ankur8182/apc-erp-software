@@ -47,6 +47,7 @@ import { summariseEquipment } from "../utils/equipment";
 import { getSubcontractingSummary } from "../utils/subcontracting";
 import { getClientBillingSummary } from "../utils/clientBilling";
 import { getSiteBoqSummary } from "../utils/boqReporting";
+import { buildProjectAnalyticsRows, calculatePortfolioAnalytics, formatAnalyticsPercent } from "../utils/projectAnalytics";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
@@ -473,6 +474,27 @@ function Dashboard() {
     () => calculatePortfolioFinancialSummary(siteSummary),
     [siteSummary]
   );
+  const projectAnalyticsRows = useMemo(
+    () => buildProjectAnalyticsRows({
+      siteRows: siteSummary,
+      boqItems,
+      boqMeasurements,
+      boqVariations,
+      raBills,
+    }),
+    [siteSummary, boqItems, boqMeasurements, boqVariations, raBills]
+  );
+  const portfolioAnalytics = useMemo(
+    () => calculatePortfolioAnalytics(projectAnalyticsRows),
+    [projectAnalyticsRows]
+  );
+  const projectWatchlist = useMemo(
+    () => projectAnalyticsRows.filter((row) => row.health.status !== "Healthy").sort((first, second) => {
+      const healthRank = { Critical: 0, Attention: 1, Healthy: 2 };
+      return healthRank[first.health.status] - healthRank[second.health.status] || first.profit - second.profit;
+    }).slice(0, 6),
+    [projectAnalyticsRows]
+  );
 
   // =========================
   // SITE STATUS COUNTS
@@ -756,6 +778,25 @@ function Dashboard() {
           </div>
         </section>
 
+        <section aria-labelledby="project-performance-analytics">
+          <div className="dashboard-section-header">
+            <div>
+              <span className="dashboard-eyebrow">Derived management view</span>
+              <h2 id="project-performance-analytics">🩺 Project Health &amp; Performance</h2>
+            </div>
+          </div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-running"><span>✅ Healthy Projects</span><strong>{projectAnalyticsRows.filter((row) => row.health.status === "Healthy").length}</strong><small>Transparent, derived health score</small></article>
+            <article className="dashboard-status-card status-pending"><span>⚠️ Attention Projects</span><strong>{portfolioAnalytics.attentionProjects}</strong><small>Review collection, budget, or progress signals</small></article>
+            <article className="dashboard-status-card status-inventory-out"><span>🚨 Critical Projects</span><strong>{portfolioAnalytics.criticalProjects}</strong><small>Loss, over-budget, or stacked risk signals</small></article>
+            <article className="dashboard-status-card status-budget"><span>📦 Top Cost Driver</span><strong>{portfolioAnalytics.largestCostCategory?.label || "N/A"}</strong><small>{portfolioAnalytics.largestCostCategory ? formatMoney(portfolioAnalytics.largestCostCategory.amount) : "No canonical cost data"}</small></article>
+            <article className="dashboard-status-card status-pending"><span>⌛ Overdue Receivables</span><strong>{formatMoney(portfolioAnalytics.totalOverdueReceivable)}</strong><small>Only RA bills with a past due date</small></article>
+          </div>
+          <div className="dashboard-table-card">
+            <div className="dashboard-table-heading"><div><span className="dashboard-eyebrow">Priority watchlist</span><h3>Projects needing management review</h3></div><span className="dashboard-table-note">Health is a deterministic indicator, not an accounting standard</span></div>
+            <div className="dashboard-table-responsive"><table className="dashboard-table"><thead><tr><th>Site</th><th>Health</th><th>Profit / Margin</th><th>Cost Driver</th><th>Physical vs Billing</th><th>Forecast</th></tr></thead><tbody>{projectWatchlist.length === 0 ? <tr><td className="dashboard-table-empty" colSpan="6">No project health risks are currently derived from the available data.</td></tr> : projectWatchlist.map((row) => <tr key={`health-${row.id || row.siteName}`}><td><strong>{row.siteName}</strong><small>{row.health.reasons[0] || "No critical signal"}</small></td><td><span className={row.health.status === "Critical" ? "pending-status" : "running-status"}>{row.health.status}{row.health.score === null ? "" : ` (${row.health.score})`}</span></td><td className={row.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(row.profit)}<small>{formatAnalyticsPercent(row.marginPercent)}</small></td><td>{row.costBreakdown.largestCategory?.label || "N/A"}<small>{row.costBreakdown.largestCategory ? formatMoney(row.costBreakdown.largestCategory.amount) : ""}</small></td><td>{row.boqAnalytics.comparison}<small>{row.boqAnalytics.measuredProgressPercent === null ? "No BOQ data" : `${formatAnalyticsPercent(row.boqAnalytics.measuredProgressPercent)} physical · ${formatAnalyticsPercent(row.boqAnalytics.billedProgressPercent)} billed`}</small></td><td>{row.forecast.status === "Available" ? <><strong className={row.forecast.projectedProfit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(row.forecast.projectedProfit)}</strong><small>Projected profit</small></> : <span>Insufficient data</span>}</td></tr>)}</tbody></table></div>
+          </div>
+        </section>
         <section className="dashboard-table-card" aria-labelledby="site-financial-summary">
           <div className="dashboard-table-heading">
             <div>

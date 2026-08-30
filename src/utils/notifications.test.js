@@ -248,6 +248,22 @@ describe("notification generation", () => {
     });
   });
 
+  it("adds a cost-progress alert from canonical cost, approved budget, and measured BOQ data", () => {
+    const sharedData = {
+      sites: [{ id: "site-1", siteName: "River View" }],
+      siteBudgets: [{ id: "budget-1", siteId: "site-1", siteName: "River View", totalProjectBudget: 1000 }],
+      invoices: [{ id: "invoice-1", site: "River View", totalAmount: 1000, paidAmount: 1000 }],
+      materials: [{ id: "material-1", site: "River View", totalAmount: 800 }],
+      boqItems: [{ id: "boq-1", site: "River View", itemNumber: "1.1", description: "Concrete", unit: "Cum", plannedQuantity: 100, rate: 10 }],
+      boqMeasurements: [{ id: "measurement-1", boqItemId: "boq-1", quantity: 20, status: "Certified" }],
+    };
+
+    expect(generateNotifications({ role: "manager", today: TODAY, ...sharedData })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Cost progress is ahead of BOQ work", module: "Project Analytics", href: "/site-details/site-1" }),
+    ]));
+    expect(generateNotifications({ role: "supervisor", userId: "field-1", today: TODAY, ...sharedData })
+      .every((alert) => alert.href === "/field-update")).toBe(true);
+  });
   it("returns an empty notification state when the ERP dataset is empty", () => {
     expect(generateNotifications({ role: "viewer", today: TODAY })).toEqual([]);
   });

@@ -31,6 +31,7 @@ import { getEquipmentLabel, getFuelEfficiencyHistory, summariseEquipment } from 
 import { getSubcontractingSummary } from "../utils/subcontracting";
 import { getClientBillingSummary } from "../utils/clientBilling";
 import { BOQ_STATUSES, getBoqItemProgressRows, getSiteBoqSummary } from "../utils/boqReporting";
+import { buildProjectAnalyticsRows, calculatePortfolioAnalytics, filterProjectAnalyticsRows, formatAnalyticsPercent } from "../utils/projectAnalytics";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -93,6 +94,10 @@ function Reports() {
   const [boqItemFilter, setBoqItemFilter] = useState("");
   const [boqCategoryFilter, setBoqCategoryFilter] = useState("");
   const [boqStatusFilter, setBoqStatusFilter] = useState("");
+  const [projectStatusFilter, setProjectStatusFilter] = useState("");
+  const [profitabilityFilter, setProfitabilityFilter] = useState("");
+  const [budgetAnalyticsFilter, setBudgetAnalyticsFilter] = useState("");
+  const [healthFilter, setHealthFilter] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [dprError, setDprError] = useState("");
@@ -706,6 +711,38 @@ function Reports() {
     () => calculatePortfolioFinancialSummary(reportRows),
     [reportRows]
   );
+  const projectAnalyticsRows = useMemo(
+    () => buildProjectAnalyticsRows({
+      siteRows: reportRows,
+      boqItems: filteredBoqItems,
+      boqMeasurements: filteredBoqMeasurements,
+      boqVariations: filteredBoqVariations,
+      raBills: filteredRABills,
+    }),
+    [reportRows, filteredBoqItems, filteredBoqMeasurements, filteredBoqVariations, filteredRABills]
+  );
+  const filteredProjectAnalyticsRows = useMemo(
+    () => filterProjectAnalyticsRows(projectAnalyticsRows, {
+      projectStatus: projectStatusFilter,
+      profitability: profitabilityFilter,
+      budget: budgetAnalyticsFilter,
+      health: healthFilter,
+    }),
+    [projectAnalyticsRows, projectStatusFilter, profitabilityFilter, budgetAnalyticsFilter, healthFilter]
+  );
+  const portfolioAnalytics = useMemo(
+    () => calculatePortfolioAnalytics(filteredProjectAnalyticsRows),
+    [filteredProjectAnalyticsRows]
+  );
+  const marginRankByProject = useMemo(
+    () => new Map(
+      [...filteredProjectAnalyticsRows]
+        .filter((row) => row.revenue > 0 && row.marginPercent !== null)
+        .sort((first, second) => second.marginPercent - first.marginPercent)
+        .map((row, index) => [row.id || row.siteName, index + 1])
+    ),
+    [filteredProjectAnalyticsRows]
+  );
 
   const monthlyFinancialTrend = useMemo(
     () => buildMonthlyFinancialTrend({
@@ -746,6 +783,10 @@ function Reports() {
     setBoqItemFilter("");
     setBoqCategoryFilter("");
     setBoqStatusFilter("");
+    setProjectStatusFilter("");
+    setProfitabilityFilter("");
+    setBudgetAnalyticsFilter("");
+    setHealthFilter("");
   };
 
   /* =========================================
@@ -855,6 +896,25 @@ function Reports() {
       { metric: "Retention Receivable", amount: formatExportMoney(portfolioFinancial.retention) },
       ...monthlyFinancialTrend.map((trend) => ({ metric: `${trend.month} Profit / Loss`, amount: formatExportMoney(trend.profit) })),
     ],
+  };
+  const projectAnalyticsExport = {
+    title: "Project Health, Profitability & Forecast",
+    filters: [...baseExportFilters, { label: "Health", value: healthFilter || "All" }, { label: "Profitability", value: profitabilityFilter || "All" }, { label: "Budget", value: budgetAnalyticsFilter || "All" }],
+    summary: [
+      { label: "Projects", value: filteredProjectAnalyticsRows.length },
+      { label: "Portfolio Revenue", value: formatExportMoney(portfolioAnalytics.revenue) },
+      { label: "Actual Cost", value: formatExportMoney(portfolioAnalytics.totalCost) },
+      { label: "Profit / Loss", value: formatExportMoney(portfolioAnalytics.profit) },
+      { label: "Critical Projects", value: portfolioAnalytics.criticalProjects },
+      { label: "Overdue Receivables", value: formatExportMoney(portfolioAnalytics.totalOverdueReceivable) },
+    ],
+    columns: [
+      { key: "site", label: "Site", width: 1.4 }, { key: "health", label: "Health" }, { key: "revenue", label: "Invoiced Revenue (INR)", format: formatExportMoney }, { key: "received", label: "Received (INR)", format: formatExportMoney }, { key: "outstanding", label: "Outstanding (INR)", format: formatExportMoney }, { key: "actualCost", label: "Actual Cost (INR)", format: formatExportMoney }, { key: "profit", label: "Profit / Loss (INR)", format: formatExportMoney }, { key: "margin", label: "Margin" }, { key: "budget", label: "Budget Used" }, { key: "physical", label: "Physical Progress" }, { key: "billing", label: "Billing Progress" }, { key: "forecast", label: "Projected Profit / Loss" },
+    ],
+    rows: filteredProjectAnalyticsRows.map((row) => ({
+      site: row.siteName, health: row.health.status, revenue: row.revenue, received: row.received, outstanding: row.outstanding, actualCost: row.totalCost, profit: row.profit,
+      margin: formatAnalyticsPercent(row.marginPercent), budget: row.budgetSummary?.hasBudget ? formatBudgetUsagePercent(row.budgetUsagePercent) : "Not set", physical: formatAnalyticsPercent(row.boqAnalytics.measuredProgressPercent), billing: formatAnalyticsPercent(row.boqAnalytics.billedProgressPercent), forecast: row.forecast.status === "Available" ? formatExportMoney(row.forecast.projectedProfit) : "Insufficient data",
+    })),
   };
   const dprExport = {
     title: "Daily Progress Report",
@@ -1399,6 +1459,22 @@ function Reports() {
               <label>BOQ Status</label>
               <select value={boqStatusFilter} onChange={(event) => setBoqStatusFilter(event.target.value)}><option value="">All Statuses</option>{BOQ_STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
             </div>
+            <div className="filter-group">
+              <label>Project Health</label>
+              <select value={healthFilter} onChange={(event) => setHealthFilter(event.target.value)}><option value="">All Health States</option><option value="Healthy">Healthy</option><option value="Attention">Attention</option><option value="Critical">Critical</option></select>
+            </div>
+            <div className="filter-group">
+              <label>Profitability</label>
+              <select value={profitabilityFilter} onChange={(event) => setProfitabilityFilter(event.target.value)}><option value="">All Projects</option><option value="profitable">Profitable</option><option value="loss-making">Loss-making</option></select>
+            </div>
+            <div className="filter-group">
+              <label>Budget Analytics</label>
+              <select value={budgetAnalyticsFilter} onChange={(event) => setBudgetAnalyticsFilter(event.target.value)}><option value="">All Sites</option><option value="budgeted">Budgeted Sites</option><option value="over-budget">Over-budget Sites</option></select>
+            </div>
+            <div className="filter-group">
+              <label>Project Status</label>
+              <select value={projectStatusFilter} onChange={(event) => setProjectStatusFilter(event.target.value)}><option value="">All Statuses</option><option value="running">Running</option><option value="completed">Completed</option><option value="pending">Pending</option></select>
+            </div>
             <div className="report-buttons">
               <button
                 type="button"
@@ -1429,6 +1505,7 @@ function Reports() {
             <ReportExportActions report={financialSummaryExport} disabled={loading} />
             <ReportExportActions report={siteFinancialExport} disabled={loading} />
              <ReportExportActions report={projectFinancialExport} disabled={loading} />
+            <ReportExportActions report={projectAnalyticsExport} disabled={loading} />
             <ReportExportActions report={dprExport} disabled={loading || Boolean(dprError)} />
             <ReportExportActions report={boqExport} disabled={loading} />
             <ReportExportActions report={measurementBookExport} disabled={loading} />
@@ -1522,6 +1599,14 @@ function Reports() {
                  </table>
                </div>
              </div>
+             <div className="report-section-title"><h2>🩺 Project Health, Cash Realization &amp; Forecast</h2><p>Health is a transparent management indicator based on canonical profit, budget, receivable, BOQ, and progress signals. Forecasts are shown only when actual cost and measured BOQ progress are sufficient.</p></div>
+             <div className="dpr-report-summary-grid">
+               <div className="dpr-report-summary-card"><span>Healthy / Attention / Critical</span><h3>{filteredProjectAnalyticsRows.filter((row) => row.health.status === "Healthy").length} / {portfolioAnalytics.attentionProjects} / {portfolioAnalytics.criticalProjects}</h3></div>
+               <div className="dpr-report-summary-card"><span>Overdue Receivables</span><h3>{formatMoney(portfolioAnalytics.totalOverdueReceivable)}</h3></div>
+               <div className="dpr-report-summary-card"><span>Largest Cost Driver</span><h3>{portfolioAnalytics.largestCostCategory?.label || "N/A"}</h3></div>
+               <div className="dpr-report-summary-card"><span>Collection Progress</span><h3>{formatAnalyticsPercent(portfolioAnalytics.received / Math.max(portfolioAnalytics.revenue, 0))}</h3></div>
+             </div>
+             <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Site</th><th>Margin Rank</th><th>Health</th><th>Revenue / Cost / Profit</th><th>Budget</th><th>Receivables</th><th>Cost Driver</th><th>Physical vs Billing</th><th>Forecast</th></tr></thead><tbody>{filteredProjectAnalyticsRows.length === 0 ? <tr><td colSpan="9" className="no-report-data">No projects match the selected financial analytics filters.</td></tr> : filteredProjectAnalyticsRows.map((row) => <tr key={`analytics-${row.id || row.siteName}`}><td><strong>{row.siteName}</strong><small>{row.status || "-"}</small></td><td>{marginRankByProject.get(row.id || row.siteName) ? `#${marginRankByProject.get(row.id || row.siteName)}` : "N/A"}</td><td><span className={row.health.status === "Critical" ? "loss-text" : row.health.status === "Healthy" ? "profit-text" : ""}>{row.health.status}{row.health.score === null ? "" : ` (${row.health.score})`}</span><small>{row.health.reasons[0] || "No major risk signal"}</small></td><td>{formatMoney(row.revenue)} / {formatMoney(row.totalCost)}<small className={row.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(row.profit)} · {formatAnalyticsPercent(row.marginPercent)}</small></td><td>{row.budgetSummary?.hasBudget ? `${formatMoney(row.totalBudget)} · ${formatBudgetUsagePercent(row.budgetUsagePercent)}` : "Not set"}<small>{row.overBudgetAmount > 0 ? `${formatMoney(row.overBudgetAmount)} over budget` : row.budgetSummary?.hasBudget ? "Within budget" : ""}</small></td><td>{formatMoney(row.received)} received<small>{formatMoney(row.outstanding)} outstanding · {formatMoney(row.revenueAnalytics.overdueReceivable)} overdue</small></td><td>{row.costBreakdown.largestCategory?.label || "N/A"}<small>{row.costBreakdown.largestCategory ? `${formatMoney(row.costBreakdown.largestCategory.amount)} · ${formatAnalyticsPercent(row.costBreakdown.largestCategory.percent)}` : ""}</small></td><td>{row.boqAnalytics.comparison}<small>{formatAnalyticsPercent(row.boqAnalytics.measuredProgressPercent)} physical · {formatAnalyticsPercent(row.boqAnalytics.billedProgressPercent)} billed</small></td><td>{row.forecast.status === "Available" ? <><span className={row.forecast.projectedProfit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(row.forecast.projectedProfit)}</span><small>{formatAnalyticsPercent(row.forecast.projectedMarginPercent)} projected margin</small></> : "Insufficient data"}</td></tr>)}</tbody></table></div></div>
 {/* DAILY PROGRESS REPORT */}
 
             <div className="report-section-title">

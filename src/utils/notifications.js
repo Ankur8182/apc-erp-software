@@ -16,7 +16,9 @@ import {
 import { FIELD_USER_ROLES, STANDARD_ERP_ROLES } from "../auth/authorization";
 import { calculateProjectFinancialSummary } from "./projectFinancials";
 import { summariseInventory } from "./inventory";
-import { buildBoqAlerts } from "./boqReporting";
+import { buildBoqAlerts, getSiteBoqSummary } from "./boqReporting";
+import { formatAnalyticsPercent, getBoqPhysicalFinancialAnalytics, getProjectHealth, getRevenueCollectionAnalytics } from "./projectAnalytics";
+import { formatBudgetUsagePercent } from "./siteBudget";
 
 export const NOTIFICATION_SEVERITIES = {
   info: "info",
@@ -358,6 +360,7 @@ const createCoreAlerts = ({
     const budgetRecord = siteBudgets.find((budget) =>
       budget?.siteId === site.id || budget?.id === site.id || isSameSite(budget, siteName)
     );
+    const siteRABills = raBills.filter((item) => isSameSite(item, siteName));
     const financialSummary = calculateProjectFinancialSummary({
       budgetRecord: budgetRecord || site,
       invoices: invoices.filter((item) => isSameSite(item, siteName)),
@@ -368,9 +371,18 @@ const createCoreAlerts = ({
       attendance: attendance.filter((item) => isSameSite(item, siteName)),
       vehicles: vehicles.filter((item) => isSameSite(item, siteName)),
       vehicleExpenses: vehicleExpenses.filter((item) => isSameSite(item, siteName)),
-      raBills: raBills.filter((item) => isSameSite(item, siteName)),
+      raBills: siteRABills,
     });
     const budgetSummary = financialSummary.budgetSummary;
+    const boqAnalytics = getBoqPhysicalFinancialAnalytics(getSiteBoqSummary({
+      site: siteName,
+      items: boqItems,
+      measurements: boqMeasurements,
+      variations: boqVariations,
+      raBills: siteRABills,
+    }));
+    const revenueAnalytics = getRevenueCollectionAnalytics({ financialSummary, raBills: siteRABills, today });
+    const health = getProjectHealth({ financialSummary, revenueAnalytics, boqAnalytics });
     const siteHref = site.id ? `/site-details/${site.id}` : "/sites";
 
     if (budgetSummary.hasBudget && budgetSummary.actualCost > 0) {
@@ -415,7 +427,9 @@ const createCoreAlerts = ({
       });
     }
 
-    if (financialSummary.revenue > 0 && financialSummary.outstanding / financialSummary.revenue >= 0.5) {
+    const lossMaking = financialSummary.revenue > 0 && financialSummary.profit < 0;
+    const highOutstanding = financialSummary.revenue > 0 && financialSummary.outstanding / financialSummary.revenue >= 0.5;
+    if (highOutstanding) {
       addAlert(alerts, {
         id: `site-high-outstanding-${normaliseId(site.id || siteName)}`,
         severity: NOTIFICATION_SEVERITIES.warning,
@@ -424,6 +438,30 @@ const createCoreAlerts = ({
         date: today,
         href: siteHref,
         module: "Project Financials",
+        site: siteName,
+      });
+    }
+    if (health.costAheadOfPhysical) {
+      addAlert(alerts, {
+        id: `site-cost-ahead-of-work-${normaliseId(site.id || siteName)}`,
+        severity: NOTIFICATION_SEVERITIES.warning,
+        title: "Cost progress is ahead of BOQ work",
+        message: `${siteName} has used ${formatBudgetUsagePercent(budgetSummary.usagePercent)} of budget against ${formatAnalyticsPercent(boqAnalytics.measuredProgressPercent)} measured BOQ progress.`,
+        date: today,
+        href: siteHref,
+        module: "Project Analytics",
+        site: siteName,
+      });
+    }
+    if (health.status === "Critical" && !lossMaking && !budgetSummary.overBudgetAmount && !highOutstanding) {
+      addAlert(alerts, {
+        id: `site-critical-health-${normaliseId(site.id || siteName)}`,
+        severity: NOTIFICATION_SEVERITIES.critical,
+        title: "Project health needs review",
+        message: `${siteName}: ${health.reasons[0] || "Multiple management risk signals require review."}`,
+        date: today,
+        href: siteHref,
+        module: "Project Analytics",
         site: siteName,
       });
     }

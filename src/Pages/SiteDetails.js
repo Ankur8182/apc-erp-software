@@ -19,6 +19,7 @@ import { formatBudgetUsagePercent } from "../utils/siteBudget";
 import { calculateProjectFinancialSummary } from "../utils/projectFinancials";
 import { getClientBillingSummary } from "../utils/clientBilling";
 import { getSiteBoqSummary } from "../utils/boqReporting";
+import { buildProjectAnalyticsRows, formatAnalyticsPercent } from "../utils/projectAnalytics";
 
 import {
   collection,
@@ -502,6 +503,18 @@ function SiteDetails() {
   // =========================
 
   const siteBoqSummary = useMemo(() => getSiteBoqSummary({ site: selectedSite, items: boqItems, measurements: boqMeasurements, variations: boqVariations, raBills }), [selectedSite, boqItems, boqMeasurements, boqVariations, raBills]);
+  const siteAnalytics = useMemo(() => buildProjectAnalyticsRows({
+    siteRows: [{
+      id: id || selectedSite,
+      siteName: selectedSite,
+      status: sites.find((site) => isSameSite(site, selectedSite))?.status || "",
+      ...siteReport.financialSummary,
+    }],
+    boqItems,
+    boqMeasurements,
+    boqVariations,
+    raBills,
+  })[0] || null, [id, selectedSite, sites, siteReport.financialSummary, boqItems, boqMeasurements, boqVariations, raBills]);
 
   const siteDprSummary = useMemo(
     () =>
@@ -1130,7 +1143,11 @@ function SiteDetails() {
                   </>
                 )}
               </section>
-              <section className="site-dpr-section">
+                            <section className="site-dpr-section">
+                <div className="site-dpr-heading"><div><h2>🩺 Project Financial Performance</h2><p>Derived from the canonical invoice, cost, budget, RA, and BOQ records. It does not create a second financial ledger.</p></div></div>
+                {!siteAnalytics ? <p className="site-dpr-empty">Project analytics are loading.</p> : <><div className="site-dpr-summary-grid"><div className="site-dpr-summary-card"><h3>Revenue / Actual Cost</h3><p>{formatMoney(siteAnalytics.revenue)} / {formatMoney(siteAnalytics.totalCost)}</p></div><div className="site-dpr-summary-card"><h3>Profit / Margin</h3><p className={siteAnalytics.profit >= 0 ? "profit-text" : "loss-text"}>{formatMoney(siteAnalytics.profit)} · {formatAnalyticsPercent(siteAnalytics.marginPercent)}</p></div><div className="site-dpr-summary-card"><h3>Project Health</h3><p className={siteAnalytics.health.status === "Critical" ? "loss-text" : siteAnalytics.health.status === "Healthy" ? "profit-text" : ""}>{siteAnalytics.health.status}{siteAnalytics.health.score === null ? "" : ` (${siteAnalytics.health.score})`}</p></div><div className="site-dpr-summary-card"><h3>Receivable / Overdue</h3><p>{formatMoney(siteAnalytics.outstanding)} / {formatMoney(siteAnalytics.revenueAnalytics.overdueReceivable)}</p></div></div><div className="site-dpr-history-card"><h3>Cost, Budget &amp; Progress Insights</h3><div className="site-dpr-table-responsive"><table className="site-dpr-table"><tbody><tr><th>Largest cost driver</th><td>{siteAnalytics.costBreakdown.largestCategory ? `${siteAnalytics.costBreakdown.largestCategory.label} · ${formatMoney(siteAnalytics.costBreakdown.largestCategory.amount)} (${formatAnalyticsPercent(siteAnalytics.costBreakdown.largestCategory.percent)})` : "No canonical cost data"}</td></tr><tr><th>Budget status</th><td>{siteAnalytics.budgetSummary?.hasBudget ? `${formatMoney(siteAnalytics.totalBudget)} budget · ${formatBudgetUsagePercent(siteAnalytics.budgetUsagePercent)} used · ${siteAnalytics.overBudgetAmount > 0 ? `${formatMoney(siteAnalytics.overBudgetAmount)} over budget` : formatMoney(siteAnalytics.budgetRemaining)} remaining` : "No approved budget set"}</td></tr><tr><th>Physical vs billing</th><td>{siteAnalytics.boqAnalytics.comparison} · {formatAnalyticsPercent(siteAnalytics.boqAnalytics.measuredProgressPercent)} physical / {formatAnalyticsPercent(siteAnalytics.boqAnalytics.billedProgressPercent)} billed</td></tr><tr><th>Conservative forecast</th><td>{siteAnalytics.forecast.status === "Available" ? `${formatMoney(siteAnalytics.forecast.projectedFinalCost)} projected cost · ${formatMoney(siteAnalytics.forecast.projectedProfit)} projected profit/loss · ${formatAnalyticsPercent(siteAnalytics.forecast.projectedMarginPercent)} margin` : "Insufficient data — requires actual cost, revised BOQ value, and measured BOQ progress."}</td></tr></tbody></table></div>{siteAnalytics.health.reasons.length > 0 && <p className="site-dpr-empty">Management signal: {siteAnalytics.health.reasons[0]}</p>}</div></>}
+              </section>
+<section className="site-dpr-section">
                 <div className="site-dpr-heading"><div><h2>📐 BOQ &amp; Quantity Progress</h2><p>Measured and certified quantities are operational progress only; they are not added to site expenses or income.</p></div></div>
                 {siteBoqSummary.itemCount === 0 ? <p className="site-dpr-empty">No BOQ items have been registered for this site.</p> : <><div className="site-dpr-summary-grid"><div className="site-dpr-summary-card"><h3>BOQ Items</h3><p>{siteBoqSummary.itemCount}</p></div><div className="site-dpr-summary-card"><h3>Measured Progress</h3><p>{siteBoqSummary.overallProgressPercent}%</p></div><div className="site-dpr-summary-card"><h3>Certified Value</h3><p>{formatMoney(siteBoqSummary.certifiedWorkValue)}</p></div></div><div className="site-dpr-history-card"><h3>Key Incomplete Items</h3><div className="site-dpr-table-responsive"><table className="site-dpr-table"><thead><tr><th>BOQ Item</th><th>Planned / Authorised</th><th>Measured / Certified</th><th>Billed</th><th>Balance</th><th>Progress</th></tr></thead><tbody>{siteBoqSummary.incompleteItems.slice(0, 8).map((item) => <tr key={item.itemId}><td>{item.itemNumber}<br /><small>{item.description}</small></td><td>{item.plannedQuantity} / {item.authorizedQuantity} {item.unit}</td><td>{item.measuredQuantity} / {item.certifiedQuantity} {item.unit}</td><td>{item.billedQuantity} {item.unit}</td><td>{item.balanceQuantity} {item.unit}</td><td>{item.progressPercent}%</td></tr>)}</tbody></table></div></div></>}
               </section>
