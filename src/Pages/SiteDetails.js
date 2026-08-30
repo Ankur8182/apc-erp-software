@@ -20,6 +20,7 @@ import {
   calculateSiteBudgetSummary,
   formatBudgetUsagePercent,
 } from "../utils/siteBudget";
+import { getClientBillingSummary } from "../utils/clientBilling";
 
 import {
   collection,
@@ -41,6 +42,7 @@ function SiteDetails() {
   const [vehicles, setVehicles] = useState([]);
   const [vehicleExpenses, setVehicleExpenses] = useState([]);
   const [dailyProgressReports, setDailyProgressReports] = useState([]);
+  const [raBills, setRaBills] = useState([]);
   const [dprLoading, setDprLoading] = useState(true);
   const [dprError, setDprError] = useState("");
 
@@ -82,7 +84,8 @@ function SiteDetails() {
       vehicles,
       vehicleExpenses,
       dailyProgressReports,
-    ].forEach((records) => records.forEach(addSite));
+      raBills,
+    ].$1((records) => records.forEach(addSite));
 
     return Array.from(siteMap.values()).sort((first, second) =>
       first.siteName.localeCompare(second.siteName)
@@ -98,6 +101,7 @@ function SiteDetails() {
     vehicles,
     vehicleExpenses,
     dailyProgressReports,
+    raBills,
   ]);
 
   // =========================
@@ -253,6 +257,18 @@ function SiteDetails() {
   }, []);
 
 
+  // =========================
+  // CLIENT RA BILLS
+  // =========================
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "raBills"),
+      (snapshot) => setRaBills(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (error) => console.error("RA bill error:", error)
+    );
+    return () => unsubscribe();
+  }, []);
   // =========================
   // MATERIALS
   // =========================
@@ -503,6 +519,17 @@ function SiteDetails() {
   const siteBudgetSummary = useMemo(
     () => calculateSiteBudgetSummary(selectedSiteBudgetRecord, siteReport.financialSummary),
     [selectedSiteBudgetRecord, siteReport.financialSummary]
+  );
+  const siteClientBillingSummary = useMemo(
+    () => getClientBillingSummary({
+      invoices: invoices.filter((item) => isSameSite(item, selectedSite)),
+      raBills: raBills.filter((item) => isSameSite(item, selectedSite)),
+    }),
+    [invoices, raBills, selectedSite]
+  );
+  const siteRABills = useMemo(
+    () => raBills.filter((item) => isSameSite(item, selectedSite)).sort((first, second) => String(second.billDate || "").localeCompare(String(first.billDate || ""))),
+    [raBills, selectedSite]
   );
 
 
@@ -1005,8 +1032,23 @@ function SiteDetails() {
                 </table>
 
               </div>
-
-
+              <section className="site-budget-section" aria-labelledby="site-client-billing-title">
+                <div className="site-budget-heading">
+                  <div>
+                    <h2 id="site-client-billing-title">🧾 Client Billing &amp; Receivables</h2>
+                    <p>Certified RA bills create one linked invoice. Income and collections below reuse the same invoice ledger as the financial summary.</p>
+                  </div>
+                </div>
+                <div className="site-budget-summary-grid">
+                  <article className="site-budget-summary-card"><span>Invoice Billing</span><strong>{formatMoney(siteClientBillingSummary.totalClientBilling)}</strong><small>Canonical income source</small></article>
+                  <article className="site-budget-summary-card"><span>Received</span><strong>{formatMoney(siteClientBillingSummary.totalReceived)}</strong><small>Recorded invoice collections</small></article>
+                  <article className="site-budget-summary-card"><span>Outstanding</span><strong>{formatMoney(siteClientBillingSummary.outstandingReceivable)}</strong><small>Pending invoice receivables</small></article>
+                  <article className="site-budget-summary-card"><span>Retention Held</span><strong>{formatMoney(siteClientBillingSummary.retentionReceivable)}</strong><small>{siteClientBillingSummary.pendingCertificationCount} RA bill(s) awaiting certification</small></article>
+                </div>
+                <div className="site-budget-table-responsive"><table className="site-budget-table"><thead><tr><th>RA Bill</th><th>Bill / Due</th><th>Net Receivable</th><th>Received / Pending</th><th>Retention</th><th>Status</th></tr></thead><tbody>
+                  {siteRABills.length === 0 ? <tr><td colSpan="6">No RA bills are recorded for this site yet.</td></tr> : siteRABills.slice(0, 8).map((bill) => <tr key={bill.id}><td>{bill.raBillNumber || bill.id}<br /><small>{bill.clientName || "-"}</small></td><td>{bill.billDate || "-"}<br /><small>Due: {bill.paymentDueDate || "-"}</small></td><td>{formatMoney(bill.netBillAmount)}</td><td>{formatMoney(bill.receivedAmount)} / {formatMoney(bill.pendingAmount)}</td><td>{formatMoney(bill.retentionBalance)}</td><td>{bill.status || "Draft"}</td></tr>)}
+                </tbody></table></div>
+              </section>
               {/* =========================
                   BUDGET & COST CONTROL
               ========================= */}

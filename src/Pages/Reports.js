@@ -27,6 +27,7 @@ import { summariseInventory } from "../utils/inventory";
 import { getProcurementSummary } from "../utils/procurement";
 import { getEquipmentLabel, getFuelEfficiencyHistory, summariseEquipment } from "../utils/equipment";
 import { getSubcontractingSummary } from "../utils/subcontracting";
+import { getClientBillingSummary } from "../utils/clientBilling";
 
 const formatMoney = (amount) => {
   return `₹ ${toNumber(amount).toLocaleString("en-IN", {
@@ -72,6 +73,9 @@ function Reports() {
   const [workOrderProgress, setWorkOrderProgress] = useState([]);
   const [contractorBills, setContractorBills] = useState([]);
   const [contractorPayments, setContractorPayments] = useState([]);
+  const [raBills, setRaBills] = useState([]);
+  const [clientReceipts, setClientReceipts] = useState([]);
+  const [billingProfiles, setBillingProfiles] = useState([]);
 
   const [selectedSite, setSelectedSite] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -91,7 +95,7 @@ function Reports() {
   useEffect(() => {
     const unsubscribers = [];
     const completedCollections = new Set();
-    const totalCollections = 22;
+    const totalCollections = 25;
 
     const markCollectionComplete = (collectionName) => {
       completedCollections.add(collectionName);
@@ -165,6 +169,9 @@ function Reports() {
     loadCollection("workOrderProgress", setWorkOrderProgress);
     loadCollection("contractorBills", setContractorBills);
     loadCollection("contractorPayments", setContractorPayments);
+    loadCollection("raBills", setRaBills);
+    loadCollection("clientReceipts", setClientReceipts);
+    loadCollection("siteBillingProfiles", setBillingProfiles);
 
     return () => {
       unsubscribers.forEach((unsubscribe) =>
@@ -246,6 +253,9 @@ function Reports() {
     workOrderProgress.forEach((item) => addSite(getSiteName(item)));
     contractorBills.forEach((item) => addSite(getSiteName(item)));
     contractorPayments.forEach((item) => addSite(getSiteName(item)));
+    raBills.forEach((item) => addSite(getSiteName(item)));
+    clientReceipts.forEach((item) => addSite(getSiteName(item)));
+    billingProfiles.forEach((item) => addSite(getSiteName(item)));
 
     return Array.from(siteMap.values()).sort(
       (a, b) => a.localeCompare(b)
@@ -269,6 +279,9 @@ function Reports() {
     workOrderProgress,
     contractorBills,
     contractorPayments,
+    raBills,
+    clientReceipts,
+    billingProfiles,
   ]);
 
   const reportSiteNames = useMemo(() => {
@@ -516,6 +529,38 @@ function Reports() {
     () => getSubcontractingSummary(filteredWorkOrders, filteredContractorBills),
     [filteredWorkOrders, filteredContractorBills]
   );
+  const filteredRABills = useMemo(
+    () => raBills.filter((bill) => (selectedSite === "all" || isSameSite(bill, selectedSite)) && isDateInRange({ ...bill, date: bill.billDate }, fromDate, toDate)),
+    [raBills, selectedSite, fromDate, toDate]
+  );
+  const clientBillingSummary = useMemo(
+    () => getClientBillingSummary({ invoices: filteredInvoices, raBills: filteredRABills }),
+    [filteredInvoices, filteredRABills]
+  );  const filteredClientReceipts = useMemo(
+    () => clientReceipts.filter((receipt) => {
+      const receiptDate = normaliseDate(receipt.receiptDate);
+      return (selectedSite === "all" || isSameSite(receipt, selectedSite)) &&
+        (!fromDate || (receiptDate && receiptDate >= fromDate)) &&
+        (!toDate || (receiptDate && receiptDate <= toDate));
+    }),
+    [clientReceipts, selectedSite, fromDate, toDate]
+  );
+  const filteredBillingProfiles = useMemo(
+    () => billingProfiles.filter((profile) => selectedSite === "all" || isSameSite(profile, selectedSite)),
+    [billingProfiles, selectedSite]
+  );
+  const clientBillingBreakdowns = useMemo(() => {
+    const byClient = new Map();
+    const bySite = new Map();
+    const add = (map, label, bill) => {
+      const current = map.get(label) || { label, bills: 0, net: 0, received: 0, pending: 0, retention: 0, gst: 0, tds: 0, advanceAdjusted: 0 };
+      current.bills += 1; current.net += toNumber(bill.netBillAmount); current.received += toNumber(bill.receivedAmount); current.pending += toNumber(bill.pendingAmount); current.retention += toNumber(bill.retentionBalance); current.gst += toNumber(bill.gstAmount); current.tds += toNumber(bill.tdsAmount); current.advanceAdjusted += toNumber(bill.advanceAdjustment);
+      map.set(label, current);
+    };
+    filteredRABills.forEach((bill) => { add(byClient, bill.clientName || "Unknown client", bill); add(bySite, getSiteName(bill) || "Unassigned site", bill); });
+    const rows = (map) => Array.from(map.values()).sort((first, second) => second.pending - first.pending || first.label.localeCompare(second.label));
+    return { byClient: rows(byClient), bySite: rows(bySite) };
+  }, [filteredRABills]);
   const procurementSummary = useMemo(
     () => getProcurementSummary(filteredPurchaseRequests, filteredPurchaseOrders, filteredGoodsReceipts),
     [filteredPurchaseRequests, filteredPurchaseOrders, filteredGoodsReceipts]
@@ -1127,7 +1172,26 @@ function Reports() {
     })),
   };
 
-  const subcontractingExport = {
+  const clientBillingExport = {
+    title: "Client Billing, RA Bills & Receipts Report", filters: baseExportFilters,
+    summary: [
+      { label: "Certified RA Bills", value: clientBillingSummary.certifiedRABillCount },
+      { label: "Canonical Invoice Billing", value: formatExportMoney(clientBillingSummary.totalClientBilling) },
+      { label: "Received", value: formatExportMoney(clientBillingSummary.totalReceived) },
+      { label: "Outstanding", value: formatExportMoney(clientBillingSummary.outstandingReceivable) },
+      { label: "Retention Held", value: formatExportMoney(clientBillingSummary.retentionReceivable) },
+      { label: "Client Receipts", value: filteredClientReceipts.length },
+    ],
+    columns: [
+      { key: "recordType", label: "Record Type" }, { key: "date", label: "Date" }, { key: "reference", label: "RA Bill / Receipt" }, { key: "site", label: "Site" }, { key: "client", label: "Client" },
+      { key: "gross", label: "Gross Work (INR)", format: formatExportMoney }, { key: "net", label: "Net Receivable (INR)", format: formatExportMoney }, { key: "cash", label: "Cash Receipt (INR)", format: formatExportMoney }, { key: "tds", label: "TDS Credit (INR)", format: formatExportMoney },
+      { key: "received", label: "Received (INR)", format: formatExportMoney }, { key: "pending", label: "Pending (INR)", format: formatExportMoney }, { key: "retention", label: "Retention (INR)", format: formatExportMoney }, { key: "status", label: "Status / Mode" },
+    ],
+    rows: [
+      ...filteredRABills.map((bill) => ({ recordType: "RA Bill", date: bill.billDate || "-", reference: bill.raBillNumber || bill.id, site: getSiteName(bill) || "-", client: bill.clientName || "-", gross: toNumber(bill.grossWorkValue), net: toNumber(bill.netBillAmount), cash: 0, tds: toNumber(bill.tdsAmount), received: toNumber(bill.receivedAmount), pending: toNumber(bill.pendingAmount), retention: toNumber(bill.retentionBalance), status: bill.status || "Draft" })),
+      ...filteredClientReceipts.map((receipt) => ({ recordType: "Client Receipt", date: receipt.receiptDate || "-", reference: receipt.reference || receipt.raBillNumber || receipt.id, site: getSiteName(receipt) || "-", client: receipt.clientName || "-", gross: 0, net: 0, cash: toNumber(receipt.amount), tds: toNumber(receipt.tdsDeducted), received: toNumber(receipt.creditedAmount), pending: 0, retention: 0, status: receipt.paymentMode || "Recorded" })),
+    ],
+  };  const subcontractingExport = {
     title: "Subcontracting & Work Orders Report",
     filters: baseExportFilters,
     summary: [
@@ -1326,6 +1390,7 @@ function Reports() {
             <ReportExportActions report={inventoryExport} disabled={loading} />
             <ReportExportActions report={procurementExport} disabled={loading} />
             <ReportExportActions report={subcontractingExport} disabled={loading} />
+            <ReportExportActions report={clientBillingExport} disabled={loading} />
           </div>
         </section>
 
@@ -1588,6 +1653,31 @@ function Reports() {
             <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Payment Date</th><th>Bill / Work Order</th><th>Vendor / Site</th><th>Type</th><th>Mode</th><th>Amount</th><th>Reference</th></tr></thead><tbody>
               {filteredContractorPayments.length === 0 ? <tr><td colSpan="7" className="no-report-data">No contractor payments match the selected filters.</td></tr> : filteredContractorPayments.map((payment) => <tr key={payment.id}><td>{normaliseDate(payment.paymentDate) || "-"}</td><td>{payment.workOrderNumber || "-"}</td><td>{payment.vendorName || "-"}<small>{getSiteName(payment) || "-"}</small></td><td>{payment.paymentType || "-"}</td><td>{payment.paymentMode || "-"}</td><td>{formatMoney(payment.amount)}</td><td>{payment.reference || "-"}</td></tr>)}
             </tbody></table></div></div>
+            <div className="report-section-title"><h2>🧾 Client Billing &amp; Receivables</h2></div>
+            <div className="inventory-report-note">Certified RA bills create exactly one linked invoice. Income, received amount and pending receivable below are calculated from those existing invoices; RA bill rows and retention are operational tracking only.</div>
+            <div className="dpr-report-summary-grid">
+              <div className="dpr-report-summary-card"><span>🧾 Certified RA Bills</span><h3>{clientBillingSummary.certifiedRABillCount}</h3></div>
+              <div className="dpr-report-summary-card"><span>💳 Invoice Billing</span><h3>{formatMoney(clientBillingSummary.totalClientBilling)}</h3></div>
+              <div className="dpr-report-summary-card"><span>✅ Received</span><h3>{formatMoney(clientBillingSummary.totalReceived)}</h3></div>
+              <div className="dpr-report-summary-card"><span>⏳ Outstanding</span><h3>{formatMoney(clientBillingSummary.outstandingReceivable)}</h3></div>
+              <div className="dpr-report-summary-card"><span>🔒 Retention Held</span><h3>{formatMoney(clientBillingSummary.retentionReceivable)}</h3></div>
+              <div className="dpr-report-summary-card"><span>⚠️ Overdue / Pending Cert.</span><h3>{formatMoney(clientBillingSummary.overdueReceivable)}</h3><small>{clientBillingSummary.pendingCertificationCount} awaiting certification</small></div>
+            </div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>RA Bill</th><th>Bill / Due</th><th>Client / Site</th><th>Gross Work</th><th>Net Receivable</th><th>Received / Pending</th><th>Retention</th><th>Status</th></tr></thead><tbody>
+              {filteredRABills.length === 0 ? <tr><td colSpan="8" className="no-report-data">No RA bills match the selected site or date filters.</td></tr> : filteredRABills.map((bill) => <tr key={bill.id}><td>{bill.raBillNumber || bill.id}<small>{bill.agreementNumber || "-"}</small></td><td>{bill.billDate || "-"}<small>Due: {bill.paymentDueDate || "-"}</small></td><td>{bill.clientName || "-"}<small>{getSiteName(bill) || "-"}</small></td><td>{formatMoney(bill.grossWorkValue)}</td><td>{formatMoney(bill.netBillAmount)}</td><td>{formatMoney(bill.receivedAmount)} / {formatMoney(bill.pendingAmount)}</td><td>{formatMoney(bill.retentionBalance)}</td><td>{bill.status || "Draft"}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Client</th><th>RA Bills</th><th>Net Billing</th><th>Received</th><th>Outstanding</th><th>Retention</th><th>Advance Adjusted</th><th>GST / TDS</th></tr></thead><tbody>
+              {clientBillingBreakdowns.byClient.length === 0 ? <tr><td colSpan="8" className="no-report-data">No client billing records match the selected filters.</td></tr> : clientBillingBreakdowns.byClient.map((row) => <tr key={row.label}><td>{row.label}</td><td>{row.bills}</td><td>{formatMoney(row.net)}</td><td>{formatMoney(row.received)}</td><td>{formatMoney(row.pending)}</td><td>{formatMoney(row.retention)}</td><td>{formatMoney(row.advanceAdjusted)}</td><td>{formatMoney(row.gst)} / {formatMoney(row.tds)}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Site</th><th>RA Bills</th><th>Net Billing</th><th>Received</th><th>Outstanding</th><th>Retention</th><th>Advance Adjusted</th><th>GST / TDS</th></tr></thead><tbody>
+              {clientBillingBreakdowns.bySite.length === 0 ? <tr><td colSpan="8" className="no-report-data">No site billing records match the selected filters.</td></tr> : clientBillingBreakdowns.bySite.map((row) => <tr key={row.label}><td>{row.label}</td><td>{row.bills}</td><td>{formatMoney(row.net)}</td><td>{formatMoney(row.received)}</td><td>{formatMoney(row.pending)}</td><td>{formatMoney(row.retention)}</td><td>{formatMoney(row.advanceAdjusted)}</td><td>{formatMoney(row.gst)} / {formatMoney(row.tds)}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Receipt Date</th><th>RA Bill</th><th>Client / Site</th><th>Cash</th><th>TDS Credit</th><th>Total Credit</th><th>Mode</th><th>Reference</th></tr></thead><tbody>
+              {filteredClientReceipts.length === 0 ? <tr><td colSpan="8" className="no-report-data">No client receipts match the selected filters.</td></tr> : filteredClientReceipts.slice().sort((first, second) => String(second.receiptDate || "").localeCompare(String(first.receiptDate || ""))).map((receipt) => <tr key={receipt.id}><td>{receipt.receiptDate || "-"}</td><td>{receipt.raBillNumber || receipt.raBillId || "-"}</td><td>{receipt.clientName || "-"}<small>{getSiteName(receipt) || "-"}</small></td><td>{formatMoney(receipt.amount)}</td><td>{formatMoney(receipt.tdsDeducted)}</td><td>{formatMoney(receipt.creditedAmount)}</td><td>{receipt.paymentMode || "-"}</td><td>{receipt.reference || "-"}</td></tr>)}
+            </tbody></table></div></div>
+            <div className="reports-table-card"><div className="table-responsive"><table className="reports-table"><thead><tr><th>Site</th><th>Client</th><th>Agreement</th><th>Client Advance</th><th>Adjusted</th><th>Remaining Advance</th><th>Contract Value</th></tr></thead><tbody>
+              {filteredBillingProfiles.length === 0 ? <tr><td colSpan="7" className="no-report-data">No billing profiles match the selected site.</td></tr> : filteredBillingProfiles.map((profile) => <tr key={profile.id}><td>{profile.siteName}</td><td>{profile.clientName}</td><td>{profile.agreementNumber}</td><td>{formatMoney(profile.advanceReceived)}</td><td>{formatMoney(profile.advanceAdjusted)}</td><td>{formatMoney(toNumber(profile.advanceReceived) - toNumber(profile.advanceAdjusted))}</td><td>{formatMoney(profile.contractValue)}</td></tr>)}
+            </tbody></table></div></div>
             {/* PROCUREMENT */}
 
             <div className="report-section-title">
@@ -1799,6 +1889,10 @@ function Reports() {
 
               <span>
                 GRNs: {goodsReceipts.length}
+              </span>
+
+              <span>
+                RA Bills: {raBills.length}
               </span>
             </div>
 

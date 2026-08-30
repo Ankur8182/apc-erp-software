@@ -187,7 +187,12 @@ service cloud.firestore {
           "workOrders",
           "workOrderProgress",
           "contractorBills",
-          "contractorPayments"
+          "contractorPayments",
+          "clients",
+          "siteBillingProfiles",
+          "raBills",
+          "clientReceipts",
+          "raRetentionReleases"
         ] &&
         request.resource.data.recordId is string &&
           request.resource.data.recordId.size() > 0 && request.resource.data.recordId.size() <= 200 &&
@@ -206,6 +211,108 @@ service cloud.firestore {
             request.resource.data.action == "create"));
     }
 
+
+    // RA bills are operational until certification writes exactly one linked
+    // invoice. The existing invoices ledger remains canonical for revenue.
+    function hasValidClientFields() {
+      return request.resource.data.keys().hasAll(["clientName", "contactPerson", "mobile", "email", "gstin", "panNumber", "billingAddress", "notes", "status", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.keys().hasOnly(["clientName", "contactPerson", "mobile", "email", "gstin", "panNumber", "billingAddress", "notes", "status", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.clientName is string && request.resource.data.clientName.size() > 0 && request.resource.data.clientName.size() <= 200 &&
+        request.resource.data.contactPerson is string && request.resource.data.contactPerson.size() <= 200 &&
+        request.resource.data.mobile is string && request.resource.data.mobile.size() <= 20 &&
+        (request.resource.data.mobile.size() == 0 || request.resource.data.mobile.matches('^[0-9]{10}$')) &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 320 &&
+        request.resource.data.gstin is string && request.resource.data.gstin.size() <= 30 && request.resource.data.panNumber is string && request.resource.data.panNumber.size() <= 30 &&
+        request.resource.data.billingAddress is string && request.resource.data.billingAddress.size() <= 1000 && request.resource.data.notes is string && request.resource.data.notes.size() <= 1000 && request.resource.data.status in ["active", "inactive"];
+    }
+
+    function hasValidBillingProfileFields() {
+      return request.resource.data.keys().hasAll(["siteId", "siteName", "clientId", "clientName", "agreementNumber", "contractValue", "startDate", "completionDate", "billingType", "gstApplicable", "gstRate", "retentionPercent", "securityDeposit", "advanceReceived", "paymentTerms", "remarks", "advanceAdjusted", "certifiedWorkValue", "lastCertifiedBillId", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.keys().hasOnly(["siteId", "siteName", "clientId", "clientName", "agreementNumber", "contractValue", "startDate", "completionDate", "billingType", "gstApplicable", "gstRate", "retentionPercent", "securityDeposit", "advanceReceived", "paymentTerms", "remarks", "advanceAdjusted", "certifiedWorkValue", "lastCertifiedBillId", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.siteId is string && request.resource.data.siteId.size() > 0 && request.resource.data.siteName is string && request.resource.data.siteName.size() > 0 && request.resource.data.siteName.size() <= 200 &&
+        request.resource.data.clientId is string && request.resource.data.clientId.size() > 0 && request.resource.data.clientName is string && request.resource.data.clientName.size() > 0 && request.resource.data.clientName.size() <= 200 &&
+        request.resource.data.agreementNumber is string && request.resource.data.agreementNumber.size() > 0 && request.resource.data.agreementNumber.size() <= 200 &&
+        request.resource.data.startDate is string && request.resource.data.startDate.size() > 0 && request.resource.data.completionDate is string && request.resource.data.completionDate.size() > 0 &&
+        request.resource.data.billingType in ["Running Account", "Milestone", "Lump Sum", "Other"] && request.resource.data.gstApplicable is bool &&
+        request.resource.data.contractValue is number && request.resource.data.contractValue > 0 && request.resource.data.gstRate is number && request.resource.data.gstRate >= 0 && request.resource.data.gstRate <= 100 &&
+        request.resource.data.retentionPercent is number && request.resource.data.retentionPercent >= 0 && request.resource.data.retentionPercent <= 100 && request.resource.data.securityDeposit is number && request.resource.data.securityDeposit >= 0 &&
+        request.resource.data.advanceReceived is number && request.resource.data.advanceReceived >= 0 && request.resource.data.advanceAdjusted is number && request.resource.data.advanceAdjusted >= 0 && request.resource.data.advanceAdjusted <= request.resource.data.advanceReceived &&
+        request.resource.data.certifiedWorkValue is number && request.resource.data.certifiedWorkValue >= 0 && request.resource.data.certifiedWorkValue <= request.resource.data.contractValue &&
+        request.resource.data.lastCertifiedBillId is string && request.resource.data.lastCertifiedBillId.size() <= 200 && request.resource.data.paymentTerms is string && request.resource.data.paymentTerms.size() <= 1000 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000;
+    }
+
+    function hasValidRABillFields() {
+      return request.resource.data.keys().hasAll(["raBillNumber", "siteId", "site", "clientId", "clientName", "agreementNumber", "billingPeriodFrom", "billingPeriodTo", "billDate", "paymentDueDate", "previousCertifiedAmount", "cumulativeCertifiedAmount", "currentWorkValue", "variationAmount", "grossWorkValue", "materialAdvanceRecovery", "advanceAdjustment", "otherDeductions", "recoveries", "retentionPercent", "retentionAmount", "tdsPercent", "tdsAmount", "gstRate", "gstAmount", "netBillAmount", "status", "receivedAmount", "pendingAmount", "retentionReleased", "retentionBalance", "linkedInvoiceId", "lastReceiptId", "lastRetentionReleaseId", "remarks", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.keys().hasOnly(["raBillNumber", "siteId", "site", "clientId", "clientName", "agreementNumber", "billingPeriodFrom", "billingPeriodTo", "billDate", "paymentDueDate", "previousCertifiedAmount", "cumulativeCertifiedAmount", "currentWorkValue", "variationAmount", "grossWorkValue", "materialAdvanceRecovery", "advanceAdjustment", "otherDeductions", "recoveries", "retentionPercent", "retentionAmount", "tdsPercent", "tdsAmount", "gstRate", "gstAmount", "netBillAmount", "status", "receivedAmount", "pendingAmount", "retentionReleased", "retentionBalance", "linkedInvoiceId", "lastReceiptId", "lastRetentionReleaseId", "remarks", "certifiedAt", "createdBy", "createdAt", "updatedAt"]) &&
+        request.resource.data.raBillNumber is string && request.resource.data.raBillNumber.size() > 0 && request.resource.data.raBillNumber.size() <= 100 && request.resource.data.siteId is string && request.resource.data.siteId.size() > 0 && request.resource.data.site is string && request.resource.data.site.size() > 0 && request.resource.data.site.size() <= 200 &&
+        request.resource.data.clientId is string && request.resource.data.clientId.size() > 0 && request.resource.data.clientName is string && request.resource.data.clientName.size() > 0 && request.resource.data.clientName.size() <= 200 && request.resource.data.agreementNumber is string && request.resource.data.agreementNumber.size() > 0 && request.resource.data.agreementNumber.size() <= 200 &&
+        request.resource.data.billingPeriodFrom is string && request.resource.data.billingPeriodFrom.size() > 0 && request.resource.data.billingPeriodTo is string && request.resource.data.billingPeriodTo.size() > 0 && request.resource.data.billDate is string && request.resource.data.billDate.size() > 0 && request.resource.data.paymentDueDate is string && request.resource.data.paymentDueDate.size() > 0 &&
+        request.resource.data.status in ["Draft", "Submitted", "Certified", "Partially Paid", "Paid", "Rejected", "Cancelled"] &&
+        request.resource.data.previousCertifiedAmount is number && request.resource.data.previousCertifiedAmount >= 0 && request.resource.data.cumulativeCertifiedAmount is number && request.resource.data.cumulativeCertifiedAmount >= request.resource.data.previousCertifiedAmount &&
+        request.resource.data.currentWorkValue is number && request.resource.data.currentWorkValue > 0 && request.resource.data.variationAmount is number && request.resource.data.variationAmount >= 0 && request.resource.data.grossWorkValue is number && request.resource.data.grossWorkValue >= request.resource.data.currentWorkValue &&
+        request.resource.data.materialAdvanceRecovery is number && request.resource.data.materialAdvanceRecovery >= 0 && request.resource.data.advanceAdjustment is number && request.resource.data.advanceAdjustment >= 0 && request.resource.data.otherDeductions is number && request.resource.data.otherDeductions >= 0 && request.resource.data.recoveries is number && request.resource.data.recoveries >= 0 &&
+        request.resource.data.retentionPercent is number && request.resource.data.retentionPercent >= 0 && request.resource.data.retentionPercent <= 100 && request.resource.data.retentionAmount is number && request.resource.data.retentionAmount >= 0 && request.resource.data.tdsPercent is number && request.resource.data.tdsPercent >= 0 && request.resource.data.tdsPercent <= 100 && request.resource.data.tdsAmount is number && request.resource.data.tdsAmount >= 0 && request.resource.data.gstRate is number && request.resource.data.gstRate >= 0 && request.resource.data.gstRate <= 100 && request.resource.data.gstAmount is number && request.resource.data.gstAmount >= 0 &&
+        request.resource.data.netBillAmount is number && request.resource.data.netBillAmount >= 0 && request.resource.data.receivedAmount is number && request.resource.data.receivedAmount >= 0 && request.resource.data.receivedAmount <= request.resource.data.netBillAmount && request.resource.data.pendingAmount is number && request.resource.data.pendingAmount >= 0 && request.resource.data.retentionReleased is number && request.resource.data.retentionReleased >= 0 && request.resource.data.retentionReleased <= request.resource.data.retentionAmount && request.resource.data.retentionBalance is number && request.resource.data.retentionBalance >= 0 &&
+        request.resource.data.linkedInvoiceId is string && request.resource.data.linkedInvoiceId.size() <= 200 && request.resource.data.lastReceiptId is string && request.resource.data.lastReceiptId.size() <= 250 && request.resource.data.lastRetentionReleaseId is string && request.resource.data.lastRetentionReleaseId.size() <= 250 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000;
+    }
+
+    function hasValidRABillTransition() {
+      return request.resource.data.status == resource.data.status ||
+        (resource.data.status == "Draft" && request.resource.data.status in ["Submitted", "Cancelled"]) ||
+        (resource.data.status == "Submitted" && request.resource.data.status in ["Certified", "Rejected", "Cancelled"]) ||
+        (resource.data.status == "Certified" && request.resource.data.status in ["Partially Paid", "Paid"]) ||
+        (resource.data.status == "Partially Paid" && request.resource.data.status == "Paid");
+    }
+
+    function preservesSubmittedRABillFields() {
+      return resource.data.status == "Draft" ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status", "linkedInvoiceId", "certifiedAt", "receivedAmount", "pendingAmount",
+          "retentionReleased", "retentionBalance", "lastReceiptId", "lastRetentionReleaseId", "updatedAt"
+        ]);
+    }
+    function hasValidClientReceiptData(receiptId) {
+      let billPath = /databases/$(database)/documents/raBills/$(request.resource.data.raBillId);
+      return request.resource.data.keys().hasAll(["receiptKey", "raBillId", "raBillNumber", "linkedInvoiceId", "siteId", "site", "clientId", "clientName", "receiptDate", "amount", "tdsDeducted", "creditedAmount", "paymentMode", "reference", "remarks", "billUpdate", "createdBy", "createdAt", "updatedAt"]) && request.resource.data.keys().hasOnly(["receiptKey", "raBillId", "raBillNumber", "linkedInvoiceId", "siteId", "site", "clientId", "clientName", "receiptDate", "amount", "tdsDeducted", "creditedAmount", "paymentMode", "reference", "remarks", "billUpdate", "createdBy", "createdAt", "updatedAt"]) && receiptId == request.resource.data.receiptKey && request.resource.data.receiptKey is string && request.resource.data.receiptKey.size() > 0 && request.resource.data.receiptKey.size() <= 250 && request.resource.data.raBillId is string && request.resource.data.raBillId.size() > 0 && exists(billPath) && request.resource.data.raBillNumber is string && request.resource.data.linkedInvoiceId is string && request.resource.data.linkedInvoiceId.size() > 0 && request.resource.data.siteId is string && request.resource.data.site is string && request.resource.data.clientId is string && request.resource.data.clientName is string && request.resource.data.receiptDate is string && request.resource.data.receiptDate.size() > 0 && request.resource.data.amount is number && request.resource.data.amount > 0 && request.resource.data.tdsDeducted is number && request.resource.data.tdsDeducted >= 0 && request.resource.data.creditedAmount is number && request.resource.data.creditedAmount == request.resource.data.amount + request.resource.data.tdsDeducted && request.resource.data.paymentMode in ["Bank Transfer", "Cheque", "UPI", "Cash", "Other"] && request.resource.data.reference is string && request.resource.data.reference.size() <= 250 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000 && request.resource.data.billUpdate is map && request.resource.data.billUpdate.keys().hasOnly(["receivedAmount", "pendingAmount", "status"]) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+    }
+
+    function receiptMatchesAtomicUpdates(receiptId) {
+      let billPath = /databases/$(database)/documents/raBills/$(request.resource.data.raBillId);
+      let invoicePath = /databases/$(database)/documents/invoices/$(request.resource.data.linkedInvoiceId);
+      let billBefore = get(billPath).data;
+      let billAfter = getAfter(billPath).data;
+      let invoiceBefore = get(invoicePath).data;
+      let invoiceAfter = getAfter(invoicePath).data;
+      return exists(billPath) && exists(invoicePath) &&
+        request.resource.data.raBillNumber == billBefore.raBillNumber && request.resource.data.siteId == billBefore.siteId &&
+        request.resource.data.clientId == billBefore.clientId && request.resource.data.linkedInvoiceId == billBefore.linkedInvoiceId &&
+        billBefore.status in ["Certified", "Partially Paid"] && request.resource.data.creditedAmount <= billBefore.pendingAmount &&
+        request.resource.data.billUpdate.keys().hasAll(["receivedAmount", "pendingAmount", "status"]) &&
+        request.resource.data.billUpdate.receivedAmount == billBefore.receivedAmount + request.resource.data.creditedAmount &&
+        request.resource.data.billUpdate.pendingAmount == billBefore.pendingAmount - request.resource.data.creditedAmount &&
+        request.resource.data.billUpdate.status in ["Partially Paid", "Paid"] &&
+        billAfter.receivedAmount == request.resource.data.billUpdate.receivedAmount && billAfter.pendingAmount == request.resource.data.billUpdate.pendingAmount &&
+        billAfter.status == request.resource.data.billUpdate.status && billAfter.lastReceiptId == receiptId &&
+        invoiceAfter.paidAmount == invoiceBefore.paidAmount + request.resource.data.creditedAmount &&
+        invoiceAfter.pendingAmount == invoiceBefore.totalAmount - invoiceAfter.paidAmount && invoiceAfter.lastClientReceiptId == receiptId;
+    }
+    function hasValidRetentionReleaseData() {
+      let billPath = /databases/$(database)/documents/raBills/$(request.resource.data.raBillId);
+      return request.resource.data.keys().hasAll(["raBillId", "raBillNumber", "siteId", "site", "clientId", "clientName", "releaseDate", "amount", "paymentMode", "reference", "remarks", "billUpdate", "createdBy", "createdAt", "updatedAt"]) && request.resource.data.keys().hasOnly(["raBillId", "raBillNumber", "siteId", "site", "clientId", "clientName", "releaseDate", "amount", "paymentMode", "reference", "remarks", "billUpdate", "createdBy", "createdAt", "updatedAt"]) && request.resource.data.raBillId is string && request.resource.data.raBillId.size() > 0 && exists(billPath) && request.resource.data.raBillNumber is string && request.resource.data.siteId is string && request.resource.data.site is string && request.resource.data.clientId is string && request.resource.data.clientName is string && request.resource.data.releaseDate is string && request.resource.data.releaseDate.size() > 0 && request.resource.data.amount is number && request.resource.data.amount > 0 && request.resource.data.paymentMode in ["Bank Transfer", "Cheque", "UPI", "Cash", "Other"] && request.resource.data.reference is string && request.resource.data.reference.size() <= 250 && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000 && request.resource.data.billUpdate is map && request.resource.data.billUpdate.keys().hasOnly(["retentionReleased", "retentionBalance"]) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+    }
+    function retentionReleaseMatchesAtomicUpdate(releaseId) {
+      let billPath = /databases/$(database)/documents/raBills/$(request.resource.data.raBillId);
+      let billBefore = get(billPath).data;
+      let billAfter = getAfter(billPath).data;
+      return exists(billPath) && request.resource.data.raBillNumber == billBefore.raBillNumber &&
+        request.resource.data.siteId == billBefore.siteId && request.resource.data.clientId == billBefore.clientId &&
+        request.resource.data.amount <= billBefore.retentionBalance &&
+        request.resource.data.billUpdate.keys().hasAll(["retentionReleased", "retentionBalance"]) &&
+        request.resource.data.billUpdate.retentionReleased == billBefore.retentionReleased + request.resource.data.amount &&
+        request.resource.data.billUpdate.retentionBalance == billBefore.retentionBalance - request.resource.data.amount &&
+        billAfter.retentionReleased == request.resource.data.billUpdate.retentionReleased && billAfter.retentionBalance == request.resource.data.billUpdate.retentionBalance &&
+        billAfter.lastRetentionReleaseId == releaseId;
+    }
     function hasValidSiteBudgetData(siteId) {
       return request.resource.data.keys().hasAll(["siteId", "siteName", "budget"]) &&
         request.resource.data.keys().hasOnly([
@@ -1130,6 +1237,39 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+
+    match /clients/{clientId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidClientFields() && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidClientFields() && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /siteBillingProfiles/{siteId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && request.resource.data.siteId == siteId && hasValidBillingProfileFields() && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && request.resource.data.siteId == siteId && hasValidBillingProfileFields() && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /raBills/{billId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && request.resource.data.raBillNumber == billId && request.resource.data.status == "Draft" && hasValidRABillFields() && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteErpData() && hasValidRABillFields() && hasValidRABillTransition() && preservesSubmittedRABillFields() && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /clientReceipts/{receiptId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidClientReceiptData(receiptId) && receiptMatchesAtomicUpdates(receiptId);
+      allow update, delete: if false;
+    }
+
+    match /raRetentionReleases/{releaseId} {
+      allow read: if isAuthorizedErpUser();
+      allow create: if canWriteErpData() && hasValidRetentionReleaseData() && retentionReleaseMatchesAtomicUpdate(releaseId);
+      allow update, delete: if false;
+    }
     match /invoices/{document=**} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();

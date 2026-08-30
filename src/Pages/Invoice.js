@@ -3,6 +3,7 @@ import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { isRABillIncomeInvoice } from "../utils/clientBilling";
 import "../Styles/Invoice.css";
 
 import { db } from "../firebase";
@@ -122,6 +123,11 @@ function Invoice() {
   // =========================
 
   const saveInvoice = async () => {
+    const editingInvoice = invoices.find((item) => item.id === editId);
+    if (editingInvoice && isRABillIncomeInvoice(editingInvoice)) {
+      alert("Certified RA invoice payments are managed from Client Billing.");
+      return;
+    }
     if (
       invoiceNo.trim() === "" ||
       site.trim() === "" ||
@@ -228,6 +234,10 @@ function Invoice() {
   // =========================
 
   const editInvoice = (item) => {
+    if (isRABillIncomeInvoice(item)) {
+      alert("Certified RA invoices are managed from Client Billing to protect receivable reconciliation.");
+      return;
+    }
     setInvoiceNo(item.invoiceNo || "");
     setSite(item.site || "");
     setClientName(item.clientName || "");
@@ -258,6 +268,10 @@ function Invoice() {
   // =========================
 
   const deleteInvoice = async (id, record = {}) => {
+    if (isRABillIncomeInvoice(record)) {
+      alert("Certified RA invoices cannot be deleted from Invoice Management.");
+      return;
+    }
     const confirmDelete = window.confirm(
       "Kya aap is Invoice ko delete karna chahte hain?"
     );
@@ -762,25 +776,14 @@ function Invoice() {
                           </td>
 
                           <td>
-
-                            <button
-                              className="edit-btn"
-                              onClick={() =>
-                                editInvoice(item)
-                              }
-                            >
-                              ✏️ Edit
-                            </button>
-
-                            <button
-                              className="delete-btn"
-                              onClick={() =>
-                                deleteInvoice(item.id, item)
-                              }
-                            >
-                              🗑️ Delete
-                            </button>
-
+                            {isRABillIncomeInvoice(item) ? (
+                              <small>Managed in Client Billing</small>
+                            ) : (
+                              <>
+                                <button className="edit-btn" onClick={() => editInvoice(item)}>✏️ Edit</button>
+                                <button className="delete-btn" onClick={() => deleteInvoice(item.id, item)}>🗑️ Delete</button>
+                              </>
+                            )}
                           </td>
 
                         </tr>

@@ -141,6 +141,7 @@ const createCoreAlerts = ({
   goodsReceipts = [],
   workOrders = [],
   contractorBills = [],
+  raBills = [],
 }) => {
   const alerts = [];
 
@@ -515,6 +516,32 @@ const createCoreAlerts = ({
       href: "/work-orders", module: "Contractor Bill", site: getSiteName(bill),
     });
   });
+
+  (Array.isArray(raBills) ? raBills : []).forEach((bill) => {
+    if (!bill || typeof bill !== "object") return;
+    const status = normaliseStatus(bill.status);
+    const pending = normaliseMoney(bill.pendingAmount);
+    const dueDate = normaliseDate(bill.paymentDueDate);
+    const label = bill.raBillNumber || "RA bill";
+    if (["certified", "partial"].includes(status) && pending > 0 && dueDate && dueDate < today) {
+      addAlert(alerts, {
+        id: `ra-bill-overdue-${normaliseId(bill.id || label)}`,
+        severity: NOTIFICATION_SEVERITIES.critical,
+        title: "Client RA payment overdue",
+        message: `${label} for ${getSiteName(bill) || "a site"} has ${formatMoney(pending)} overdue since ${dueDate}.`,
+        date: dueDate, href: "/client-billing", module: "Client Billing", site: getSiteName(bill),
+      });
+    }
+    if (status === "submitted") {
+      addAlert(alerts, {
+        id: `ra-bill-submitted-${normaliseId(bill.id || label)}`,
+        severity: NOTIFICATION_SEVERITIES.info,
+        title: "RA bill awaiting certification",
+        message: `${label} for ${getSiteName(bill) || "a site"} is submitted for certification.`,
+        date: normaliseDate(bill.billDate) || today, href: "/client-billing", module: "Client Billing", site: getSiteName(bill),
+      });
+    }
+  });
   vehicles.forEach((vehicle) => {
     if (!vehicle || typeof vehicle !== "object") return;
 
@@ -588,6 +615,7 @@ export const generateNotifications = ({
   goodsReceipts = [],
   workOrders = [],
   contractorBills = [],
+  raBills = [],
 } = {}) => {
   const currentDate = normaliseDate(today) || getDprTodayDate();
   const normalisedRole = cleanRole(role);
@@ -642,6 +670,7 @@ export const generateNotifications = ({
       goodsReceipts,
       workOrders,
       contractorBills,
+      raBills,
     })
   );
 };

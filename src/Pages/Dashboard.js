@@ -39,6 +39,7 @@ import { getProcurementSummary } from "../utils/procurement";
 import { getTodayWorkforceSummary } from "../utils/payrollReporting";
 import { summariseEquipment } from "../utils/equipment";
 import { getSubcontractingSummary } from "../utils/subcontracting";
+import { getClientBillingSummary } from "../utils/clientBilling";
 
 const CHART_COLORS = ["#2563eb", "#0f766e", "#8b5cf6", "#f59e0b"];
 
@@ -61,6 +62,7 @@ function Dashboard() {
   const [goodsReceipts, setGoodsReceipts] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
   const [contractorBills, setContractorBills] = useState([]);
+  const [raBills, setRaBills] = useState([]);
   const [dprLoading, setDprLoading] = useState(true);
   const [dprError, setDprError] = useState("");
 
@@ -285,6 +287,11 @@ function Dashboard() {
       (snapshot) => setWorkOrders(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
       (error) => console.error("Work order Error:", error)
     );
+    const unsubscribeRaBills = onSnapshot(
+      collection(db, "raBills"),
+      (snapshot) => setRaBills(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (error) => console.error("RA bill Error:", error)
+    );
     const unsubscribeContractorBills = onSnapshot(
       collection(db, "contractorBills"),
       (snapshot) => setContractorBills(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
@@ -308,6 +315,7 @@ function Dashboard() {
       unsubscribePurchaseOrders();
       unsubscribeGoodsReceipts();
       unsubscribeWorkOrders();
+      unsubscribeRaBills();
       unsubscribeContractorBills();
     };
   }, []);
@@ -337,6 +345,10 @@ function Dashboard() {
   const subcontractingSummary = useMemo(
     () => getSubcontractingSummary(workOrders, contractorBills),
     [workOrders, contractorBills]
+  );
+  const clientBillingSummary = useMemo(
+    () => getClientBillingSummary({ invoices, raBills }),
+    [invoices, raBills]
   );
   const equipmentSummary = useMemo(
     () => summariseEquipment({ vehicles, vehicleExpenses }),
@@ -820,6 +832,16 @@ function Dashboard() {
             <article className="dashboard-status-card status-inventory"><span>✅ Certified Work</span><strong>{formatMoney(subcontractingSummary.certifiedAmount)}</strong><small>Operational certification, not an extra expense</small></article>
             <article className="dashboard-status-card status-inventory-low"><span>⏳ Pending Bills</span><strong>{formatMoney(subcontractingSummary.pendingPayable)}</strong><small>Retention: {formatMoney(subcontractingSummary.retentionBalance)}</small></article>
             <article className="dashboard-status-card status-inventory-out"><span>⚠️ Overdue Orders</span><strong>{subcontractingSummary.overdueWorkOrders}</strong><small>Review expected completion dates</small></article>
+          </div>
+        </section>
+        <section aria-labelledby="client-billing-overview">
+          <div className="dashboard-section-header"><div><span className="dashboard-eyebrow">Client receivables</span><h2 id="client-billing-overview">🧾 Client Billing Overview</h2></div></div>
+          <div className="dashboard-status-grid">
+            <article className="dashboard-status-card status-inventory"><span>🧾 Certified RA Bills</span><strong>{clientBillingSummary.certifiedRABillCount}</strong><small>Operational bills with a canonical invoice</small></article>
+            <article className="dashboard-status-card status-running"><span>💳 Received</span><strong>{formatMoney(clientBillingSummary.totalReceived)}</strong><small>From the existing invoice ledger</small></article>
+            <article className="dashboard-status-card status-pending"><span>⏳ Outstanding</span><strong>{formatMoney(clientBillingSummary.outstandingReceivable)}</strong><small>Invoice receivables still pending</small></article>
+            <article className="dashboard-status-card status-budget"><span>🔒 Retention Held</span><strong>{formatMoney(clientBillingSummary.retentionReceivable)}</strong><small>Not counted as additional income</small></article>
+            <article className="dashboard-status-card status-inventory-out"><span>⚠️ Overdue RA Receivable</span><strong>{formatMoney(clientBillingSummary.overdueReceivable)}</strong><small>{clientBillingSummary.pendingCertificationCount} submitted bill(s) awaiting certification</small></article>
           </div>
         </section>
         <section aria-labelledby="financial-charts">

@@ -13,6 +13,7 @@ import PurchaseRequests from "./Pages/PurchaseRequests";
 import PurchaseOrders from "./Pages/PurchaseOrders";
 import GoodsReceipts from "./Pages/GoodsReceipts";
 import WorkOrders from "./Pages/WorkOrders";
+import ClientBilling from "./Pages/ClientBilling";
 import Expenses from "./Pages/Expenses";
 import Attendance from "./Pages/Attendance";
 import Salary from "./Pages/Salary";
@@ -70,6 +71,8 @@ function App() {
           <Route path="/goods-receipts" element={protectedPage(<GoodsReceipts />)} />
 
           <Route path="/work-orders" element={protectedPage(<WorkOrders />)} />
+
+          <Route path="/client-billing" element={protectedPage(<ClientBilling />)} />
 
           <Route path="/expenses" element={protectedPage(<Expenses />)} />
 

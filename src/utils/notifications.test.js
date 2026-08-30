@@ -161,6 +161,20 @@ describe("notification generation", () => {
   });
 
 
+  it("creates client-billing alerts only from submitted or overdue RA bills", () => {
+    const alerts = generateNotifications({
+      role: "manager", today: TODAY,
+      raBills: [
+        { id: "ra-1", raBillNumber: "RA-1", site: "River View", status: "Submitted", billDate: TODAY },
+        { id: "ra-2", raBillNumber: "RA-2", site: "River View", status: "Partially Paid", pendingAmount: 1500, paymentDueDate: "2026-08-20" },
+      ],
+    });
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "RA bill awaiting certification", href: "/client-billing" }),
+      expect.objectContaining({ title: "Client RA payment overdue", href: "/client-billing", severity: "critical" }),
+    ]));
+    expect(generateNotifications({ role: "supervisor", today: TODAY, raBills: [{ status: "Submitted" }] }).every((alert) => alert.href === "/field-update")).toBe(true);
+  });
   it("creates real work-order and contractor-bill alerts only for standard ERP roles", () => {
     const alerts = generateNotifications({
       role: "manager", today: TODAY,

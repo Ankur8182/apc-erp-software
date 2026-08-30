@@ -23,6 +23,7 @@ function Sidebar() {
     { path: "/purchase-orders", icon: "📄", label: "Purchase Orders", roles: STANDARD_ERP_ROLES },
     { path: "/goods-receipts", icon: "🚚", label: "Goods Receipts", roles: STANDARD_ERP_ROLES },
     { path: "/work-orders", icon: "🧱", label: "Work Orders", roles: STANDARD_ERP_ROLES },
+    { path: "/client-billing", icon: "🧾", label: "Client Billing", roles: STANDARD_ERP_ROLES },
     { path: "/expenses", icon: "💰", label: "Expenses", roles: STANDARD_ERP_ROLES },
     { path: "/attendance", icon: "📅", label: "Attendance", roles: STANDARD_ERP_ROLES },
     { path: "/salary", icon: "💵", label: "Salary", roles: STANDARD_ERP_ROLES },

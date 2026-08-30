@@ -35,5 +35,6 @@ test("keeps the standard ERP navigation for an admin", () => {
     expect(screen.getByText("Vendors")).toBeInTheDocument();
     expect(screen.getByText("Purchase Requests")).toBeInTheDocument();
   expect(screen.getByText("Daily Progress")).toBeInTheDocument();
+  expect(screen.getByText("Client Billing")).toBeInTheDocument();
   expect(screen.getByText("User Management")).toBeInTheDocument();
 });
