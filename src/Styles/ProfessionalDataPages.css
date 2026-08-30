@@ -1,4 +1,5 @@
 .data-page {
+  min-width: 0;
   color: #1e293b;
 }
 
@@ -32,7 +33,9 @@
   min-height: 2.7rem;
   box-sizing: border-box;
   border-color: #cbd5e1;
+  background: #fff;
   box-shadow: none;
+  font: inherit;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 

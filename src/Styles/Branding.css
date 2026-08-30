@@ -1,0 +1,114 @@
+.brand-logo {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.login-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 52%, #e2e8f0 100%);
+}
+
+.login-card {
+  width: min(100%, 390px);
+  padding: 32px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.16);
+}
+
+.login-brand {
+  display: grid;
+  justify-items: center;
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+.login-brand-logo {
+  width: 108px;
+  height: 108px;
+  margin-bottom: 14px;
+}
+
+.login-company-name {
+  margin: 0;
+  color: #0f172a;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.login-erp-name {
+  margin: 6px 0 0;
+  color: #2563eb;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.login-tagline {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.login-card input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  color: #1e293b;
+  font: inherit;
+}
+
+.login-card input:focus {
+  border-color: #2563eb;
+  outline: 3px solid rgba(37, 99, 235, 0.15);
+}
+
+.login-submit-button {
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.login-submit-button:hover:not(:disabled) { background: #1d4ed8; }
+.login-submit-button:disabled { cursor: wait; opacity: 0.72; }
+
+.print-brand-header { display: none; }
+
+@media print {
+  .print-brand-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 0 0 9px;
+    border-bottom: 2px solid #1d4ed8;
+  }
+
+  .print-brand-header .brand-logo { width: 52px; height: 52px; }
+  .print-brand-header strong,
+  .print-brand-header span { display: block; }
+  .print-brand-header strong { color: #0f172a; font-size: 15px; letter-spacing: 0.04em; }
+  .print-brand-header span { margin-top: 2px; color: #475569; font-size: 11px; }
+}
+
+@media (max-width: 480px) {
+  .login-screen { padding: 16px; }
+  .login-card { padding: 25px 20px; }
+  .login-brand-logo { width: 92px; height: 92px; }
+  .login-company-name { font-size: 16px; }
+  .login-erp-name { font-size: 20px; }
+}

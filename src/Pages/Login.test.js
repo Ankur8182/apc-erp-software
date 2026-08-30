@@ -26,6 +26,14 @@ jest.mock("../firebase", () => ({
 }));
 
 describe("Login", () => {
+  test("shows the official A P Construction brand without changing login controls", () => {
+    render(<Login />);
+
+    expect(screen.getByAltText("A P Construction logo")).toBeInTheDocument();
+    expect(screen.getByText("A P CONSTRUCTION")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AP Construction ERP" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "LOGIN" })).toBeInTheDocument();
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     window.alert = jest.fn();

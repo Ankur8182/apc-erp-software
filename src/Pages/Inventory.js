@@ -317,7 +317,7 @@ function Inventory() {
   };
 
   return (
-    <Layout title="📦 Inventory & Stock Control">
+    <Layout>
       <div className="data-page inventory-page">
         <div className="inventory-heading">
           <div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
 import Layout from "../Components/Layout";
+import PrintBrandHeader from "../Components/PrintBrandHeader";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
@@ -20,6 +21,14 @@ const today = () => new Date().toISOString().slice(0, 10);
 const initialReceipt = () => ({ raBillId: "", receiptDate: today(), amount: "", tdsDeducted: "0", paymentMode: "Bank Transfer", reference: "", remarks: "" });
 const initialRelease = () => ({ raBillId: "", releaseDate: today(), amount: "", paymentMode: "Bank Transfer", reference: "", remarks: "" });
 const getInvoiceStatus = (paid, pending) => pending <= 0 ? "Paid" : paid > 0 ? "Partial" : "Pending";
+const snapshotRows = (snapshot) => {
+  const documents = Array.isArray(snapshot?.docs) ? snapshot.docs : [];
+
+  return documents.map((item) => {
+    const data = typeof item?.data === "function" ? item.data() : {};
+    return { id: item?.id || "", ...(data && typeof data === "object" ? data : {}) };
+  });
+};
 
 function ClientBilling() {
   const { role, user } = useAuth();
@@ -51,7 +60,7 @@ function ClientBilling() {
     let remaining = collections.length;
     const complete = () => { remaining -= 1; if (remaining <= 0) setLoading(false); };
     const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name)),
-      (snapshot) => { setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); complete(); },
+      (snapshot) => { setter(snapshotRows(snapshot)); complete(); },
       () => { setFeedback(message); complete(); }
     );
     const unsubscribers = [
@@ -284,6 +293,7 @@ function ClientBilling() {
   return (
     <Layout>
       <main className="procurement-page">
+        <PrintBrandHeader title="Client Billing & Running Account Bills" />
         <section className="procurement-hero">
           <div><p className="eyebrow">Client receivables</p><h1>Client Billing & RA Bills</h1><p>Certified RA bills create one linked invoice. The existing invoices collection remains the only income and receivables source.</p></div>
           <span className="procurement-pill">{canWrite ? "Billing control" : "Read only"}</span>
@@ -361,16 +371,17 @@ function ClientBilling() {
           <section className="procurement-card">
             <div className="procurement-card-heading"><div><h2>RA Bill Register</h2><p>Draft → Submitted → Certified → received. Certification creates the only linked income invoice.</p></div></div>
             <DataTableToolbar
-              searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search RA no., site, client…"
-              filters={[
-                { key: "site", label: "All sites", value: siteFilter, onChange: setSiteFilter, options: siteNames.map((site) => ({ value: site, label: site })) },
-                { key: "client", label: "All clients", value: clientFilter, onChange: setClientFilter, options: clients.map((client) => ({ value: client.id, label: client.clientName })) },
-                { key: "status", label: "All statuses", value: statusFilter, onChange: setStatusFilter, options: RA_BILL_STATUSES.map((status) => ({ value: status, label: status })) },
-              ]}
-              sortBy={billTable.sortBy} sortDirection={billTable.sortDirection} onSortByChange={billTable.setSortBy} onSortDirectionChange={billTable.setSortDirection} sortOptions={billTable.sortOptions}
-            />
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search RA no., site, client…"
+              table={billTable}
+            >
+              <label><span>Site</span><select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteNames.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
+              <label><span>Client</span><select value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}><option value="">All clients</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.clientName || "Unnamed client"}</option>)}</select></label>
+              <label><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{RA_BILL_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
+            </DataTableToolbar>
             <div className="procurement-table-wrap"><table><thead><tr><th>RA Bill</th><th>Site / Client</th><th>Bill / Due</th><th>Net receivable</th><th>Received / Pending</th><th>Retention</th><th>Status</th>{canWrite && <th>Actions</th>}</tr></thead><tbody>
-              {billTable.pageRows.length ? billTable.pageRows.map((bill) => <tr key={bill.id}>
+              {billTable.count > 0 ? billTable.rows.map((bill) => <tr key={bill.id}>
                 <td><strong>{bill.raBillNumber}</strong><br /><small>{bill.agreementNumber}</small></td><td>{bill.site}<br /><small>{bill.clientName}</small></td><td>{bill.billDate}<br /><small>Due: {bill.paymentDueDate}</small></td>
                 <td>{formatMoney(bill.netBillAmount)}</td><td>{formatMoney(bill.receivedAmount)}<br /><small>Pending: {formatMoney(bill.pendingAmount)}</small></td><td>{formatMoney(bill.retentionBalance)}</td><td><span className={`procurement-status status-${String(bill.status || "draft").toLowerCase().replace(/\s+/g, "-")}`}>{bill.status}</span></td>
                 {canWrite && <td className="procurement-row-actions">
@@ -380,7 +391,7 @@ function ClientBilling() {
                 </td>}
               </tr>) : <tr><td colSpan={canWrite ? "8" : "7"}>No RA bills match the selected filters.</td></tr>}
             </tbody></table></div>
-            <DataTablePagination page={billTable.page} totalPages={billTable.totalPages} startIndex={billTable.startIndex} endIndex={billTable.endIndex} totalCount={billTable.totalCount} pageSize={billTable.pageSize} onPageChange={billTable.setPage} onPageSizeChange={billTable.setPageSize} />
+            <DataTablePagination table={billTable} />
           </section>
 
           {canWrite && <section className="procurement-card">

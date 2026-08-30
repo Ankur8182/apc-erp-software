@@ -6,6 +6,8 @@ import "../Styles/Header.css";
 import { auth, db } from "../firebase";
 import { useAuth } from "../auth/AuthProvider";
 import { isFieldOnlyRole } from "../auth/authorization";
+import BrandLogo from "./BrandLogo";
+import { COMPANY_NAME, ERP_NAME } from "../config/branding";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import {
   formatNotificationDate,
@@ -190,7 +192,11 @@ function Header() {
   return (
     <div className="header">
       <div className="header-left">
-        <h2>🏗 AP Construction ERP</h2>
+        <BrandLogo className="header-brand-logo" />
+        <div className="header-brand-copy">
+          <h2>{ERP_NAME}</h2>
+          <span>{COMPANY_NAME}</span>
+        </div>
       </div>
 
       <div className="header-right">

@@ -2,8 +2,11 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import BrandLogo from "../Components/BrandLogo";
+import { BRAND_TAGLINE, COMPANY_NAME, ERP_NAME } from "../config/branding";
 import { auth, db } from "../firebase";
 import { getAuthorizedRole, getRoleLandingPath } from "../auth/authorization";
+import "../Styles/Branding.css";
 
 function Login() {
   const navigate = useNavigate();
@@ -49,31 +52,14 @@ function Login() {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        background: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          width: "350px",
-          background: "#fff",
-          padding: "30px",
-          borderRadius: "10px",
-          boxShadow: "0 0 10px rgba(0,0,0,0.2)",
-        }}
-      >
-        <h2 style={{ textAlign: "center" }}>
-          AP CONSTRUCTION ERP
-        </h2>
-
-        <p style={{ textAlign: "center" }}>
-          Construction Management System
-        </p>
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-brand">
+          <BrandLogo className="login-brand-logo" />
+          <p className="login-company-name">{COMPANY_NAME}</p>
+          <h1 className="login-erp-name">{ERP_NAME}</h1>
+          <p className="login-tagline">{BRAND_TAGLINE}</p>
+        </div>
 
         <input
           type="email"
@@ -81,11 +67,6 @@ function Login() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
-          style={{
-            width: "100%",
-            padding: "10px",
-            marginBottom: "10px",
-          }}
         />
 
         <input
@@ -94,24 +75,13 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
-          style={{
-            width: "100%",
-            padding: "10px",
-            marginBottom: "15px",
-          }}
         />
 
         <button
+          type="button"
+          className="login-submit-button"
           onClick={handleLogin}
           disabled={loading}
-          style={{
-            width: "100%",
-            padding: "10px",
-            background: "#007bff",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-          }}
         >
           {loading ? "LOGGING IN..." : "LOGIN"}
         </button>

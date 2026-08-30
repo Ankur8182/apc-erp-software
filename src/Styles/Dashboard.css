@@ -35,6 +35,7 @@
   text-transform: uppercase;
 }
 
+.dashboard-hero h1,
 .dashboard-hero h2,
 .dashboard-section-header h2,
 .dashboard-table-heading h2 {
@@ -73,6 +74,9 @@
 
 .dashboard-hero-status span { color: #475569; font-size: 12px; font-weight: 700; }
 .dashboard-hero-status strong { margin-top: 5px; color: #1d4ed8; font-size: 15px; }
+.dashboard-brand-lockup { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; }
+.dashboard-brand-logo { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 7px; background: #fff; box-shadow: 0 2px 7px rgba(15, 23, 42, 0.12); }
+.dashboard-brand-lockup span { display: inline; color: #475569; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; }
 
 .dashboard-section-header,
 .dashboard-table-heading,
@@ -146,6 +150,8 @@
 .dashboard-kpi-sites { border-top: 3px solid #7c3aed; }
 .dashboard-kpi-labour { border-top: 3px solid #0891b2; }
 .dashboard-kpi-dpr { border-top: 3px solid #4f46e5; }
+.dashboard-kpi-margin { border-top: 3px solid #0f766e; }
+.dashboard-kpi-budget { border-top: 3px solid #9333ea; }
 
 .dashboard-status-grid {
   display: grid;
@@ -243,7 +249,7 @@
 
 .dashboard-chart-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
   gap: 18px;
 }
 
@@ -323,10 +329,7 @@
 .dashboard-alert-warning { background: #fef3c7; color: #a16207; }
 .empty-text { margin: 15px 0 0; padding: 28px 12px; color: var(--dashboard-muted); font-size: 14px; text-align: center; }
 
-@media (max-width: 1380px) {
-  .dashboard-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dashboard-chart-card:last-child { grid-column: span 2; }
-}
+
 
 @media (max-width: 1120px) {
   .dashboard-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -338,8 +341,9 @@
   .dashboard-page { padding: 0 0 30px; }
   .dashboard-page section + section { margin-top: 27px; }
   .dashboard-hero { align-items: stretch; flex-direction: column; padding: 23px 19px; border-radius: 17px; }
-  .dashboard-hero h2 { font-size: 22px; }
+  .dashboard-hero h1, .dashboard-hero h2 { font-size: 22px; }
   .dashboard-hero-status { min-width: 0; text-align: left; }
+  .dashboard-brand-lockup { justify-content: flex-start; }
   .dashboard-section-header h2 { font-size: 20px; }
   .dashboard-kpi-grid,
   .dashboard-status-grid,
@@ -347,7 +351,7 @@
   .dashboard-attendance-grid,
   .dashboard-chart-grid,
   .dashboard-alert-grid { grid-template-columns: 1fr; }
-  .dashboard-chart-card:last-child { grid-column: auto; }
+
   .dashboard-kpi-card { min-height: 118px; }
   .dashboard-table-card,
   .dashboard-chart-card,

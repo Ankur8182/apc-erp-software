@@ -43,5 +43,7 @@ describe("report export helpers", () => {
 
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<td><script>");
+    expect(html).toContain("A P CONSTRUCTION");
+    expect(html).toContain('class="brand-logo"');
   });
 });

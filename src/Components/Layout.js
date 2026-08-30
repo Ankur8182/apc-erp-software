@@ -19,7 +19,7 @@ function Layout({ title, children }) {
 
         <div className="layout-content">
 
-          <h1 className="page-title">{title}</h1>
+          {title ? <h1 className="page-title">{title}</h1> : null}
 
           {!canWrite && (
             <p className="read-only-notice" role="status">

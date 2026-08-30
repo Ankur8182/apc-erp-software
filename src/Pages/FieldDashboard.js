@@ -98,7 +98,7 @@ function FieldDashboard() {
   );
 
   return (
-    <Layout title="📱 Field Dashboard">
+    <Layout>
       <div className="field-dashboard-page">
         <div className="field-dashboard-heading">
           <div>

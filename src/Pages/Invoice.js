@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Layout from "../Components/Layout";
+import PrintBrandHeader from "../Components/PrintBrandHeader";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
@@ -387,6 +388,7 @@ function Invoice() {
   return (
     <Layout title="🧾 Invoice Management">
       <div className="data-page invoice-page">
+        <PrintBrandHeader title="Invoice Management" />
 
         {/* =========================
             SUMMARY CARDS

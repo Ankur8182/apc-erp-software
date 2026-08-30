@@ -38,3 +38,12 @@ test("keeps the standard ERP navigation for an admin", () => {
   expect(screen.getByText("Client Billing")).toBeInTheDocument();
   expect(screen.getByText("User Management")).toBeInTheDocument();
 });
+
+test("uses the compact official brand in the sidebar without changing role menus", () => {
+  useAuth.mockReturnValue({ role: "viewer" });
+  render(<Sidebar />);
+
+  expect(screen.getByAltText("A P Construction logo")).toBeInTheDocument();
+  expect(screen.getAllByText("A P CONSTRUCTION").length).toBeGreaterThan(0);
+  expect(screen.getByText("Dashboard")).toBeInTheDocument();
+});

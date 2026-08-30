@@ -472,7 +472,7 @@ function FieldUpdate() {
   };
 
   return (
-    <Layout title="📱 Field Update">
+    <Layout>
       <div className="field-update-page">
         <div className="field-update-heading">
           <h1>📱 Site Update</h1>

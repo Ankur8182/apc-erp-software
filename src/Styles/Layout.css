@@ -5,6 +5,7 @@
 }
 
 .layout-main{
+    min-width:0;
     margin-left:250px;
     width:calc(100% - 250px);
     min-height:100vh;
@@ -12,6 +13,7 @@
 }
 
 .layout-content{
+    min-width:0;
     padding:28px 30px 36px;
 }
 

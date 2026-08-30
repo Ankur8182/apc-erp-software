@@ -7,6 +7,8 @@ import {
   FIELD_UPDATE_ROLES,
   STANDARD_ERP_ROLES,
 } from "../auth/authorization";
+import BrandLogo from "./BrandLogo";
+import { COMPANY_NAME, ERP_NAME } from "../config/branding";
 
 function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -59,10 +61,10 @@ function Sidebar() {
 
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-logo">
-          <div className="logo-icon">🏗️</div>
+          <BrandLogo className="sidebar-brand-logo" />
           <div className="logo-text">
-            <h2>AP ERP</h2>
-            <span>Construction Management</span>
+            <h2>{COMPANY_NAME}</h2>
+            <span>{ERP_NAME}</span>
           </div>
         </div>
 
@@ -94,8 +96,8 @@ function Sidebar() {
             <span>🏢</span>
 
             <div>
-              <strong>AP Construction</strong>
-              <small>ERP Management System</small>
+              <strong>{COMPANY_NAME}</strong>
+              <small>{ERP_NAME}</small>
             </div>
           </div>
         </div>

@@ -6,6 +6,8 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -15,6 +17,8 @@ import {
 } from "recharts";
 
 import Layout from "../Components/Layout";
+import BrandLogo from "../Components/BrandLogo";
+import { COMPANY_NAME } from "../config/branding";
 import { db } from "../firebase";
 import "../Styles/Dashboard.css";
 import {
@@ -31,6 +35,7 @@ import {
 } from "../utils/dailyProgressReporting";
 import { formatBudgetUsagePercent } from "../utils/siteBudget";
 import {
+  buildMonthlyFinancialTrend,
   buildSiteFinancialRows,
   calculatePortfolioFinancialSummary,
   calculateProjectFinancialSummary,
@@ -536,7 +541,7 @@ function Dashboard() {
       helper: "Payments collected",
     },
     {
-      label: "Pending",
+      label: "Outstanding Receivable",
       value: formatMoney(summary.pending),
       icon: "⏳",
       tone: "pending",
@@ -577,37 +582,89 @@ function Dashboard() {
       tone: "dpr",
       helper: `${todayDprSummary.totalManpower} manpower reported`,
     },
+    {
+      label: "Profit Margin",
+      value: summary.marginPercent === null ? "N/A" : `${summary.marginPercent}%`,
+      icon: "📐",
+      tone: "margin",
+      helper: "Recognized revenue after cost",
+    },
+    {
+      label: "Budget Used",
+      value: formatBudgetUsagePercent(portfolioInsights.budgetUsagePercent),
+      icon: "🎯",
+      tone: "budget",
+      helper: `${portfolioInsights.budgetedSiteCount} budgeted site${portfolioInsights.budgetedSiteCount === 1 ? "" : "s"}`,
+    },
   ];
 
-  const incomeExpenseChartData = [
+  const incomeExpenseChartData = useMemo(() => [
     { name: "Revenue", amount: toNumber(summary.revenue) },
     { name: "Actual Cost", amount: toNumber(summary.totalCost) },
-  ];
+  ], [summary.revenue, summary.totalCost]);
 
-  const siteProfitChartData = siteSummary.map((site) => ({
-    name: site.siteName,
-    profit: toNumber(site.profit),
-  }));
+  const siteProfitChartData = useMemo(
+    () => siteSummary
+      .filter((site) => toNumber(site.revenue) !== 0 || toNumber(site.totalCost) !== 0)
+      .map((site) => ({ name: site.siteName, profit: toNumber(site.profit) })),
+    [siteSummary]
+  );
 
-  const expenseBreakdownData = [
-    { name: "Material", value: toNumber(summary.materialCost) },
-    { name: "Labour", value: toNumber(summary.labourCost) },
-    { name: "Contractor", value: toNumber(summary.contractorCost) },
-    { name: "Vehicle", value: toNumber(summary.vehicleCost) },
-    { name: "Other", value: toNumber(summary.otherCost) },
-  ].filter((item) => item.value > 0);
+  const expenseBreakdownData = useMemo(
+    () => [
+      { name: "Material", value: toNumber(summary.materialCost) },
+      { name: "Labour", value: toNumber(summary.labourCost) },
+      { name: "Contractor", value: toNumber(summary.contractorCost) },
+      { name: "Vehicle", value: toNumber(summary.vehicleCost) },
+      { name: "Other", value: toNumber(summary.otherCost) },
+    ].filter((item) => item.value > 0),
+    [summary.contractorCost, summary.labourCost, summary.materialCost, summary.otherCost, summary.vehicleCost]
+  );
+
+  const budgetVsActualChartData = useMemo(
+    () => siteSummary
+      .filter((site) => site.budgetSummary?.hasBudget)
+      .map((site) => ({
+        name: site.siteName,
+        budget: toNumber(site.totalBudget),
+        actual: toNumber(site.totalCost),
+      })),
+    [siteSummary]
+  );
+
+  const monthlyFinancialTrendData = useMemo(
+    () => buildMonthlyFinancialTrend({
+      invoices,
+      expenses,
+      materials,
+      labours,
+      salaries,
+      attendance,
+      vehicles,
+      vehicleExpenses,
+      raBills,
+    }).map((item) => ({ ...item, label: item.month })),
+    [attendance, expenses, invoices, labours, materials, raBills, salaries, vehicleExpenses, vehicles]
+  );
+
+  const hasIncomeExpenseData = summary.revenue !== 0 || summary.totalCost !== 0;
+  const hasBudgetVsActualData = budgetVsActualChartData.some((item) => item.budget !== 0 || item.actual !== 0);
+  const hasMonthlyTrendData = monthlyFinancialTrendData.some((item) => item.revenue !== 0 || item.cost !== 0);
 
   return (
-    <Layout title="🏗️ AP Construction ERP">
+    <Layout>
       <div className="dashboard-page">
         <section className="dashboard-hero">
           <div>
             <span className="dashboard-eyebrow">Operations overview</span>
-            <h2>Project performance, live from your ERP.</h2>
+            <h1>Project performance, live from your ERP.</h1>
             <p>Track finances, field progress, workforce, and site health in one place.</p>
           </div>
           <div className="dashboard-hero-status">
-            <span>Live operational data</span>
+            <div className="dashboard-brand-lockup">
+              <BrandLogo className="dashboard-brand-logo" />
+              <span>{COMPANY_NAME}</span>
+            </div>
             <strong>{sites.length} sites in view</strong>
           </div>
         </section>
@@ -680,6 +737,7 @@ function Dashboard() {
             <article className="dashboard-status-card status-pending"><span>⏳ Outstanding</span><strong>{formatMoney(summary.outstanding)}</strong><small>Cash received: {formatMoney(summary.received)}</small></article>
             <article className="dashboard-status-card status-inventory-low"><span>⚠️ Over-budget Sites</span><strong>{portfolioInsights.sitesOverBudget}</strong><small>{portfolioInsights.budgetedSiteCount} site budgets in view</small></article>
             <article className="dashboard-status-card status-inventory-out"><span>📉 Loss-making Sites</span><strong>{portfolioInsights.lossMakingSites}</strong><small>Only sites with recognized revenue</small></article>
+            <article className="dashboard-status-card status-budget"><span>🎯 Budget Used</span><strong>{formatBudgetUsagePercent(portfolioInsights.budgetUsagePercent)}</strong><small>{portfolioInsights.totalBudget > 0 ? `Budget: ${formatMoney(portfolioInsights.totalBudget)}` : "No approved budgets yet"}</small></article>
           </div>
         </section>
 
@@ -840,7 +898,7 @@ function Dashboard() {
                   <p>Canonical invoices compared with recorded project costs.</p>
                 </div>
               </div>
-              {summary.income === 0 && summary.totalExpense === 0 ? (
+              {!hasIncomeExpenseData ? (
                 <p className="dashboard-chart-empty">No financial entries are available yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={270}>
@@ -905,6 +963,54 @@ function Dashboard() {
                     <Tooltip formatter={(value) => formatMoney(value)} />
                     <Legend verticalAlign="bottom" iconType="circle" />
                   </PieChart>
+                </ResponsiveContainer>
+              )}
+            </article>
+
+            <article className="dashboard-chart-card">
+              <div className="dashboard-chart-heading">
+                <div>
+                  <h3>Budget vs Actual Cost</h3>
+                  <p>Only sites with approved budgets are included.</p>
+                </div>
+              </div>
+              {!hasBudgetVsActualData ? (
+                <p className="dashboard-chart-empty">No approved site budgets with actual costs are available yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={270}>
+                  <BarChart data={budgetVsActualChartData} margin={{ top: 12, right: 8, left: 0, bottom: 34 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} angle={-18} textAnchor="end" interval={0} height={62} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `₹${toNumber(value).toLocaleString("en-IN")}`} />
+                    <Tooltip formatter={(value) => formatMoney(value)} />
+                    <Legend verticalAlign="top" height={28} />
+                    <Bar dataKey="budget" name="Budget" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="actual" name="Actual cost" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </article>
+
+            <article className="dashboard-chart-card">
+              <div className="dashboard-chart-heading">
+                <div>
+                  <h3>Monthly Revenue &amp; Cost Trend</h3>
+                  <p>Month-wise canonical financial entries only.</p>
+                </div>
+              </div>
+              {!hasMonthlyTrendData ? (
+                <p className="dashboard-chart-empty">No dated financial trend data is available yet.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={270}>
+                  <LineChart data={monthlyFinancialTrendData} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `₹${toNumber(value).toLocaleString("en-IN")}`} />
+                    <Tooltip formatter={(value) => formatMoney(value)} />
+                    <Legend verticalAlign="top" height={28} />
+                    <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="cost" name="Actual cost" stroke="#dc2626" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
                 </ResponsiveContainer>
               )}
             </article>
@@ -991,7 +1097,14 @@ function Dashboard() {
           </div>
         </section>
 
-        <section className="dashboard-alert-grid" aria-label="Operational alerts">
+        <section aria-labelledby="attention-required">
+          <div className="dashboard-section-header dashboard-attention-heading">
+            <div>
+              <span className="dashboard-eyebrow">Follow-up queue</span>
+              <h2 id="attention-required">⚠️ Attention Required</h2>
+            </div>
+          </div>
+          <div className="dashboard-alert-grid">
           <article className="dashboard-alert-card">
             <div className="dashboard-card-title-row">
               <div><h3>⏳ Pending Invoice Alerts</h3><p>Invoices with a balance still outstanding.</p></div>
@@ -1029,6 +1142,7 @@ function Dashboard() {
               ))
             )}
           </article>
+          </div>
         </section>
       </div>
     </Layout>

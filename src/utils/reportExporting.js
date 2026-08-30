@@ -1,4 +1,6 @@
-const APP_NAME = "AP Construction ERP";
+import { BRAND_LOGO_SRC, COMPANY_NAME, ERP_NAME } from "../config/branding";
+
+const APP_NAME = ERP_NAME;
 
 const asText = (value) => {
   if (value === null || value === undefined) return "";
@@ -117,8 +119,9 @@ const buildPrintDocument = ({
 <style>
   @page { size: A4 ${columns.length > 5 ? "landscape" : "portrait"}; margin: 12mm; }
   * { box-sizing: border-box; } body { color: #172033; font: 11px Arial, sans-serif; margin: 0; }
-  header { border-bottom: 2px solid #1d4ed8; margin-bottom: 14px; padding-bottom: 10px; }
-  h1 { color: #0f172a; font-size: 20px; margin: 0 0 4px; } h2 { font-size: 14px; margin: 16px 0 8px; }
+  header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1d4ed8; margin-bottom: 14px; padding-bottom: 10px; }
+  .brand-logo { width: 50px; height: 50px; flex: 0 0 50px; object-fit: contain; }
+  .company-name { color: #0f172a; font-size: 12px; font-weight: 800; letter-spacing: .09em; } h1 { color: #0f172a; font-size: 20px; margin: 2px 0 4px; } h2 { font-size: 14px; margin: 16px 0 8px; }
   p { color: #475569; margin: 0; } ul { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0; padding: 0; }
   .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .summary div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 8px; }
@@ -128,7 +131,7 @@ const buildPrintDocument = ({
   tr { break-inside: avoid; page-break-inside: avoid; } .empty { color: #64748b; padding: 18px; text-align: center; }
   footer { color: #64748b; font-size: 9px; margin-top: 12px; text-align: right; }
 </style></head><body>
-  <header><h1>${APP_NAME}</h1><p>${escapeHtml(title)} | Generated ${escapeHtml(generatedAt)}</p></header>
+  <header><img class="brand-logo" src="${escapeHtml(BRAND_LOGO_SRC)}" alt="${escapeHtml(COMPANY_NAME)} logo"><div><div class="company-name">${escapeHtml(COMPANY_NAME)}</div><h1>${escapeHtml(title)}</h1><p>${APP_NAME} | Generated ${escapeHtml(generatedAt)}</p></div></header>
   <h2>Applied Filters</h2><ul>${filterMarkup}</ul>
   <h2>Summary</h2><section class="summary">${summaryMarkup}</section>
   <h2>Report Details</h2><table><thead><tr>${headerMarkup}</tr></thead><tbody>${rowMarkup}</tbody></table>
@@ -149,6 +152,37 @@ export const printReport = (report) => {
 
   return true;
 };
+
+const getBrandLogoDataUrl = () => new Promise((resolve) => {
+  if (typeof Image === "undefined" || typeof document === "undefined") {
+    resolve("");
+    return;
+  }
+
+  const image = new Image();
+  image.onload = () => {
+    try {
+      const longestSide = Math.max(image.naturalWidth, image.naturalHeight, 1);
+      const scale = Math.min(1, 128 / longestSide);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        resolve("");
+        return;
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.9));
+    } catch {
+      resolve("");
+    }
+  };
+  image.onerror = () => resolve("");
+  image.src = BRAND_LOGO_SRC;
+});
 
 const drawPdfTable = (pdf, columns, rows, startY, pageWidth, pageHeight, margin) => {
   const usableWidth = pageWidth - margin * 2;
@@ -220,14 +254,23 @@ export const exportReportPdf = async (report) => {
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 36;
   let cursorY = margin;
+  const logoDataUrl = await getBrandLogoDataUrl();
+  const brandTextX = logoDataUrl ? margin + 48 : margin;
+
+  if (logoDataUrl) {
+    try {
+      pdf.addImage(logoDataUrl, "JPEG", margin, cursorY - 4, 38, 38);
+    } catch {
+      // Brand artwork must never prevent a user from exporting the underlying report.
+    }
+  }
 
   pdf.setTextColor(15, 23, 42);
+  pdf.setFontSize(9);
+  pdf.text(COMPANY_NAME, brandTextX, cursorY + 4);
   pdf.setFontSize(18);
-  pdf.text(APP_NAME, margin, cursorY);
-  cursorY += 19;
-  pdf.setFontSize(11);
-  pdf.text(asText(report.title), margin, cursorY);
-  cursorY += 14;
+  pdf.text(asText(report.title), brandTextX, cursorY + 22);
+  cursorY += 42;
   pdf.setTextColor(71, 85, 105);
   pdf.setFontSize(8);
   pdf.text(`Generated: ${getGeneratedReportDate()}`, margin, cursorY);

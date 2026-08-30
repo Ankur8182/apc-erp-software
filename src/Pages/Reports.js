@@ -1207,7 +1207,7 @@ function Reports() {
   ========================================= */
 
   return (
-    <Layout title="📊 Reports & Analytics">
+    <Layout>
       <div className="reports-page">
 
         <div className="reports-title-section">
