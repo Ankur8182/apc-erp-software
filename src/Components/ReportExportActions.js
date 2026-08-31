@@ -36,9 +36,14 @@ function ReportExportActions({ report, disabled = false }) {
   const handlePrint = () => {
     if (disabled) return;
 
-    setError("");
-    if (!printReport(report)) {
-      setError("Print preview was blocked. Please allow pop-ups and try again.");
+    try {
+      setError("");
+      if (!printReport(report)) {
+        setError("Print preview was blocked. Please allow pop-ups and try again.");
+      }
+    } catch (printError) {
+      console.error("Print preview error:", printError);
+      setError("Print preview could not be opened. Please try again.");
     }
   };
 

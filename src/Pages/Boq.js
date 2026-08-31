@@ -5,6 +5,7 @@ import { DataTablePagination, DataTableToolbar } from "../Components/DataTableCo
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getSiteName } from "../utils/financialReporting";
 import { BOQ_STATUSES, BOQ_UNITS, DIMENSION_TYPES, buildBoqAlerts, canManageBoq, createInitialBoqItemForm, createInitialMeasurementForm, createInitialVariationForm, getBoqItemProgressRows, getSiteBoqSummary, validateBoqItem, validateMeasurement, validateVariation } from "../utils/boqReporting";
@@ -83,7 +84,7 @@ function Boq() {
         setFeedback((await audit({ action: "create", module: "boqItems", recordId: reference.id, recordLabel: validation.value.itemNumber, details: "BOQ item created as a draft.", site: validation.value.site })) || "BOQ item saved as a draft.");
       }
       setEditId(""); setItemForm(createInitialBoqItemForm());
-    } catch (error) { console.error("BOQ item save error:", error); setFeedback(error.message || "BOQ item could not be saved."); } finally { setSaving(false); }
+    } catch (error) { console.error("BOQ item save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "BOQ item could not be saved.")); } finally { setSaving(false); }
   };
 
   const updateItemStatus = async (item, status) => {

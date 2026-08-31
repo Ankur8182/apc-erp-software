@@ -54,6 +54,18 @@ describe("route authorization", () => {
     expect(screen.getByTestId("redirect")).toHaveTextContent("/dashboard");
     expect(screen.queryByText("Sensitive ERP data")).not.toBeInTheDocument();
   });
+  test("shows a safe loading state on the login route while the role is being checked", () => {
+    useAuth.mockReturnValue({ loading: true, isAuthorized: false });
+
+    render(
+      <PublicOnlyRoute>
+        <div>Login</div>
+      </PublicOnlyRoute>
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Checking account access...");
+    expect(screen.queryByText("Login")).not.toBeInTheDocument();
+  });
   test("redirects an authorised user away from the login route", () => {
     useAuth.mockReturnValue({ loading: false, isAuthorized: true, role: "admin" });
 

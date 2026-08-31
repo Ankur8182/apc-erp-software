@@ -13,6 +13,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { getSiteName } from "../utils/financialReporting";
 import {
   canManageInventory,
@@ -223,7 +224,7 @@ function Inventory() {
       clearItemForm();
     } catch (error) {
       console.error("Inventory item save error:", error);
-      setFeedback(error.message || "Inventory item could not be saved.");
+      setFeedback(getUserFriendlyFirebaseError(error, "Inventory item could not be saved."));
     } finally {
       setItemSaving(false);
     }
@@ -310,7 +311,7 @@ function Inventory() {
       setTransactionForm(createInitialInventoryTransactionForm());
     } catch (error) {
       console.error("Inventory transaction save error:", error);
-      setFeedback(error.message || "Stock transaction could not be recorded.");
+      setFeedback(getUserFriendlyFirebaseError(error, "Stock transaction could not be recorded."));
     } finally {
       setTransactionSaving(false);
     }

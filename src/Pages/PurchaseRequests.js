@@ -6,6 +6,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { buildDocumentNumber, canApprovePurchaseRequest, canManageProcurement, createInitialPurchaseRequestForm, createInitialPurchaseRequestItem, PURCHASE_PRIORITIES, PURCHASE_REQUEST_STATUSES, validatePurchaseRequest } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
@@ -88,7 +89,7 @@ function PurchaseRequests() {
       const audit = await logAuditEvent({ action: "create", module: "purchaseRequests", recordId: requestNumber, recordLabel: requestNumber, details: "Purchase request submitted for approval.", site: validation.value.site });
       setFeedback(audit.success ? `Purchase request ${requestNumber} submitted.` : getAuditFailureMessage());
       setForm(createInitialPurchaseRequestForm());
-    } catch (error) { console.error("Purchase request save error:", error); setFeedback(error.message || "Purchase request could not be saved."); }
+    } catch (error) { console.error("Purchase request save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Purchase request could not be saved.")); }
     finally { setSaving(false); }
   };
 

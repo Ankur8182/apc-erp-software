@@ -26,7 +26,7 @@ function ProtectedRoute({ children, allowedRoles = STANDARD_ERP_ROLES }) {
 export function PublicOnlyRoute({ children }) {
   const { loading, isAuthorized, role } = useAuth();
 
-  if (loading) return null;
+  if (loading) return <p role="status">Checking account access...</p>;
 
   const landingPath = getRoleLandingPath(role);
 

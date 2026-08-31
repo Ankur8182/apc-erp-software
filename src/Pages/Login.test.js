@@ -36,6 +36,7 @@ describe("Login", () => {
   });
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(console, "error").mockImplementation(() => {});
     window.alert = jest.fn();
     doc.mockReturnValue({});
     getDoc.mockResolvedValue({
@@ -44,6 +45,9 @@ describe("Login", () => {
     });
   });
 
+  afterEach(() => {
+    console.error.mockRestore();
+  });
   test("requires an email address and password", () => {
     render(<Login />);
     fireEvent.click(screen.getByRole("button", { name: "LOGIN" }));
@@ -96,6 +100,22 @@ describe("Login", () => {
     );
   });
 
+  test("shows a safe retry message when Firebase authentication is unavailable", async () => {
+    signInWithEmailAndPassword.mockRejectedValue({ code: "auth/network-request-failed" });
+    render(<Login />);
+
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "manager@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "secure-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "LOGIN" }));
+
+    await waitFor(() => expect(window.alert).toHaveBeenCalledWith(
+      "Unable to connect right now. Check your internet connection and try again."
+    ));
+  });
   test("signs out a Firebase user without an active ERP role", async () => {
     signInWithEmailAndPassword.mockResolvedValue({ user: { uid: "user-1" } });
     getDoc.mockResolvedValue({ exists: () => false });

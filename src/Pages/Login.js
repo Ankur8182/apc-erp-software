@@ -6,6 +6,7 @@ import BrandLogo from "../Components/BrandLogo";
 import { BRAND_TAGLINE, COMPANY_NAME, ERP_NAME } from "../config/branding";
 import { auth, db } from "../firebase";
 import { getAuthorizedRole, getRoleLandingPath } from "../auth/authorization";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import "../Styles/Branding.css";
 
 function Login() {
@@ -45,7 +46,7 @@ function Login() {
       navigate(getRoleLandingPath(role));
     } catch (error) {
       console.error("Firebase login error:", error);
-      alert("Invalid Username or Password");
+      alert(getUserFriendlyFirebaseError(error, "Invalid Username or Password"));
     } finally {
       setLoading(false);
     }

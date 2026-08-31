@@ -6,6 +6,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { buildDocumentNumber, canManageProcurement, createGoodsReceiptKey, createInventoryStockInFromGoodsReceipt, findInventoryItemForPurchaseLine, getPurchaseOrderLine, getPurchaseOrderReceiptStatus, validateGoodsReceipt } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
@@ -136,7 +137,7 @@ function GoodsReceipts() {
       const audit = await logAuditEvent({ action: "create", module: "goodsReceipts", recordId: receiptKey, recordLabel: grnNumber, details: "GRN completed and linked inventory Stock-In recorded.", site: selectedOrder.site });
       setFeedback(audit.success ? `GRN ${grnNumber} completed.` : getAuditFailureMessage());
       setForm(initialForm());
-    } catch (error) { console.error("GRN completion error:", error); setFeedback(error.message || "Goods receipt could not be completed."); }
+    } catch (error) { console.error("GRN completion error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Goods receipt could not be completed.")); }
     finally { setSaving(false); }
   };
 

@@ -1,0 +1,57 @@
+.app-error-boundary {
+  align-items: center;
+  background: #f4f7fb;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.app-error-boundary-card {
+  background: #fff;
+  border: 1px solid #d9e2ef;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.1);
+  max-width: 440px;
+  padding: 32px;
+  text-align: center;
+  width: 100%;
+}
+
+.app-error-boundary-brand {
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.app-error-boundary-card h1 {
+  color: #172033;
+  font-size: 1.45rem;
+  margin: 0;
+}
+
+.app-error-boundary-card p:not(.app-error-boundary-brand) {
+  color: #526176;
+  line-height: 1.55;
+  margin: 12px 0 22px;
+}
+
+.app-error-boundary-card button {
+  background: #1d4ed8;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.app-error-boundary-card button:hover,
+.app-error-boundary-card button:focus-visible {
+  background: #1e40af;
+}

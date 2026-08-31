@@ -6,6 +6,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { getSiteName, normaliseMoney } from "../utils/financialReporting";
 import {
   buildWorkOrderNumber, canManageSubcontracting, canTransitionWorkOrder,
@@ -121,7 +122,7 @@ function WorkOrders() {
         setFeedback(audit.success ? "Draft work order created." : getAuditFailureMessage());
       }
       resetOrder();
-    } catch (error) { console.error("Work order save error:", error); setFeedback(error.message || "Work order could not be saved."); }
+    } catch (error) { console.error("Work order save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Work order could not be saved.")); }
     finally { setSaving(false); }
   };
 

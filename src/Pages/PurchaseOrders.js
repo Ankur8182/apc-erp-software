@@ -6,6 +6,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { buildDocumentNumber, calculatePurchaseOrderTotals, canManageProcurement, createInitialPurchaseOrderForm, createInitialPurchaseOrderItem, PURCHASE_ORDER_STATUSES, validatePurchaseOrder } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
@@ -106,7 +107,7 @@ function PurchaseOrders() {
         setFeedback(audit.success ? `Purchase order ${poNumber} created.` : getAuditFailureMessage());
       }
       resetForm();
-    } catch (error) { console.error("Purchase order save error:", error); setFeedback(error.message || "Purchase order could not be saved."); }
+    } catch (error) { console.error("Purchase order save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Purchase order could not be saved.")); }
     finally { setSaving(false); }
   };
 
