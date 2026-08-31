@@ -27,6 +27,7 @@ import FieldDashboard from "./Pages/FieldDashboard";
 import AuditLog from "./Pages/AuditLog";
 import UserManagement from "./Pages/UserManagement";
 import BackupRecovery from "./Pages/BackupRecovery";
+import DataHealthMigration from "./Pages/DataHealthMigration";
 import { AuthProvider } from "./auth/AuthProvider";
 import ProtectedRoute, { PublicOnlyRoute } from "./auth/ProtectedRoute";
 import {
@@ -97,6 +98,8 @@ function App() {
           <Route path="/user-management" element={protectedPage(<UserManagement />, ADMIN_ROLES)} />
 
           <Route path="/backup-recovery" element={protectedPage(<BackupRecovery />, ADMIN_ROLES)} />
+
+          <Route path="/data-health-migration" element={protectedPage(<DataHealthMigration />, ADMIN_ROLES)} />
 
           <Route
             path="/field-update"

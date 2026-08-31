@@ -2,6 +2,7 @@ import {
   canSubmitFieldUpdate,
   canReadAuditLogs,
   canManageBackupExport,
+  canManageDataHealth,
   canReadFieldReferenceData,
   FIELD_REFERENCE_COLLECTIONS,
   getDprReadScope,
@@ -80,4 +81,10 @@ test("limits backup export administration to active admin role handling", () => 
   expect(canManageBackupExport("manager")).toBe(false);
   expect(canManageBackupExport("viewer")).toBe(false);
   expect(canManageBackupExport("supervisor")).toBe(false);
+});
+test("limits data-health administration to admins", () => {
+  expect(canManageDataHealth("admin")).toBe(true);
+  expect(canManageDataHealth("manager")).toBe(false);
+  expect(canManageDataHealth("viewer")).toBe(false);
+  expect(canManageDataHealth("engineer")).toBe(false);
 });

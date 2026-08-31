@@ -1,0 +1,49 @@
+.data-health-page { display: grid; gap: 1rem; }
+.data-health-intro, .data-health-card { border: 1px solid #dbe3ef; border-radius: .9rem; background: #fff; box-shadow: 0 8px 22px rgba(15, 23, 42, .05); }
+.data-health-intro { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .9rem; padding: 1.05rem 1.2rem; background: linear-gradient(120deg, #eff6ff, #f8fafc); border-color: #bfdbfe; }
+.data-health-intro h2, .data-health-card h2 { margin: 0; color: #0f172a; font-size: 1.08rem; }
+.data-health-intro p, .data-health-card p { margin: .35rem 0 0; color: #475569; font-size: .9rem; line-height: 1.55; }
+.data-health-card { padding: 1.2rem; }
+.data-health-card-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: .9rem; }
+.data-health-admin-badge, .data-health-no-write-badge, .data-health-severity { display: inline-flex; align-items: center; min-height: 1.8rem; padding: .18rem .58rem; border-radius: 999px; font-size: .76rem; font-weight: 800; line-height: 1.2; }
+.data-health-admin-badge { color: #1e3a8a; background: #dbeafe; }
+.data-health-no-write-badge { color: #166534; background: #dcfce7; }
+.data-health-warning { margin-top: 1rem; padding: .85rem .95rem; border: 1px solid #fdba74; border-radius: .7rem; background: #fff7ed; color: #9a3412; font-size: .88rem; line-height: 1.5; }
+.data-health-run-button, .data-health-more-button { min-height: 46px; border: 0; border-radius: .65rem; font: inherit; font-weight: 800; cursor: pointer; }
+.data-health-run-button { width: 100%; margin-top: 1rem; background: #1d4ed8; color: #fff; }
+.data-health-run-button:hover:not(:disabled) { background: #1e40af; }
+.data-health-run-button:disabled { cursor: not-allowed; opacity: .65; }
+.data-health-more-button { margin-top: .9rem; padding: .5rem .85rem; color: #1e3a8a; background: #dbeafe; }
+.data-health-state { margin: .9rem 0 0; padding: .78rem .9rem; border-radius: .65rem; background: #eff6ff; color: #1e3a8a; font-size: .88rem; line-height: 1.5; }
+.data-health-error { background: #fef2f2; color: #b91c1c; }
+.data-health-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+.data-health-summary-grid article { min-width: 0; padding: .9rem; border: 1px solid #dbe3ef; border-radius: .75rem; background: #fff; box-shadow: 0 5px 14px rgba(15, 23, 42, .04); }
+.data-health-summary-grid span { display: block; color: #64748b; font-size: .73rem; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.data-health-summary-grid strong { display: block; margin-top: .35rem; color: #0f172a; font-size: 1.35rem; }
+.data-health-filters { display: grid; grid-template-columns: 1.5fr repeat(3, minmax(130px, 1fr)); gap: .75rem; margin-top: 1rem; }
+.data-health-filters label { display: grid; gap: .3rem; color: #475569; font-size: .78rem; font-weight: 800; }
+.data-health-filters input, .data-health-filters select { box-sizing: border-box; width: 100%; min-height: 40px; padding: .45rem .55rem; border: 1px solid #cbd5e1; border-radius: .5rem; color: #1e293b; background: #fff; font: inherit; }
+.data-health-table-wrap { overflow-x: auto; margin-top: 1rem; border: 1px solid #e2e8f0; border-radius: .65rem; }
+.data-health-table { width: 100%; min-width: 760px; border-collapse: collapse; color: #334155; font-size: .84rem; }
+.data-health-table th, .data-health-table td { padding: .7rem .75rem; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; line-height: 1.45; }
+.data-health-table th { color: #475569; background: #f8fafc; font-size: .73rem; text-transform: uppercase; letter-spacing: .02em; }
+.data-health-table tbody tr:last-child td { border-bottom: 0; }
+.data-health-table strong { display: block; color: #0f172a; }
+.data-health-table small { display: block; margin-top: .17rem; color: #64748b; overflow-wrap: anywhere; }
+.data-health-candidates td:nth-child(4) { min-width: 280px; }
+.data-health-severity-critical { color: #991b1b; background: #fee2e2; }
+.data-health-severity-warning { color: #9a3412; background: #ffedd5; }
+.data-health-severity-info { color: #1e3a8a; background: #dbeafe; }
+.data-health-empty { margin-top: 1rem !important; padding: 1rem; border-radius: .65rem; background: #f8fafc; }
+.data-health-candidate-details summary { cursor: pointer; color: #1d4ed8; font-weight: 800; white-space: nowrap; }
+.data-health-candidate-details dl { display: grid; gap: .38rem; margin: .7rem 0 0; }
+.data-health-candidate-details dl div { display: grid; gap: .12rem; }
+.data-health-candidate-details dt { color: #64748b; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.data-health-candidate-details dd { margin: 0; color: #334155; overflow-wrap: anywhere; }
+.data-health-proposals { margin-top: .7rem; padding: .65rem; border-radius: .5rem; background: #eff6ff; color: #1e3a8a; }
+.data-health-proposals ul { margin: .45rem 0 0; padding-left: 1.1rem; }
+.data-health-proposals li { margin-top: .28rem; }
+.data-health-proposals small { display: block; margin-top: .14rem; }
+.data-health-guidance code { color: #1e3a8a; font-size: .9em; }
+@media (max-width: 900px) { .data-health-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .data-health-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .data-health-intro, .data-health-card { padding: .95rem; } .data-health-summary-grid, .data-health-filters { grid-template-columns: 1fr; } .data-health-admin-badge, .data-health-no-write-badge { white-space: normal; } }
