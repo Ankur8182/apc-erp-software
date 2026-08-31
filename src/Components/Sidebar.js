@@ -39,6 +39,7 @@ function Sidebar() {
     { path: "/field-update", icon: "✍️", label: "Field Update", roles: FIELD_UPDATE_ROLES },
     { path: "/reports", icon: "📊", label: "Reports", roles: STANDARD_ERP_ROLES },
     { path: "/audit-logs", icon: "🛡️", label: "Audit Log", roles: ADMIN_ROLES },
+    { path: "/backup-recovery", icon: "🗄️", label: "Backup & Recovery", roles: ADMIN_ROLES },
     { path: "/user-management", icon: "👥", label: "User Management", roles: ADMIN_ROLES },
   ];
   const visibleMenuItems = menuItems.filter((item) => item.roles.includes(role));

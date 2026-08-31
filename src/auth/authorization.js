@@ -43,6 +43,9 @@ export const canReadFieldReferenceData = (role) =>
 export const canReadAuditLogs = (role) =>
   ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
 
+export const canManageBackupExport = (role) =>
+  ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
+
 export const getAuthorizedRole = (profile = {}) => {
   const role = String(profile?.role || "").trim().toLowerCase();
 

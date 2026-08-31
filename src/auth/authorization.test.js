@@ -1,6 +1,7 @@
 import {
   canSubmitFieldUpdate,
   canReadAuditLogs,
+  canManageBackupExport,
   canReadFieldReferenceData,
   FIELD_REFERENCE_COLLECTIONS,
   getDprReadScope,
@@ -72,4 +73,11 @@ test("limits audit-log access to active admin role handling", () => {
   expect(canReadAuditLogs("manager")).toBe(false);
   expect(canReadAuditLogs("viewer")).toBe(false);
   expect(canReadAuditLogs("engineer")).toBe(false);
+});
+
+test("limits backup export administration to active admin role handling", () => {
+  expect(canManageBackupExport("admin")).toBe(true);
+  expect(canManageBackupExport("manager")).toBe(false);
+  expect(canManageBackupExport("viewer")).toBe(false);
+  expect(canManageBackupExport("supervisor")).toBe(false);
 });
