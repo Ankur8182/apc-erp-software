@@ -9,11 +9,23 @@ import { syncQueuedDprEntry } from "../utils/offlineDprSync";
 import { getNetworkStatus } from "../utils/pwa";
 
 const getSyncMessage = (result) => {
+  const retryable = result.failed.filter(({ entry }) => entry.retryable !== false).length;
+  const attention = result.failed.length - retryable;
+
   if (result.synced.length > 0 && result.failed.length === 0) {
     return `${result.synced.length} local site update${result.synced.length > 1 ? "s" : ""} synchronized.`;
   }
   if (result.synced.length > 0) {
-    return `${result.synced.length} local site update${result.synced.length > 1 ? "s" : ""} synchronized; ${result.failed.length} still need${result.failed.length === 1 ? "s" : ""} attention.`;
+    const remaining = attention
+      ? `${attention} still need${attention === 1 ? "s" : ""} attention`
+      : `${retryable} still pending synchronization`;
+    return `${result.synced.length} local site update${result.synced.length > 1 ? "s" : ""} synchronized; ${remaining}.`;
+  }
+  if (retryable > 0) {
+    return `${retryable} local site update${retryable > 1 ? "s are" : " is"} still pending and will retry when the connection and field account are ready.`;
+  }
+  if (attention > 0) {
+    return `${attention} local site update${attention > 1 ? "s need" : " needs"} attention before it can synchronize.`;
   }
   return "";
 };
@@ -84,6 +96,24 @@ export const useDprOutboxSync = ({ userId, role } = {}) => {
     return synchronize();
   }, [fieldOnly, owner, refresh, synchronize]);
 
+  const retryEntry = useCallback(async (clientSubmissionId) => {
+    if (!owner || !fieldOnly || !clientSubmissionId) return null;
+    const entry = await dprOutbox.retry(owner, clientSubmissionId, { force: true });
+    if (!entry) return null;
+    await refresh();
+    return synchronize();
+  }, [fieldOnly, owner, refresh, synchronize]);
+
+  const discardEntry = useCallback(async (clientSubmissionId) => {
+    if (!owner || !fieldOnly || !clientSubmissionId) return false;
+    const discarded = await dprOutbox.discard(owner, clientSubmissionId);
+    if (discarded) {
+      setSyncMessage("The local site update was discarded from this device. No server DPR was deleted.");
+      await refresh();
+    }
+    return discarded;
+  }, [fieldOnly, owner, refresh]);
+
   useEffect(() => {
     const updateNetworkStatus = () => setIsOnline(getNetworkStatus());
     updateNetworkStatus();
@@ -126,6 +156,8 @@ export const useDprOutboxSync = ({ userId, role } = {}) => {
     syncMessage,
     queueDpr,
     retryPending,
+    retryEntry,
+    discardEntry,
     synchronize,
     refresh,
   };

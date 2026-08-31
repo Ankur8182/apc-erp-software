@@ -1,0 +1,125 @@
+.dpr-outbox-attention {
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fffafa;
+  box-sizing: border-box;
+}
+
+.dpr-outbox-attention-heading h2,
+.dpr-outbox-attention-heading p {
+  margin: 0;
+}
+
+.dpr-outbox-attention-heading h2 {
+  color: #991b1b;
+  font-size: 17px;
+}
+
+.dpr-outbox-attention-heading p {
+  margin-top: 5px;
+  color: #7f1d1d;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dpr-outbox-attention-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dpr-outbox-attention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #fee2e2;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.dpr-outbox-attention-details {
+  min-width: 0;
+}
+
+.dpr-outbox-attention-details strong,
+.dpr-outbox-attention-details span,
+.dpr-outbox-attention-details small {
+  display: block;
+}
+
+.dpr-outbox-attention-details strong {
+  color: #1f2937;
+}
+
+.dpr-outbox-attention-details span,
+.dpr-outbox-attention-details small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.dpr-outbox-attention-details p {
+  margin: 8px 0 0;
+  color: #7f1d1d;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.dpr-outbox-attention-details p b {
+  color: #991b1b;
+}
+
+.dpr-outbox-attention-actions {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.dpr-outbox-attention-actions button {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #b91c1c;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #991b1b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dpr-outbox-attention-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dpr-outbox-attention-actions .dpr-outbox-discard {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+@media (max-width: 700px) {
+  .dpr-outbox-attention {
+    padding: 14px;
+  }
+
+  .dpr-outbox-attention-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dpr-outbox-attention-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .dpr-outbox-attention-actions button {
+    width: 100%;
+    min-height: 46px;
+  }
+}

@@ -22,6 +22,17 @@ const createOutboxError = (code, message) => {
   return error;
 };
 
+const LEGACY_PREFLIGHT_READ_FAILURE_MESSAGE = "Synchronization needs a valid active field account. This local update has been kept on this device.";
+const LEGACY_PREFLIGHT_RETRY_MESSAGE = "A previous synchronization check will be retried with the current secure connection flow.";
+
+const getDprSyncFailureCode = (error) => cleanText(error?.code).toLowerCase();
+
+const isLegacyPreflightReadFailure = (raw = {}) =>
+  raw.syncStatus === DPR_OUTBOX_STATUS.FAILED &&
+  raw.retryable === false &&
+  !cleanText(raw.failureCode) &&
+  cleanText(raw.lastError) === LEGACY_PREFLIGHT_READ_FAILURE_MESSAGE;
+
 const toIsoString = (value = new Date()) => {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
@@ -54,6 +65,7 @@ const normaliseEntry = (raw = {}, index = 0) => {
     ? createFieldUpdateDprPayload(rawPayload, userId)
     : { isValid: false, error: "A queued DPR must have an owner." };
   const knownStatus = Object.values(DPR_OUTBOX_STATUS).includes(raw.syncStatus);
+  const legacyPreflightReadFailure = isLegacyPreflightReadFailure(raw);
 
   if (!validation.isValid || !userId || !cleanText(raw.clientSubmissionId)) {
     return {
@@ -65,7 +77,8 @@ const normaliseEntry = (raw = {}, index = 0) => {
       syncStatus: DPR_OUTBOX_STATUS.FAILED,
       retryCount: Math.max(Number(raw.retryCount) || 0, 0),
       retryable: false,
-      lastError: "This local update is incomplete and cannot be synchronized. It has been kept on this device for review.",
+      failureCode: "dpr-outbox-invalid-payload",
+      lastError: "Queued DPR contains invalid data and cannot be synchronized. It has been kept on this device for review.",
     };
   }
 
@@ -75,10 +88,19 @@ const normaliseEntry = (raw = {}, index = 0) => {
     site: validation.value.site,
     localCreatedAt: toIsoString(raw.localCreatedAt),
     payload: validation.value,
-    syncStatus: knownStatus ? raw.syncStatus : DPR_OUTBOX_STATUS.PENDING,
+    syncStatus: legacyPreflightReadFailure
+      ? DPR_OUTBOX_STATUS.PENDING
+      : knownStatus
+        ? raw.syncStatus
+        : DPR_OUTBOX_STATUS.PENDING,
     retryCount: Math.max(Number(raw.retryCount) || 0, 0),
-    retryable: raw.retryable !== false,
-    lastError: cleanText(raw.lastError),
+    retryable: legacyPreflightReadFailure ? true : raw.retryable !== false,
+    failureCode: legacyPreflightReadFailure
+      ? "dpr-outbox-legacy-preflight-read"
+      : cleanText(raw.failureCode),
+    lastError: legacyPreflightReadFailure
+      ? LEGACY_PREFLIGHT_RETRY_MESSAGE
+      : cleanText(raw.lastError),
   };
 };
 
@@ -99,6 +121,7 @@ export const createOfflineDprEntry = ({ clientSubmissionId, userId, payload, cre
     syncStatus: DPR_OUTBOX_STATUS.PENDING,
     retryCount: 0,
     retryable: true,
+    failureCode: "",
     lastError: "",
   };
 };
@@ -238,20 +261,65 @@ export const createMemoryDprOutboxStorage = (initialEntries = []) => {
 };
 
 export const isRetryableDprSyncError = (error) => {
-  const code = cleanText(error?.code).toLowerCase();
+  const code = getDprSyncFailureCode(error);
   const message = cleanText(error?.message).toLowerCase();
-  return ["unavailable", "network", "deadline-exceeded", "timeout", "aborted", "resource-exhausted"]
-    .some((part) => code.includes(part) || message.includes(part));
+  return [
+    "unavailable",
+    "network",
+    "deadline-exceeded",
+    "timeout",
+    "aborted",
+    "cancelled",
+    "resource-exhausted",
+    "unauthenticated",
+    "auth-not-ready",
+    "auth/user-token-expired",
+    "auth/network-request-failed",
+  ].some((part) => code.includes(part) || message.includes(part));
 };
 
 export const getDprSyncFailureMessage = (error) => {
-  const code = cleanText(error?.code).toLowerCase();
-  if (code.includes("permission-denied")) return "Synchronization needs a valid active field account. This local update has been kept on this device.";
+  const code = getDprSyncFailureCode(error);
+  if (code.includes("dpr-outbox-auth-not-ready") || code.includes("unauthenticated") || code.includes("auth/")) {
+    return "Authentication is not ready. This local update is still saved and will retry when connection and sign-in are ready.";
+  }
+  if (code.includes("permission-denied")) return "Permission denied while submitting this DPR. Confirm your active field access, then retry.";
   if (code.includes("dpr-outbox-owner")) return "This local update belongs to a different user and will not be synchronized by this account.";
   if (code.includes("dpr-outbox-id-collision")) return "A different report already uses this submission ID. The local update was retained for review.";
-  if (code.includes("dpr-outbox-invalid")) return "This local update is incomplete and cannot be synchronized. It has been kept for review.";
-  if (isRetryableDprSyncError(error)) return "Could not reach the server. This site update is still saved locally and can be retried.";
+  if (code.includes("dpr-outbox-invalid")) return "Queued DPR contains invalid data and cannot be synchronized. It has been kept for review.";
+  if (isRetryableDprSyncError(error)) return "Network connection was interrupted during synchronization. This site update is still saved locally and will retry.";
   return "The site update could not be synchronized. It has been kept on this device.";
+};
+
+const isSafeOutboxMessage = (message) => [
+  "Authentication is not ready.",
+  "Permission denied while submitting this DPR.",
+  "This local update belongs to a different user",
+  "A different report already uses this submission ID.",
+  "Queued DPR contains invalid data",
+  "Network connection was interrupted during synchronization.",
+  "The site update could not be synchronized.",
+  "A previous synchronization check will be retried",
+].some((prefix) => cleanText(message).startsWith(prefix));
+
+export const getDprOutboxEntryDiagnostics = (entry = {}) => {
+  const payload = entry?.payload && typeof entry.payload === "object" ? entry.payload : {};
+  const failureCode = cleanText(entry.failureCode).toLowerCase();
+  const savedReason = cleanText(entry.lastError);
+  const reason = failureCode
+    ? getDprSyncFailureMessage({ code: failureCode })
+    : isSafeOutboxMessage(savedReason)
+      ? savedReason
+      : "This local update needs review before it can synchronize.";
+
+  return {
+    activity: cleanText(payload.workActivity) || "Work activity not recorded",
+    site: cleanText(entry.site || payload.site) || "Site not recorded",
+    date: cleanText(payload.date) || "DPR date not recorded",
+    reason,
+    retryable: entry.retryable !== false,
+    canManualRetry: !failureCode.includes("dpr-outbox-invalid"),
+  };
 };
 
 export const getDprOutboxSummary = (entries = []) => (Array.isArray(entries) ? entries : []).reduce(
@@ -303,10 +371,23 @@ export const createDprOutbox = ({ storage = createBrowserDprOutboxStorage() } = 
       }
       return recovered;
     },
-    retry: async (userId, clientSubmissionId) => {
+    retry: async (userId, clientSubmissionId, { force = false } = {}) => {
       const entry = (await list(userId)).find((current) => current.clientSubmissionId === clientSubmissionId);
-      if (!entry || entry.retryable === false) return entry || null;
-      return put({ ...entry, syncStatus: DPR_OUTBOX_STATUS.PENDING, lastError: "" });
+      if (!entry || (!force && entry.retryable === false)) return entry || null;
+      return put({
+        ...entry,
+        syncStatus: DPR_OUTBOX_STATUS.PENDING,
+        retryable: true,
+        failureCode: "",
+        lastError: "",
+      });
+    },
+    discard: async (userId, clientSubmissionId) => {
+      const entry = (await list(userId)).find((current) => current.clientSubmissionId === clientSubmissionId);
+      if (!entry) return false;
+      await storage.remove(entry.clientSubmissionId);
+      notifyDprOutboxChange();
+      return true;
     },
     sync: async ({ userId, syncEntry } = {}) => {
       const owner = cleanText(userId);
@@ -318,7 +399,12 @@ export const createDprOutbox = ({ storage = createBrowserDprOutboxStorage() } = 
           result.skipped.push(entry);
           continue;
         }
-        const syncing = { ...entry, syncStatus: DPR_OUTBOX_STATUS.SYNCING, lastError: "" };
+        const syncing = {
+          ...entry,
+          syncStatus: DPR_OUTBOX_STATUS.SYNCING,
+          failureCode: "",
+          lastError: "",
+        };
         await put(syncing);
         try {
           const serverResult = await syncEntry(syncing);
@@ -326,11 +412,16 @@ export const createDprOutbox = ({ storage = createBrowserDprOutboxStorage() } = 
           notifyDprOutboxChange();
           result.synced.push({ entry: syncing, serverResult });
         } catch (error) {
+          const retryable = isRetryableDprSyncError(error);
           const failed = {
             ...syncing,
-            syncStatus: DPR_OUTBOX_STATUS.FAILED,
+            // A temporary network/auth race remains pending rather than being
+            // shown as a permanent attention item. Only non-retryable errors
+            // require manual review.
+            syncStatus: retryable ? DPR_OUTBOX_STATUS.PENDING : DPR_OUTBOX_STATUS.FAILED,
             retryCount: syncing.retryCount + 1,
-            retryable: isRetryableDprSyncError(error),
+            retryable,
+            failureCode: getDprSyncFailureCode(error) || "dpr-outbox-sync-failed",
             lastError: getDprSyncFailureMessage(error),
           };
           await put(failed);

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import FieldDashboard from "./FieldDashboard";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
@@ -22,16 +22,25 @@ jest.mock("firebase/firestore", () => ({
   where: jest.fn(),
 }));
 
+const mockRetryEntry = jest.fn();
+const mockDiscardEntry = jest.fn();
+
+const createOutboxState = (overrides = {}) => ({
+  isOnline: false,
+  entries: [{ clientSubmissionId: "local-dpr", retryable: true }],
+  summary: { pending: 1, syncing: 0, failed: 0, total: 1 },
+  isSyncing: false,
+  syncMessage: "",
+  retryPending: jest.fn(),
+  retryEntry: mockRetryEntry,
+  discardEntry: mockDiscardEntry,
+  ...overrides,
+});
+
 describe("FieldDashboard mobile operational view", () => {
   beforeEach(() => {
-    useDprOutboxSync.mockReturnValue({
-      isOnline: false,
-      entries: [{ clientSubmissionId: "local-dpr", retryable: true }],
-      summary: { pending: 1, syncing: 0, failed: 0, total: 1 },
-      isSyncing: false,
-      syncMessage: "",
-      retryPending: jest.fn(),
-    });
+    jest.clearAllMocks();
+    useDprOutboxSync.mockReturnValue(createOutboxState());
     collection.mockImplementation((database, name) => ({ name }));
     query.mockImplementation((source) => source);
     onSnapshot.mockImplementation((source, onNext) => {
@@ -73,5 +82,33 @@ describe("FieldDashboard mobile operational view", () => {
     expect(screen.queryByText(/Payroll/)).not.toBeInTheDocument();
     expect(query).toHaveBeenCalled();
     expect(where).toHaveBeenCalledWith("createdBy", "==", "supervisor-1");
+  });
+
+  it("explains a failed local DPR and requires deliberate confirmation before discarding it", () => {
+    const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+    useDprOutboxSync.mockReturnValue(createOutboxState({
+      isOnline: true,
+      entries: [{
+        clientSubmissionId: "dpr-permission",
+        syncStatus: "failed",
+        retryable: false,
+        failureCode: "permission-denied",
+        site: "Civil Site",
+        payload: { workActivity: "Jointing", date: "2026-09-06", site: "Civil Site" },
+      }],
+      summary: { pending: 0, syncing: 0, failed: 1, total: 1 },
+    }));
+
+    render(<FieldDashboard />);
+
+    expect(screen.getByRole("heading", { name: /local updates needing attention/i })).toBeInTheDocument();
+    expect(screen.getByText("Jointing")).toBeInTheDocument();
+    expect(screen.getByText(/Permission denied while submitting this DPR/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry Sync" }));
+    expect(mockRetryEntry).toHaveBeenCalledWith("dpr-permission");
+    fireEvent.click(screen.getByRole("button", { name: "Discard Local Update" }));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockDiscardEntry).toHaveBeenCalledWith("dpr-permission");
+    confirmSpy.mockRestore();
   });
 });

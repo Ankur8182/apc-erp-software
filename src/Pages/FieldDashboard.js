@@ -18,6 +18,7 @@ import {
 import { getRecordDate, getSiteName } from "../utils/financialReporting";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
+import DprOutboxAttentionList from "../Components/DprOutboxAttentionList";
 import "../Styles/FieldDashboard.css";
 
 const getAvailableSiteNames = (sites = []) => {
@@ -50,6 +51,8 @@ function FieldDashboard() {
     isSyncing: isOutboxSyncing,
     syncMessage: outboxSyncMessage,
     retryPending,
+    retryEntry,
+    discardEntry,
   } = useDprOutboxSync({ userId: user?.uid, role });
   const canRetryOutbox = outboxEntries.some((entry) => entry.retryable !== false);
 
@@ -200,6 +203,13 @@ function FieldDashboard() {
             </button>
           )}
         </section>
+        <DprOutboxAttentionList
+          entries={outboxEntries}
+          isOnline={isOnline}
+          isSyncing={isOutboxSyncing}
+          onRetry={retryEntry}
+          onDiscard={discardEntry}
+        />
         {outboxSyncMessage && <p className="field-dashboard-sync-message" role="status">{outboxSyncMessage}</p>}
 
         <section className="field-dashboard-sites" aria-labelledby="field-available-sites">

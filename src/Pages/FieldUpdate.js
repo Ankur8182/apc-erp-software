@@ -52,6 +52,7 @@ import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import { getOfflineFieldMessage } from "../utils/pwa";
 import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
+import DprOutboxAttentionList from "../Components/DprOutboxAttentionList";
 import { createDprClientSubmissionId, isRetryableDprSyncError } from "../utils/offlineDprOutbox";
 import "../Styles/FieldUpdate.css";
 
@@ -172,6 +173,8 @@ function FieldUpdate() {
     syncMessage: outboxSyncMessage,
     queueDpr,
     retryPending,
+    retryEntry,
+    discardEntry,
   } = useDprOutboxSync({ userId, role });
   const canRetryOutbox = outboxEntries.some((entry) => entry.retryable !== false);
 
@@ -610,6 +613,15 @@ function FieldUpdate() {
               </button>
             )}
           </section>
+        )}
+        {fieldOnly && (
+          <DprOutboxAttentionList
+            entries={outboxEntries}
+            isOnline={isOnline}
+            isSyncing={isOutboxSyncing}
+            onRetry={retryEntry}
+            onDiscard={discardEntry}
+          />
         )}
         {outboxSyncMessage && <p className="field-feedback field-feedback-draft" role="status">{outboxSyncMessage}</p>}
         {reportsLoading && !loadError && <p className="field-network-state" role="status">Loading your site updates and operational references...</p>}
