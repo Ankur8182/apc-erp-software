@@ -40,7 +40,8 @@ service cloud.firestore {
     function isValidDprUsageValue(value) {
       // Current forms submit text. Phase 3 legacy/structured DPRs can contain
       // a list of material or equipment entries, so both are accepted.
-      return value is string || (value is list && value.size() <= 25);
+      return (value is string && value.size() <= 1000) ||
+        (value is list && value.size() <= 25);
     }
 
     function hasValidOptionalDprUsageFields() {
@@ -63,11 +64,38 @@ service cloud.firestore {
           "createdAt",
           "updatedAt"
         ]) &&
+        // Field users may create only the operational DPR schema emitted by
+        // Field Update/offline sync. This prevents arbitrary fields or nested
+        // data from being smuggled into a manager-visible ERP document.
+        request.resource.data.keys().hasOnly([
+          "date",
+          "site",
+          "workActivity",
+          "workLocation",
+          "quantity",
+          "unit",
+          "manpowerCount",
+          "materialsUsed",
+          "equipmentUsed",
+          "remarks",
+          "materialQuantity",
+          "equipmentUsage",
+          "createdBy",
+          "clientSubmissionId",
+          "photos",
+          "createdAt",
+          "updatedAt"
+        ]) &&
         request.resource.data.site is string && request.resource.data.site.size() > 0 &&
-        request.resource.data.date is string && request.resource.data.date.size() > 0 &&
+        request.resource.data.site.size() <= 200 &&
+        request.resource.data.date is string &&
+          request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
         request.resource.data.workActivity is string && request.resource.data.workActivity.size() > 0 &&
+          request.resource.data.workActivity.size() <= 500 &&
         request.resource.data.workLocation is string && request.resource.data.workLocation.size() > 0 &&
+          request.resource.data.workLocation.size() <= 500 &&
         request.resource.data.unit is string && request.resource.data.unit.size() > 0 &&
+          request.resource.data.unit.size() <= 50 &&
         request.resource.data.quantity is number && request.resource.data.quantity >= 0 &&
         request.resource.data.manpowerCount is number && request.resource.data.manpowerCount >= 0 &&
         hasValidOptionalDprUsageFields() &&
@@ -77,6 +105,12 @@ service cloud.firestore {
           (request.resource.data.materialQuantity is number && request.resource.data.materialQuantity >= 0)) &&
         (!request.resource.data.keys().hasAll(["equipmentUsage"]) ||
           (request.resource.data.equipmentUsage is number && request.resource.data.equipmentUsage >= 0)) &&
+        (!request.resource.data.keys().hasAll(["remarks"]) ||
+          (request.resource.data.remarks is string && request.resource.data.remarks.size() <= 2000)) &&
+        (!request.resource.data.keys().hasAll(["clientSubmissionId"]) ||
+          (request.resource.data.clientSubmissionId is string &&
+            request.resource.data.clientSubmissionId.size() > 0 &&
+            request.resource.data.clientSubmissionId.size() <= 200)) &&
         (!request.resource.data.keys().hasAll(["photos"]) ||
           (request.resource.data.photos is list && request.resource.data.photos.size() <= 5));
     }
@@ -1037,7 +1071,9 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
-    match /sites/{document=**} {
+    // Root-only master records. The client has no supported site subcollection;
+    // avoiding a recursive match keeps future nested paths default-denied.
+    match /sites/{siteId} {
       allow read: if isAuthorizedErpUser() || isFieldUser();
       allow create, update, delete: if canWriteErpData();
     }
@@ -1194,7 +1230,7 @@ service cloud.firestore {
         request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
       allow update, delete: if false;
     }
-    match /labours/{document=**} {
+    match /labours/{labourId} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }
@@ -1213,17 +1249,17 @@ service cloud.firestore {
         (!resource.data.keys().hasAll(["source"]) || resource.data.source != "procurement");
     }
 
-    match /expenses/{document=**} {
+    match /expenses/{expenseId} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }
 
-    match /attendance/{document=**} {
+    match /attendance/{attendanceId} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }
 
-    match /salaries/{document=**} {
+    match /salaries/{salaryId} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }
@@ -1290,13 +1326,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /vehicles/{document=**} {
+    match /vehicles/{vehicleId} {
       allow read: if isAuthorizedErpUser() || isFieldUser();
       allow create: if canWriteErpData() && hasValidVehicleMasterData();
       allow update, delete: if canWriteErpData();
     }
 
-    match /vehicleExpenses/{document=**} {
+    match /vehicleExpenses/{vehicleExpenseId} {
       allow read: if isAuthorizedErpUser();
       allow create: if canWriteErpData() && hasValidVehicleExpenseData();
       // Retain existing manager/admin edit/delete behavior for legacy expense
@@ -1354,7 +1390,9 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /dailyProgressReports/{document=**} {
+    // Root-only DPR records. In particular, a field user must never obtain
+    // create access to an arbitrary nested path under somebody else's DPR.
+    match /dailyProgressReports/{reportId} {
       allow read: if canReadDailyProgressReport();
       allow create: if canWriteErpData() || canCreateFieldDailyProgressReport();
       allow update, delete: if canWriteErpData();
@@ -1432,7 +1470,7 @@ service cloud.firestore {
       allow create: if canWriteErpData() && hasValidRetentionReleaseData() && retentionReleaseMatchesAtomicUpdate(releaseId);
       allow update, delete: if false;
     }
-    match /invoices/{document=**} {
+    match /invoices/{invoiceId} {
       allow read: if isAuthorizedErpUser();
       allow create, update, delete: if canWriteErpData();
     }

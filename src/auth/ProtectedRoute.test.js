@@ -27,7 +27,7 @@ describe("route authorization", () => {
   });
 
   test("renders ERP routes only for an authorised user", () => {
-    useAuth.mockReturnValue({ loading: false, isAuthorized: true });
+    useAuth.mockReturnValue({ loading: false, isAuthorized: true, role: "admin" });
 
     render(
       <ProtectedRoute>
@@ -38,8 +38,24 @@ describe("route authorization", () => {
     expect(screen.getByText("ERP data")).toBeInTheDocument();
   });
 
+  test("fails closed for a missing or unknown route role", () => {
+    useAuth.mockReturnValue({
+      loading: false,
+      isAuthorized: true,
+      role: "unrecognised-role",
+    });
+
+    render(
+      <ProtectedRoute>
+        <div>Sensitive ERP data</div>
+      </ProtectedRoute>
+    );
+
+    expect(screen.getByTestId("redirect")).toHaveTextContent("/dashboard");
+    expect(screen.queryByText("Sensitive ERP data")).not.toBeInTheDocument();
+  });
   test("redirects an authorised user away from the login route", () => {
-    useAuth.mockReturnValue({ loading: false, isAuthorized: true });
+    useAuth.mockReturnValue({ loading: false, isAuthorized: true, role: "admin" });
 
     render(
       <PublicOnlyRoute>

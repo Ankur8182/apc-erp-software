@@ -4,12 +4,13 @@ import { useAuth } from "./AuthProvider";
 import {
   getRoleLandingPath,
   isFieldOnlyRole,
+  STANDARD_ERP_ROLES,
 } from "./authorization";
 
-function ProtectedRoute({ children, allowedRoles }) {
+function ProtectedRoute({ children, allowedRoles = STANDARD_ERP_ROLES }) {
   const { loading, isAuthorized, role } = useAuth();
   const hasRoleAccess =
-    !allowedRoles || allowedRoles.includes(role);
+    Array.isArray(allowedRoles) && allowedRoles.includes(role);
 
   if (loading) {
     return <p role="status">Checking account access...</p>;
