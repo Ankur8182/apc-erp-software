@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
 import Login from "./Pages/Login";
 import Dashboard from "./Pages/Dashboard";
@@ -110,6 +110,9 @@ function App() {
             path="/field-dashboard"
             element={protectedPage(<FieldDashboard />, FIELD_UPDATE_ROLES)}
           />
+
+          {/* Keep an unknown direct URL from rendering a blank application shell. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>
       </AuthProvider>

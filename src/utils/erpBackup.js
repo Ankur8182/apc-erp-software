@@ -63,12 +63,16 @@ const SENSITIVE_FIELD_KEYS = new Set([
   "accesstoken",
   "refreshtoken",
   "secret",
+  "secretkey",
+  "clientsecret",
   "privatekey",
   "serviceaccount",
+  "serviceaccountkey",
   "credential",
   "credentials",
   "authorization",
   "apikey",
+  "firebaseapikey",
 ]);
 
 const createBackupError = (code, message, details = {}) => {

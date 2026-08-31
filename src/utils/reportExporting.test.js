@@ -26,6 +26,25 @@ describe("report export helpers", () => {
     expect(csv).toContain('"Pipe ""repair"""');
   });
 
+  it("neutralizes spreadsheet formulas while preserving numeric cells", () => {
+    const csv = buildReportCsv({
+      ...report,
+      columns: [
+        { key: "formula", label: "Formula" },
+        { key: "amount", label: "Amount" },
+      ],
+      rows: [
+        { formula: "=SUM(1,1)", amount: -1250 },
+        { formula: " @HYPERLINK(\"https://example.com\")", amount: "+125" },
+      ],
+    });
+
+    expect(csv).toContain("\"'=SUM(1,1)\"");
+    expect(csv).toContain("\"' @HYPERLINK(\"\"https://example.com\"\")\"");
+    expect(csv).toContain('"-1250"');
+    expect(csv).toContain('"+125"');
+  });
+
   it("uses formatting only for presentation exports", () => {
     expect(formatReportCell(report.rows[0], report.columns[1])).toBe("INR 1250");
   });

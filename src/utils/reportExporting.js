@@ -9,7 +9,23 @@ const asText = (value) => {
   return String(value);
 };
 
-const escapeCsvValue = (value) => `"${asText(value).replace(/"/g, '""')}"`;
+const isNumericCsvValue = (value) =>
+  (typeof value === "number" && Number.isFinite(value)) ||
+  (typeof value === "string" &&
+    /^[+-]?(?:\d+|\d*\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()));
+
+const protectCsvFormula = (value) => {
+  const text = asText(value);
+
+  // Spreadsheet applications can evaluate user-controlled cells that begin
+  // with these characters. Keep genuine numbers numeric, but force all other
+  // potentially executable text to be treated as literal text.
+  return !isNumericCsvValue(value) && /^\s*[=+\-@]/.test(text)
+    ? `'${text}`
+    : text;
+};
+
+const escapeCsvValue = (value) => `"${protectCsvFormula(value).replace(/"/g, '""')}"`;
 
 const escapeHtml = (value) =>
   asText(value)

@@ -74,6 +74,34 @@ test("redacts prohibited credential-like data rather than placing it in a browse
   expect(createErpBackupJson(backup)).not.toContain("never-export");
 });
 
+test("redacts common credential-key aliases at every nesting level", () => {
+  const backup = createErpFirestoreBackup({
+    collectionNames: ["sites"],
+    collectionDocuments: {
+      sites: [{
+        id: "site-credential-aliases",
+        data: {
+          siteName: "Bridge Site",
+          serviceAccountKey: "never-export-service-account",
+          firebase_api_key: "never-export-api-key",
+          nested: {
+            clientSecret: "never-export-client-secret",
+            secretKey: "never-export-secret-key",
+            safeValue: "retained",
+          },
+        },
+      }],
+    },
+  });
+
+  expect(backup.collections.sites[0].data).toEqual({
+    siteName: "Bridge Site",
+    nested: { safeValue: "retained" },
+  });
+  expect(backup.metadata.redactedFieldCount).toBe(4);
+  expect(createErpBackupJson(backup)).not.toContain("never-export");
+});
+
 test("supports empty known collections without pretending data exists", () => {
   const backup = createErpFirestoreBackup({
     collectionNames: ["sites", "invoices"],
