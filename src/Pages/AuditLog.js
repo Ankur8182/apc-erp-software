@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { db } from "../firebase";
 import { AUDIT_ACTIONS, AUDIT_MODULES, filterAuditLogs, formatAuditTimestamp } from "../utils/auditLogging";
+import { getAuditLogPage, mergeAuditLogPages } from "../utils/auditLogPaging";
 import { useDataTable } from "../utils/dataTable";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import "../Styles/AuditLog.css";
@@ -15,10 +15,32 @@ const MODULE_LABELS = {
   expenses: "Expenses",
   attendance: "Attendance",
   salary: "Salary",
+  salaryPayments: "Salary Payments",
+  labourAdvances: "Labour Advances",
   vehicle: "Vehicle",
   vehicleExpenses: "Vehicle Expenses",
+  vehicleAssignments: "Vehicle Assignments",
+  vehicleMaintenance: "Vehicle Maintenance",
   invoices: "Invoices",
   dailyProgressReports: "Daily Progress Reports",
+  inventoryItems: "Inventory Items",
+  inventoryTransactions: "Inventory Transactions",
+  vendors: "Vendors",
+  purchaseRequests: "Purchase Requests",
+  purchaseOrders: "Purchase Orders",
+  goodsReceipts: "Goods Receipts",
+  workOrders: "Work Orders",
+  workOrderProgress: "Work Order Progress",
+  contractorBills: "Contractor Bills",
+  contractorPayments: "Contractor Payments",
+  clients: "Clients",
+  siteBillingProfiles: "Site Billing Profiles",
+  raBills: "RA Bills",
+  clientReceipts: "Client Receipts",
+  raRetentionReleases: "RA Retention Releases",
+  boqItems: "BOQ Items",
+  boqMeasurements: "BOQ Measurements",
+  boqVariations: "BOQ Variations",
   users: "User Management",
 };
 
@@ -29,33 +51,88 @@ const toTitleCase = (value) => {
 
 function AuditLog() {
   const [logs, setLogs] = useState([]);
+  const [lastDocument, setLastDocument] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [loadMoreError, setLoadMoreError] = useState("");
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const mountedRef = useRef(false);
+  const requestIdRef = useRef(0);
+
+  const loadFirstPage = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
+    setLoading(true);
+    setError("");
+    setLoadMoreError("");
+
+    try {
+      const page = await getAuditLogPage({ database: db });
+
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
+      setLogs(page.logs);
+      setLastDocument(page.cursor);
+      setHasMore(page.hasMore);
+    } catch (loadError) {
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
+      console.error("Audit log load failed:", loadError);
+      setLogs([]);
+      setLastDocument(null);
+      setHasMore(false);
+      setError(getUserFriendlyFirebaseError(
+        loadError,
+        "Audit logs could not be loaded. Please try again."
+      ));
+    } finally {
+      if (mountedRef.current && requestId === requestIdRef.current) setLoading(false);
+    }
+  }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loading || loadingMore || !hasMore || !lastDocument) return;
+
+    const requestId = ++requestIdRef.current;
+
+    setLoadingMore(true);
+    setLoadMoreError("");
+
+    try {
+      const page = await getAuditLogPage({ database: db, cursor: lastDocument });
+
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
+      setLogs((currentLogs) => mergeAuditLogPages(currentLogs, page.logs));
+      setLastDocument(page.cursor);
+      setHasMore(page.hasMore);
+    } catch (loadError) {
+      if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
+      console.error("Older audit log load failed:", loadError);
+      setLoadMoreError(getUserFriendlyFirebaseError(
+        loadError,
+        "Older audit logs could not be loaded. Please try again."
+      ));
+    } finally {
+      if (mountedRef.current && requestId === requestIdRef.current) setLoadingMore(false);
+    }
+  }, [hasMore, lastDocument, loading, loadingMore]);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "auditLogs"),
-      (snapshot) => {
-        setLogs(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
-        setLoading(false);
-        setError("");
-      },
-      (snapshotError) => {
-        console.error("Audit log load failed:", snapshotError);
-        setError(getUserFriendlyFirebaseError(
-          snapshotError,
-          "Audit logs could not be loaded. Please try again."
-        ));
-        setLoading(false);
-      }
-    );
+    mountedRef.current = true;
+    void loadFirstPage();
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+    };
+  }, [loadFirstPage]);
 
   const filteredLogs = useMemo(
     () => filterAuditLogs(logs, {
@@ -87,7 +164,17 @@ function AuditLog() {
             <h2>Activity history</h2>
             <p>Append-only history of successful ERP record changes.</p>
           </div>
-          <span className="audit-log-admin-badge">Admin only</span>
+          <div className="audit-log-intro-actions">
+            <button
+              className="audit-log-refresh-button"
+              type="button"
+              onClick={loadFirstPage}
+              disabled={loading || loadingMore}
+            >
+              {loading ? "Refreshing…" : "Refresh history"}
+            </button>
+            <span className="audit-log-admin-badge">Admin only</span>
+          </div>
         </div>
 
         <div className="table-card audit-log-card">
@@ -111,7 +198,7 @@ function AuditLog() {
               <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)}>
                 <option value="">All modules</option>
                 {AUDIT_MODULES.map((module) => (
-                  <option key={module} value={module}>{MODULE_LABELS[module]}</option>
+                  <option key={module} value={module}>{MODULE_LABELS[module] || module}</option>
                 ))}
               </select>
             </label>
@@ -121,10 +208,23 @@ function AuditLog() {
             </label>
           </DataTableToolbar>
 
-          {loading && <p className="audit-log-state" role="status">Loading audit history…</p>}
-          {!loading && error && <p className="audit-log-state audit-log-error" role="alert">{error}</p>}
+          {loading && <p className="audit-log-state" role="status">Loading newest audit history…</p>}
+          {!loading && error && (
+            <div className="audit-log-state audit-log-error" role="alert">
+              <p>{error}</p>
+              <button className="audit-log-retry-button" type="button" onClick={loadFirstPage}>
+                Try again
+              </button>
+            </div>
+          )}
           {!loading && !error && (
             <>
+              <p className="audit-log-loaded-note" role="status">
+                {logs.length} newest audit record{logs.length === 1 ? "" : "s"} loaded.
+                {hasMore
+                  ? " Search and filters apply to loaded history; load more to include older activity."
+                  : ""}
+              </p>
               <div className="table-responsive">
                 <table className="audit-log-table">
                   <thead>
@@ -158,6 +258,19 @@ function AuditLog() {
                 </table>
               </div>
               <DataTablePagination table={auditTable} />
+              <div className="audit-log-load-more">
+                {loadMoreError && <p className="audit-log-load-more-error" role="alert">{loadMoreError}</p>}
+                {hasMore && (
+                  <button
+                    className="audit-log-load-more-button"
+                    type="button"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? "Loading older history…" : "Load more history"}
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
