@@ -24,15 +24,18 @@ jest.mock('./auth/AuthProvider', () => ({
   useAuth: () => ({ loading: false, isAuthorized: false, user: null }),
 }));
 
-test('renders the login screen', () => {
+test('shows a safe loading state and then renders the lazy login route', async () => {
   render(<App />);
+
+  expect(screen.getByRole('status')).toHaveTextContent('Loading application...');
   expect(
-    screen.getByRole('heading', { name: /ap construction erp/i })
+    await screen.findByRole('heading', { name: /ap construction erp/i })
   ).toBeInTheDocument();
 });
 
-test('registers a safe fallback for unknown direct URLs', () => {
+test('registers a safe fallback for unknown direct URLs', async () => {
   render(<App />);
 
+  await screen.findByRole('heading', { name: /ap construction erp/i });
   expect(registeredRoutePaths).toContain('*');
 });

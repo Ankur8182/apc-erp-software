@@ -1,33 +1,6 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
-import Login from "./Pages/Login";
-import Dashboard from "./Pages/Dashboard";
-import Labour from "./Pages/Labour";
-import Sites from "./Pages/Sites";
-import SiteDetails from "./Pages/SiteDetails";
-import Materials from "./Pages/Materials";
-import Inventory from "./Pages/Inventory";
-import Vendors from "./Pages/Vendors";
-import PurchaseRequests from "./Pages/PurchaseRequests";
-import PurchaseOrders from "./Pages/PurchaseOrders";
-import GoodsReceipts from "./Pages/GoodsReceipts";
-import WorkOrders from "./Pages/WorkOrders";
-import Boq from "./Pages/Boq";
-import ClientBilling from "./Pages/ClientBilling";
-import Expenses from "./Pages/Expenses";
-import Attendance from "./Pages/Attendance";
-import Salary from "./Pages/Salary";
-import Vehicle from "./Pages/Vehicle";
-import Invoice from "./Pages/Invoice";
-import Reports from "./Pages/Reports";
-import DailyProgressReport from "./Pages/DailyProgressReport";
-import FieldUpdate from "./Pages/FieldUpdate";
-import FieldDashboard from "./Pages/FieldDashboard";
-import AuditLog from "./Pages/AuditLog";
-import UserManagement from "./Pages/UserManagement";
-import BackupRecovery from "./Pages/BackupRecovery";
-import DataHealthMigration from "./Pages/DataHealthMigration";
 import { AuthProvider } from "./auth/AuthProvider";
 import ProtectedRoute, { PublicOnlyRoute } from "./auth/ProtectedRoute";
 import {
@@ -37,6 +10,34 @@ import {
 } from "./auth/authorization";
 import "./Styles/ProfessionalDataPages.css";
 
+const Login = lazy(() => import("./Pages/Login"));
+const Dashboard = lazy(() => import("./Pages/Dashboard"));
+const Labour = lazy(() => import("./Pages/Labour"));
+const Sites = lazy(() => import("./Pages/Sites"));
+const SiteDetails = lazy(() => import("./Pages/SiteDetails"));
+const Materials = lazy(() => import("./Pages/Materials"));
+const Inventory = lazy(() => import("./Pages/Inventory"));
+const Vendors = lazy(() => import("./Pages/Vendors"));
+const PurchaseRequests = lazy(() => import("./Pages/PurchaseRequests"));
+const PurchaseOrders = lazy(() => import("./Pages/PurchaseOrders"));
+const GoodsReceipts = lazy(() => import("./Pages/GoodsReceipts"));
+const WorkOrders = lazy(() => import("./Pages/WorkOrders"));
+const Boq = lazy(() => import("./Pages/Boq"));
+const ClientBilling = lazy(() => import("./Pages/ClientBilling"));
+const Expenses = lazy(() => import("./Pages/Expenses"));
+const Attendance = lazy(() => import("./Pages/Attendance"));
+const Salary = lazy(() => import("./Pages/Salary"));
+const Vehicle = lazy(() => import("./Pages/Vehicle"));
+const Invoice = lazy(() => import("./Pages/Invoice"));
+const Reports = lazy(() => import("./Pages/Reports"));
+const DailyProgressReport = lazy(() => import("./Pages/DailyProgressReport"));
+const FieldUpdate = lazy(() => import("./Pages/FieldUpdate"));
+const FieldDashboard = lazy(() => import("./Pages/FieldDashboard"));
+const AuditLog = lazy(() => import("./Pages/AuditLog"));
+const UserManagement = lazy(() => import("./Pages/UserManagement"));
+const BackupRecovery = lazy(() => import("./Pages/BackupRecovery"));
+const DataHealthMigration = lazy(() => import("./Pages/DataHealthMigration"));
+
 const protectedPage = (page, allowedRoles = STANDARD_ERP_ROLES) => (
   <ProtectedRoute allowedRoles={allowedRoles}>{page}</ProtectedRoute>
 );
@@ -45,6 +46,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Suspense fallback={<p role="status">Loading application...</p>}>
         <Routes>
 
           <Route path="/" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
@@ -115,6 +117,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   );
