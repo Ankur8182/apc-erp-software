@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { getSiteName, normaliseMoney } from "../utils/financialReporting";
 import {
   buildWorkOrderNumber, canManageSubcontracting, canTransitionWorkOrder,
@@ -52,7 +53,7 @@ function WorkOrders() {
     const complete = () => { remaining -= 1; if (remaining <= 0) setLoading(false); };
     const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name)),
       (snapshot) => { setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); complete(); },
-      () => { setFeedback(message); complete(); }
+      (error) => { void captureMonitoringError(error, { module: "subcontracting", operation: "read" }); setFeedback(message); complete(); }
     );
     const unsubscribers = [
       subscribe("vendors", setVendors, "Vendors could not be loaded."),
@@ -122,7 +123,7 @@ function WorkOrders() {
         setFeedback(audit.success ? "Draft work order created." : getAuditFailureMessage());
       }
       resetOrder();
-    } catch (error) { console.error("Work order save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Work order could not be saved.")); }
+    } catch (error) { console.error("Work order save error:", error); void captureMonitoringError(error, { module: "subcontracting", operation: "write" }); setFeedback(getUserFriendlyFirebaseError(error, "Work order could not be saved.")); }
     finally { setSaving(false); }
   };
 
@@ -138,7 +139,7 @@ function WorkOrders() {
       setSaving(true); await updateDoc(doc(db, "workOrders", order.id), { status, updatedAt: serverTimestamp() });
       const audit = await logAuditEvent({ action: "update", module: "workOrders", recordId: order.id, recordLabel: order.workOrderNumber, details: "Work order status changed to " + status + ".", site: order.site });
       setFeedback(audit.success ? "Work order " + status.toLowerCase() + "." : getAuditFailureMessage());
-    } catch (error) { setFeedback("Work-order status could not be changed."); }
+    } catch (error) { void captureMonitoringError(error, { module: "subcontracting", operation: "write" }); setFeedback("Work-order status could not be changed."); }
     finally { setSaving(false); }
   };
   const selectProgressOrder = (workOrderId) => {
@@ -166,7 +167,7 @@ function WorkOrders() {
       const audit = await logAuditEvent({ action: "create", module: "workOrderProgress", recordId: progressReference.id, recordLabel: order.workOrderNumber, details: "Certified progress recorded.", site: validation.value.site });
       setFeedback(audit.success ? "Certified work progress saved." : getAuditFailureMessage());
       setProgressForm(initialProgressForm());
-    } catch (error) { console.error("Progress save error:", error); setFeedback("Work progress could not be saved."); }
+    } catch (error) { console.error("Progress save error:", error); void captureMonitoringError(error, { module: "subcontracting", operation: "write" }); setFeedback("Work progress could not be saved."); }
     finally { setSaving(false); }
   };
 
@@ -204,7 +205,7 @@ function WorkOrders() {
       await logAuditEvent({ action: "create", module: "expenses", recordId: expenseReference.id, recordLabel: billNumber, details: "Subcontractor bill expense linked to contractor bill.", site: validation.value.site });
       setFeedback(billAudit.success ? "Contractor bill and its linked expense were saved." : getAuditFailureMessage());
       setBillForm(initialBillForm());
-    } catch (error) { console.error("Contractor bill save error:", error); setFeedback("Contractor bill could not be saved."); }
+    } catch (error) { console.error("Contractor bill save error:", error); void captureMonitoringError(error, { module: "subcontracting", operation: "write" }); setFeedback("Contractor bill could not be saved."); }
     finally { setSaving(false); }
   };
 
@@ -224,7 +225,7 @@ function WorkOrders() {
       const audit = await logAuditEvent({ action: "create", module: "contractorPayments", recordId: paymentReference.id, recordLabel: bill.billNumber || bill.id, details: validation.value.paymentType + " recorded.", site: validation.value.site });
       setFeedback(audit.success ? "Contractor payment recorded." : getAuditFailureMessage());
       setPaymentForm(initialPaymentForm());
-    } catch (error) { console.error("Contractor payment error:", error); setFeedback("Contractor payment could not be saved."); }
+    } catch (error) { console.error("Contractor payment error:", error); void captureMonitoringError(error, { module: "subcontracting", operation: "write" }); setFeedback("Contractor payment could not be saved."); }
     finally { setSaving(false); }
   };
 

@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { buildDocumentNumber, canManageProcurement, createGoodsReceiptKey, createInventoryStockInFromGoodsReceipt, findInventoryItemForPurchaseLine, getPurchaseOrderLine, getPurchaseOrderReceiptStatus, validateGoodsReceipt } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
@@ -34,7 +35,7 @@ function GoodsReceipts() {
 
   useEffect(() => {
     let pending = 4; const done = () => { pending -= 1; if (pending <= 0) setLoading(false); };
-    const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name), limit(500)), (snapshot) => { setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); done(); }, () => { setFeedback(message); done(); });
+    const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name), limit(500)), (snapshot) => { setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); done(); }, (error) => { void captureMonitoringError(error, { module: "goodsReceipts", operation: "read" }); setFeedback(message); done(); });
     const unOrders = subscribe("purchaseOrders", setPurchaseOrders, "Purchase orders could not be loaded.");
     const unReceipts = subscribe("goodsReceipts", setGoodsReceipts, "Goods receipt history could not be loaded.");
     const unInventory = subscribe("inventoryItems", setInventoryItems, "Inventory items could not be loaded.");
@@ -137,7 +138,7 @@ function GoodsReceipts() {
       const audit = await logAuditEvent({ action: "create", module: "goodsReceipts", recordId: receiptKey, recordLabel: grnNumber, details: "GRN completed and linked inventory Stock-In recorded.", site: selectedOrder.site });
       setFeedback(audit.success ? `GRN ${grnNumber} completed.` : getAuditFailureMessage());
       setForm(initialForm());
-    } catch (error) { console.error("GRN completion error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Goods receipt could not be completed.")); }
+    } catch (error) { console.error("GRN completion error:", error); void captureMonitoringError(error, { module: "goodsReceipts", operation: "write" }); setFeedback(getUserFriendlyFirebaseError(error, "Goods receipt could not be completed.")); }
     finally { setSaving(false); }
   };
 

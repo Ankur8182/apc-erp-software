@@ -248,6 +248,110 @@ service cloud.firestore {
             request.resource.data.action == "create"));
     }
 
+    // System-health events are technical diagnostics, not business audit records.
+    // They contain only a strict, sanitised enum payload and are immutable.
+    function isMonitoringReporter() {
+      return isAuthorizedErpUser() || isFieldUser();
+    }
+
+    function hasValidSystemHealthEventData() {
+      return request.resource.data.keys().hasAll([
+          "userId",
+          "userRole",
+          "category",
+          "severity",
+          "code",
+          "module",
+          "operation",
+          "timestamp"
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          "userId",
+          "userRole",
+          "category",
+          "severity",
+          "code",
+          "module",
+          "operation",
+          "timestamp"
+        ]) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userRole == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role &&
+        request.resource.data.userRole in ["admin", "manager", "viewer", "supervisor", "engineer"] &&
+        request.resource.data.category in [
+          "NETWORK",
+          "AUTHENTICATION",
+          "PERMISSION",
+          "VALIDATION",
+          "FIRESTORE_READ",
+          "FIRESTORE_WRITE",
+          "EXPORT",
+          "APPLICATION",
+          "UNKNOWN"
+        ] &&
+        request.resource.data.severity in ["INFO", "WARNING", "ERROR", "CRITICAL"] &&
+        request.resource.data.code in [
+          "permission-denied",
+          "unauthenticated",
+          "unavailable",
+          "deadline-exceeded",
+          "failed-precondition",
+          "resource-exhausted",
+          "aborted",
+          "cancelled",
+          "not-found",
+          "invalid-argument",
+          "auth-network-request-failed",
+          "auth-user-disabled",
+          "auth-user-token-expired",
+          "auth-invalid-credential",
+          "auth-too-many-requests",
+          "auth-requires-recent-login",
+          "auth-operation-not-allowed",
+          "application-crash",
+          "unknown"
+        ] &&
+        request.resource.data.module in [
+          "app",
+          "auth",
+          "notifications",
+          "exports",
+          "fieldUpdate",
+          "dailyProgressReports",
+          "expenses",
+          "inventory",
+          "purchaseOrders",
+          "goodsReceipts",
+          "attendance",
+          "payroll",
+          "salary",
+          "clientBilling",
+          "payments",
+          "boq",
+          "vehicles",
+          "reports",
+          "backup",
+          "procurement",
+          "subcontracting",
+          "audit",
+          "unknown"
+        ] &&
+        request.resource.data.operation in [
+          "read",
+          "write",
+          "authentication",
+          "export",
+          "application",
+          "sync",
+          "unknown"
+        ] &&
+        request.resource.data.timestamp == request.time;
+    }
+
+    function canCreateSystemHealthEvent() {
+      return isMonitoringReporter() && hasValidSystemHealthEventData();
+    }
+
 
     // RA bills are operational until certification writes exactly one linked
     // invoice. The existing invoices ledger remains canonical for revenue.
@@ -1434,6 +1538,15 @@ service cloud.firestore {
     match /auditLogs/{documentId} {
       allow read: if isAdmin();
       allow create: if canCreateAuditLog();
+      allow update, delete: if false;
+    }
+
+    // Sanitised operational failures are visible only to administrators.
+    // Clients may only append their own strict enum-shaped event; no client can
+    // resolve, edit, delete, or read global monitoring history.
+    match /systemHealthEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if canCreateSystemHealthEvent();
       allow update, delete: if false;
     }
 

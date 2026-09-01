@@ -25,6 +25,7 @@ test("shows supervisor users only the field workflow navigation", () => {
   expect(screen.queryByText("Expenses")).not.toBeInTheDocument();
   expect(screen.queryByText("Backup & Recovery")).not.toBeInTheDocument();
   expect(screen.queryByText("Data Health & Migration")).not.toBeInTheDocument();
+  expect(screen.queryByText("System Health")).not.toBeInTheDocument();
 });
 
 test("keeps the standard ERP navigation for an admin", () => {
@@ -41,6 +42,7 @@ test("keeps the standard ERP navigation for an admin", () => {
   expect(screen.getByText("User Management")).toBeInTheDocument();
   expect(screen.getByText("Backup & Recovery")).toBeInTheDocument();
   expect(screen.getByText("Data Health & Migration")).toBeInTheDocument();
+  expect(screen.getByText("System Health")).toBeInTheDocument();
 });
 
 test("uses the compact official brand in the sidebar without changing role menus", () => {

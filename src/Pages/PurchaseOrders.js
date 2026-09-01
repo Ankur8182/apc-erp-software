@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { buildDocumentNumber, calculatePurchaseOrderTotals, canManageProcurement, createInitialPurchaseOrderForm, createInitialPurchaseOrderItem, PURCHASE_ORDER_STATUSES, validatePurchaseOrder } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
@@ -31,7 +32,7 @@ function PurchaseOrders() {
 
   useEffect(() => {
     let pending = 4; const done = () => { pending -= 1; if (pending <= 0) setLoading(false); };
-    const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name), limit(500)), (snapshot) => { setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); done(); }, () => { setFeedback(message); done(); });
+    const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name), limit(500)), (snapshot) => { setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); done(); }, (error) => { void captureMonitoringError(error, { module: "purchaseOrders", operation: "read" }); setFeedback(message); done(); });
     const unOrders = subscribe("purchaseOrders", setOrders, "Purchase orders could not be loaded.");
     const unRequests = subscribe("purchaseRequests", setRequests, "Purchase requests could not be loaded.");
     const unVendors = subscribe("vendors", setVendors, "Vendors could not be loaded.");
@@ -107,7 +108,7 @@ function PurchaseOrders() {
         setFeedback(audit.success ? `Purchase order ${poNumber} created.` : getAuditFailureMessage());
       }
       resetForm();
-    } catch (error) { console.error("Purchase order save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Purchase order could not be saved.")); }
+    } catch (error) { console.error("Purchase order save error:", error); void captureMonitoringError(error, { module: "purchaseOrders", operation: "write" }); setFeedback(getUserFriendlyFirebaseError(error, "Purchase order could not be saved.")); }
     finally { setSaving(false); }
   };
 
@@ -119,7 +120,7 @@ function PurchaseOrders() {
       const details = status === "issued" ? "Purchase order issued to vendor." : "Purchase order cancelled.";
       const audit = await logAuditEvent({ action: "update", module: "purchaseOrders", recordId: order.id, recordLabel: order.poNumber, details, site: order.site });
       setFeedback(audit.success ? `Purchase order ${status}.` : getAuditFailureMessage());
-    } catch (error) { setFeedback("Purchase order status could not be updated."); }
+    } catch (error) { void captureMonitoringError(error, { module: "purchaseOrders", operation: "write" }); setFeedback("Purchase order status could not be updated."); }
     finally { setSaving(false); }
   };
   const recordPayment = async (order) => {
@@ -137,7 +138,7 @@ function PurchaseOrders() {
       await updateDoc(doc(db, "purchaseOrders", order.id), { paidAmount, outstandingAmount: Math.max(grandTotal - paidAmount, 0), updatedAt: serverTimestamp() });
       const audit = await logAuditEvent({ action: "update", module: "purchaseOrders", recordId: order.id, recordLabel: order.poNumber, details: "PO payable amount updated.", site: order.site });
       setFeedback(audit.success ? "PO payable updated." : getAuditFailureMessage());
-    } catch (error) { setFeedback("PO payable could not be updated."); }
+    } catch (error) { void captureMonitoringError(error, { module: "purchaseOrders", operation: "write" }); setFeedback("PO payable could not be updated."); }
     finally { setSaving(false); }
   };
   const startEdit = (order) => {

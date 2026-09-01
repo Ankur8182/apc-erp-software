@@ -14,6 +14,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { getSiteName } from "../utils/financialReporting";
 import {
   canManageInventory,
@@ -74,6 +75,7 @@ function Inventory() {
       },
       (error) => {
         console.error(`${collectionName} load error:`, error);
+        void captureMonitoringError(error, { module: "inventory", operation: "read" });
         setData([]);
         setLoadError("Inventory data could not be loaded. Please try again later.");
         complete(collectionName);
@@ -224,6 +226,7 @@ function Inventory() {
       clearItemForm();
     } catch (error) {
       console.error("Inventory item save error:", error);
+      void captureMonitoringError(error, { module: "inventory", operation: "write" });
       setFeedback(getUserFriendlyFirebaseError(error, "Inventory item could not be saved."));
     } finally {
       setItemSaving(false);
@@ -311,6 +314,7 @@ function Inventory() {
       setTransactionForm(createInitialInventoryTransactionForm());
     } catch (error) {
       console.error("Inventory transaction save error:", error);
+      void captureMonitoringError(error, { module: "inventory", operation: "write" });
       setFeedback(getUserFriendlyFirebaseError(error, "Stock transaction could not be recorded."));
     } finally {
       setTransactionSaving(false);

@@ -3,6 +3,7 @@ import {
   canReadAuditLogs,
   canManageBackupExport,
   canManageDataHealth,
+  canReadSystemHealth,
   canReadFieldReferenceData,
   FIELD_REFERENCE_COLLECTIONS,
   getDprReadScope,
@@ -87,4 +88,11 @@ test("limits data-health administration to admins", () => {
   expect(canManageDataHealth("manager")).toBe(false);
   expect(canManageDataHealth("viewer")).toBe(false);
   expect(canManageDataHealth("engineer")).toBe(false);
+});
+
+test("limits System Health diagnostics to admins", () => {
+  expect(canReadSystemHealth("admin")).toBe(true);
+  expect(canReadSystemHealth("manager")).toBe(false);
+  expect(canReadSystemHealth("viewer")).toBe(false);
+  expect(canReadSystemHealth("engineer")).toBe(false);
 });

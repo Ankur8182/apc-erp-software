@@ -7,6 +7,7 @@ import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { captureMonitoringError } from "../utils/monitoring";
 import { normaliseMoney } from "../utils/financialReporting";
 import { getBoqItemProgressRows, validateBoqBillingLines } from "../utils/boqReporting";
 import {
@@ -67,7 +68,7 @@ function ClientBilling() {
     const complete = () => { remaining -= 1; if (remaining <= 0) setLoading(false); };
     const subscribe = (name, setter, message) => onSnapshot(query(collection(db, name)),
       (snapshot) => { setter(snapshotRows(snapshot)); complete(); },
-      () => { setFeedback(message); complete(); }
+       (error) => { void captureMonitoringError(error, { module: "clientBilling", operation: "read" }); setFeedback(message); complete(); }
     );
     const unsubscribers = [
       subscribe("sites", setSites, "Sites could not be loaded."), subscribe("clients", setClients, "Clients could not be loaded."),
@@ -125,7 +126,7 @@ function ClientBilling() {
         setFeedback(audit.success ? "Client added." : getAuditFailureMessage());
       }
       resetClient();
-    } catch (error) { console.error("Client save error:", error); setFeedback("Client could not be saved."); }
+    } catch (error) { console.error("Client save error:", error); void captureMonitoringError(error, { module: "clientBilling", operation: "write" }); setFeedback("Client could not be saved."); }
     finally { setSaving(false); }
   };
 
@@ -154,7 +155,7 @@ function ClientBilling() {
       const audit = await logAuditEvent({ action: existing ? "update" : "create", module: "siteBillingProfiles", recordId: validation.value.siteId, recordLabel: validation.value.agreementNumber, details: "Site client billing profile saved.", site: validation.value.siteName });
       setFeedback(audit.success ? "Site billing profile saved." : getAuditFailureMessage());
       resetProfile();
-    } catch (error) { console.error("Billing profile save error:", error); setFeedback("Billing profile could not be saved."); }
+    } catch (error) { console.error("Billing profile save error:", error); void captureMonitoringError(error, { module: "clientBilling", operation: "write" }); setFeedback("Billing profile could not be saved."); }
     finally { setSaving(false); }
   };
   const saveRABill = async (event) => {
@@ -186,7 +187,7 @@ function ClientBilling() {
         setFeedback(audit.success ? "Draft RA bill created." : getAuditFailureMessage());
       }
       resetBill();
-    } catch (error) { console.error("RA bill save error:", error); setFeedback("RA bill could not be saved."); }
+    } catch (error) { console.error("RA bill save error:", error); void captureMonitoringError(error, { module: "clientBilling", operation: "write" }); setFeedback("RA bill could not be saved."); }
     finally { setSaving(false); }
   };
 
@@ -226,7 +227,7 @@ function ClientBilling() {
         const audit = await logAuditEvent({ action: "update", module: "raBills", recordId: bill.id, recordLabel: bill.raBillNumber, details: `RA bill status changed to ${status}.`, site: bill.site });
         setFeedback(audit.success ? `RA bill marked ${status}.` : getAuditFailureMessage());
       }
-    } catch (error) { console.error("RA bill status error:", error); setFeedback("RA bill status could not be updated."); }
+    } catch (error) { console.error("RA bill status error:", error); void captureMonitoringError(error, { module: "clientBilling", operation: "write" }); setFeedback("RA bill status could not be updated."); }
     finally { setSaving(false); }
   };
 
@@ -265,7 +266,7 @@ function ClientBilling() {
       const audit = await logAuditEvent({ action: "create", module: "clientReceipts", recordId: receiptReference.id, recordLabel: committedBill.raBillNumber, details: `Client receipt credited ${formatMoney(committedReceipt.creditedAmount)}.`, site: committedBill.site });
       setFeedback(audit.success ? "Client receipt recorded." : getAuditFailureMessage());
       setReceiptForm(initialReceipt());
-    } catch (error) { console.error("Client receipt error:", error); setFeedback("Client receipt could not be recorded. Refresh the pending balance and try again."); }
+    } catch (error) { console.error("Client receipt error:", error); void captureMonitoringError(error, { module: "clientBilling", operation: "write" }); setFeedback("Client receipt could not be recorded. Refresh the pending balance and try again."); }
     finally { setSaving(false); }
   };
 
@@ -294,7 +295,7 @@ function ClientBilling() {
       const audit = await logAuditEvent({ action: "create", module: "raRetentionReleases", recordId: releaseReference.id, recordLabel: committedBill.raBillNumber, details: `Retention released ${formatMoney(committedRelease.amount)}.`, site: committedBill.site });
       setFeedback(audit.success ? "Retention release recorded." : getAuditFailureMessage());
       setReleaseForm(initialRelease());
-    } catch (error) { console.error("Retention release error:", error); setFeedback("Retention release could not be recorded. Refresh the retention balance and try again."); }
+    } catch (error) { console.error("Retention release error:", error); void captureMonitoringError(error, { module: "clientBilling", operation: "write" }); setFeedback("Retention release could not be recorded. Refresh the retention balance and try again."); }
     finally { setSaving(false); }
   };
   const editClient = (client) => { if (!canWrite) return; setClientForm({ ...createInitialClientForm(), ...client }); setEditingClientId(client.id); window.scrollTo({ top: 0, behavior: "smooth" }); };

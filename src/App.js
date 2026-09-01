@@ -34,6 +34,7 @@ const DailyProgressReport = lazy(() => import("./Pages/DailyProgressReport"));
 const FieldUpdate = lazy(() => import("./Pages/FieldUpdate"));
 const FieldDashboard = lazy(() => import("./Pages/FieldDashboard"));
 const AuditLog = lazy(() => import("./Pages/AuditLog"));
+const SystemHealth = lazy(() => import("./Pages/SystemHealth"));
 const UserManagement = lazy(() => import("./Pages/UserManagement"));
 const BackupRecovery = lazy(() => import("./Pages/BackupRecovery"));
 const DataHealthMigration = lazy(() => import("./Pages/DataHealthMigration"));
@@ -96,6 +97,8 @@ function App() {
           <Route path="/daily-progress-report" element={protectedPage(<DailyProgressReport />)} />
 
           <Route path="/audit-logs" element={protectedPage(<AuditLog />, ADMIN_ROLES)} />
+
+          <Route path="/system-health" element={protectedPage(<SystemHealth />, ADMIN_ROLES)} />
 
           <Route path="/user-management" element={protectedPage(<UserManagement />, ADMIN_ROLES)} />
 

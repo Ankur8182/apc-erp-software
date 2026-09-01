@@ -3,6 +3,7 @@ import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { captureMonitoringError } from "../utils/monitoring";
 import "../Styles/Expenses.css";
 
 import { db } from "../firebase";
@@ -63,6 +64,7 @@ function Expenses() {
       (error) => {
 
         console.error("Firestore Error:", error);
+        void captureMonitoringError(error, { module: "expenses", operation: "read" });
 
         alert(
           "Expense data load nahi ho saka. Firebase connection check karein."
@@ -203,6 +205,7 @@ function Expenses() {
     catch (error) {
 
       console.error("Save Expense Error:", error);
+      void captureMonitoringError(error, { module: "expenses", operation: "write" });
 
       alert(
         "Expense save nahi hua. Firebase connection/rules check karein."
@@ -280,6 +283,7 @@ function Expenses() {
     catch (error) {
 
       console.error("Delete Expense Error:", error);
+      void captureMonitoringError(error, { module: "expenses", operation: "write" });
 
       alert(
         "Expense delete nahi hua. Firebase connection/rules check karein."

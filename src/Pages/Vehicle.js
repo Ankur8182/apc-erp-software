@@ -3,6 +3,7 @@ import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { captureMonitoringError } from "../utils/monitoring";
 import { useAuth } from "../auth/AuthProvider";
 import "../Styles/Vehicle.css";
 
@@ -136,7 +137,7 @@ function Vehicle() {
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "sites"), (snapshot) => {
       setSites(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    }, (error) => console.error("Site reference error:", error));
+    }, (error) => { console.error("Site reference error:", error); void captureMonitoringError(error, { module: "vehicles", operation: "read" }); });
     return () => unsubscribe();
   }, []);
 
@@ -155,6 +156,7 @@ function Vehicle() {
       },
       (error) => {
         console.error("Firestore Vehicle Error:", error);
+        void captureMonitoringError(error, { module: "vehicles", operation: "read" });
         alert("Vehicle data load nahi ho saka.");
       }
     );
@@ -175,6 +177,7 @@ function Vehicle() {
       },
       (error) => {
         console.error("Firestore vehicle expense error:", error);
+        void captureMonitoringError(error, { module: "vehicles", operation: "read" });
         alert("Vehicle expense history load nahi ho saka.");
       }
     );
@@ -185,14 +188,14 @@ function Vehicle() {
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "vehicleAssignments"), (snapshot) => {
       setVehicleAssignments(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    }, (error) => console.error("Vehicle assignment history error:", error));
+    }, (error) => { console.error("Vehicle assignment history error:", error); void captureMonitoringError(error, { module: "vehicles", operation: "read" }); });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "vehicleMaintenance"), (snapshot) => {
       setMaintenanceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    }, (error) => console.error("Vehicle maintenance history error:", error));
+    }, (error) => { console.error("Vehicle maintenance history error:", error); void captureMonitoringError(error, { module: "vehicles", operation: "read" }); });
     return () => unsubscribe();
   }, []);
 
@@ -376,6 +379,7 @@ function Vehicle() {
       clearForm();
     } catch (error) {
       console.error("Vehicle Error:", error);
+      void captureMonitoringError(error, { module: "vehicles", operation: "write" });
 
       alert(
         "Vehicle save nahi hua. Firebase connection check karein."
@@ -465,6 +469,7 @@ function Vehicle() {
       }
     } catch (error) {
       console.error("Delete Vehicle Error:", error);
+      void captureMonitoringError(error, { module: "vehicles", operation: "write" });
 
       alert("Vehicle delete nahi hua.");
     }
@@ -595,6 +600,7 @@ function Vehicle() {
       clearExpenseForm();
     } catch (error) {
       console.error("Save vehicle expense error:", error);
+      void captureMonitoringError(error, { module: "vehicles", operation: "write" });
       alert("Vehicle expense save nahi hua. Firebase connection/rules check karein.");
     } finally {
       setExpenseLoading(false);
@@ -643,6 +649,7 @@ function Vehicle() {
       }
     } catch (error) {
       console.error("Delete vehicle expense error:", error);
+      void captureMonitoringError(error, { module: "vehicles", operation: "write" });
       alert("Vehicle expense delete nahi hua.");
     }
   };
@@ -680,7 +687,7 @@ function Vehicle() {
       if (!auditResult.success) alert(getAuditFailureMessage());
       alert("Equipment site assignment saved.");
       setAssignmentVehicleId(""); setAssignmentSite(""); setAssignmentDate("");
-    } catch (error) { console.error("Save assignment error:", error); alert("Equipment assignment save nahi hua."); }
+    } catch (error) { console.error("Save assignment error:", error); void captureMonitoringError(error, { module: "vehicles", operation: "write" }); alert("Equipment assignment save nahi hua."); }
     finally { setAssignmentLoading(false); }
   };
 
@@ -743,7 +750,7 @@ function Vehicle() {
       }
       alert("Maintenance record saved. Linked cost is counted once in Vehicle Expenses.");
       setMaintenanceVehicleId(""); setMaintenanceSite(""); setMaintenanceDate(""); setMaintenanceType(""); setMaintenanceIssue(""); setMaintenanceVendor(""); setMaintenanceLabourCost(""); setMaintenancePartsCost(""); setMaintenanceOtherCost(""); setMaintenanceMeterReading(""); setNextServiceDate(""); setNextServiceMeterReading(""); setMaintenanceStatus("Open"); setMaintenanceRemarks("");
-    } catch (error) { console.error("Save maintenance error:", error); alert("Maintenance record save nahi hua."); }
+    } catch (error) { console.error("Save maintenance error:", error); void captureMonitoringError(error, { module: "vehicles", operation: "write" }); alert("Maintenance record save nahi hua."); }
     finally { setMaintenanceLoading(false); }
   };
 

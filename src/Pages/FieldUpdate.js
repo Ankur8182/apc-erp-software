@@ -50,6 +50,7 @@ import {
 import { getRecordDate, getSiteName, isSameSite } from "../utils/financialReporting";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { getOfflineFieldMessage } from "../utils/pwa";
 import { useDprOutboxSync } from "../hooks/useDprOutboxSync";
 import DprOutboxAttentionList from "../Components/DprOutboxAttentionList";
@@ -201,6 +202,7 @@ function FieldUpdate() {
       },
       (error) => {
         console.error("Field update DPR load error:", error);
+        void captureMonitoringError(error, { module: "fieldUpdate", operation: "read" });
         setReports([]);
         setLoadError(
           getUserFriendlyFirebaseError(
@@ -219,6 +221,7 @@ function FieldUpdate() {
       },
       (error) => {
         console.error("Field update sites load error:", error);
+        void captureMonitoringError(error, { module: "fieldUpdate", operation: "read" });
         setLoadError(
           getUserFriendlyFirebaseError(
             error,
@@ -237,6 +240,7 @@ function FieldUpdate() {
         },
         (error) => {
           console.error("Field update materials load error:", error);
+          void captureMonitoringError(error, { module: "fieldUpdate", operation: "read" });
           setLoadError(
             getUserFriendlyFirebaseError(
               error,
@@ -253,6 +257,7 @@ function FieldUpdate() {
       },
       (error) => {
         console.error("Field update inventory load error:", error);
+        void captureMonitoringError(error, { module: "fieldUpdate", operation: "read" });
         setLoadError(
           getUserFriendlyFirebaseError(
             error,
@@ -269,6 +274,7 @@ function FieldUpdate() {
       },
       (error) => {
         console.error("Field update vehicles load error:", error);
+        void captureMonitoringError(error, { module: "fieldUpdate", operation: "read" });
         setLoadError(
           getUserFriendlyFirebaseError(
             error,
@@ -476,6 +482,7 @@ function FieldUpdate() {
         setSubmitSuccess("Site update saved on this device and pending synchronization. It has not been saved to the server yet.");
       } catch (error) {
         console.error("Offline site update queue error:", error);
+        void captureMonitoringError(error, { module: "fieldUpdate", operation: "sync" });
         setSubmitError("This site update could not be saved on this device. Keep the form open and try again.");
       } finally {
         setIsSubmitting(false);
@@ -550,6 +557,9 @@ function FieldUpdate() {
       );
     } catch (error) {
       console.error("Field update save error:", error);
+      if (error?.code !== "dpr-photo-upload-failed") {
+        void captureMonitoringError(error, { module: "fieldUpdate", operation: "write" });
+      }
 
       if (fieldOnly && isRetryableDprSyncError(error)) {
         try {
@@ -562,6 +572,7 @@ function FieldUpdate() {
           setSubmitSuccess("The connection was interrupted. Your site update is saved on this device and pending synchronization.");
         } catch (queueError) {
           console.error("Interrupted site update queue error:", queueError);
+          void captureMonitoringError(queueError, { module: "fieldUpdate", operation: "sync" });
           setSubmitError("The connection failed and this site update could not be saved on this device. Keep the form open and try again.");
         }
       } else if (error?.code !== "dpr-photo-upload-failed") {

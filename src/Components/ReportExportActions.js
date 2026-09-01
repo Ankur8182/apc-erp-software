@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { downloadReportCsv, exportReportPdf, printReport } from "../utils/reportExporting";
+import { captureMonitoringError } from "../utils/monitoring";
 import "../Styles/ReportExportActions.css";
 
 function ReportExportActions({ report, disabled = false }) {
@@ -14,6 +15,10 @@ function ReportExportActions({ report, disabled = false }) {
       setError("");
       await exportReportPdf(report);
     } catch (exportError) {
+      void captureMonitoringError(exportError, {
+        module: "exports",
+        operation: "export",
+      });
       console.error("PDF export error:", exportError);
       setError("PDF export could not be created. Please try again.");
     } finally {
@@ -28,6 +33,10 @@ function ReportExportActions({ report, disabled = false }) {
       setError("");
       downloadReportCsv(report);
     } catch (exportError) {
+      void captureMonitoringError(exportError, {
+        module: "exports",
+        operation: "export",
+      });
       console.error("CSV export error:", exportError);
       setError("CSV export could not be created. Please try again.");
     }
@@ -42,6 +51,10 @@ function ReportExportActions({ report, disabled = false }) {
         setError("Print preview was blocked. Please allow pop-ups and try again.");
       }
     } catch (printError) {
+      void captureMonitoringError(printError, {
+        module: "exports",
+        operation: "export",
+      });
       console.error("Print preview error:", printError);
       setError("Print preview could not be opened. Please try again.");
     }

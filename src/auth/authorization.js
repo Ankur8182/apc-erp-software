@@ -46,6 +46,9 @@ export const canReadAuditLogs = (role) =>
 export const canManageBackupExport = (role) =>
   ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
 
+export const canReadSystemHealth = (role) =>
+  ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());
+
 // Data Health & Migration is diagnostic-only, but its dataset can be sensitive.
 export const canManageDataHealth = (role) =>
   ADMIN_ROLES.includes(String(role || "").trim().toLowerCase());

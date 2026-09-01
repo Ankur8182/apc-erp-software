@@ -5,6 +5,7 @@ import App from './App';
 import AppErrorBoundary from './Components/AppErrorBoundary';
 import reportWebVitals from './reportWebVitals';
 import { registerPwaServiceWorker } from './utils/pwa';
+import { installProductionErrorMonitoring } from './utils/productionErrorMonitor';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -19,6 +20,7 @@ root.render(
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 if (typeof window !== 'undefined') {
+  installProductionErrorMonitoring();
   window.addEventListener('load', () => {
     registerPwaServiceWorker();
   });

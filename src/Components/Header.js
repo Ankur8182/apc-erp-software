@@ -9,6 +9,7 @@ import { isFieldOnlyRole } from "../auth/authorization";
 import BrandLogo from "./BrandLogo";
 import { COMPANY_NAME, ERP_NAME } from "../config/branding";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import {
   formatNotificationDate,
   generateNotifications,
@@ -134,6 +135,10 @@ function Header() {
         (loadError) => {
           if (!active) return;
 
+          void captureMonitoringError(loadError, {
+            module: "notifications",
+            operation: "read",
+          });
           console.error("Notification data load error:", loadError);
           setNotificationsError(
             getUserFriendlyFirebaseError(
@@ -191,6 +196,10 @@ function Header() {
     try {
       await signOut(auth);
     } catch (error) {
+      void captureMonitoringError(error, {
+        module: "auth",
+        operation: "authentication",
+      });
       console.error("Firebase logout error:", error);
       alert("Unable to sign out. Please try again.");
     }

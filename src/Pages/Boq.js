@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getSiteName } from "../utils/financialReporting";
 import { BOQ_STATUSES, BOQ_UNITS, DIMENSION_TYPES, buildBoqAlerts, canManageBoq, createInitialBoqItemForm, createInitialMeasurementForm, createInitialVariationForm, getBoqItemProgressRows, getSiteBoqSummary, validateBoqItem, validateMeasurement, validateVariation } from "../utils/boqReporting";
@@ -37,7 +38,7 @@ function Boq() {
     const sources = [["sites", setSites], ["boqItems", setItems], ["boqMeasurements", setMeasurements], ["boqVariations", setVariations], ["raBills", setRaBills], ["workOrders", setWorkOrders]];
     let pending = sources.length;
     const done = () => { pending -= 1; if (!pending) setLoading(false); };
-    const unsubscribers = sources.map(([name, setter]) => onSnapshot(query(collection(db, name)), (snapshot) => { setter(rows(snapshot)); done(); }, () => { setFeedback(`${name} could not be loaded.`); done(); }));
+    const unsubscribers = sources.map(([name, setter]) => onSnapshot(query(collection(db, name)), (snapshot) => { setter(rows(snapshot)); done(); }, (error) => { void captureMonitoringError(error, { module: "boq", operation: "read" }); setFeedback(`${name} could not be loaded.`); done(); }));
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
 
@@ -84,7 +85,7 @@ function Boq() {
         setFeedback((await audit({ action: "create", module: "boqItems", recordId: reference.id, recordLabel: validation.value.itemNumber, details: "BOQ item created as a draft.", site: validation.value.site })) || "BOQ item saved as a draft.");
       }
       setEditId(""); setItemForm(createInitialBoqItemForm());
-    } catch (error) { console.error("BOQ item save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "BOQ item could not be saved.")); } finally { setSaving(false); }
+    } catch (error) { console.error("BOQ item save error:", error); void captureMonitoringError(error, { module: "boq", operation: "write" }); setFeedback(getUserFriendlyFirebaseError(error, "BOQ item could not be saved.")); } finally { setSaving(false); }
   };
 
   const updateItemStatus = async (item, status) => {

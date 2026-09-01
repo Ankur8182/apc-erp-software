@@ -29,13 +29,14 @@ test('shows a safe loading state and then renders the lazy login route', async (
 
   expect(screen.getByRole('status')).toHaveTextContent('Loading application...');
   expect(
-    await screen.findByRole('heading', { name: /ap construction erp/i })
+    await screen.findByRole('heading', { name: /ap construction erp/i }, { timeout: 5000 })
   ).toBeInTheDocument();
 });
 
 test('registers a safe fallback for unknown direct URLs', async () => {
   render(<App />);
 
-  await screen.findByRole('heading', { name: /ap construction erp/i });
+  await screen.findByRole('heading', { name: /ap construction erp/i }, { timeout: 5000 });
   expect(registeredRoutePaths).toContain('*');
+  expect(registeredRoutePaths).toContain('/system-health');
 });

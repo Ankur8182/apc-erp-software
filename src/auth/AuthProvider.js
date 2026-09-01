@@ -3,6 +3,11 @@ import { onSnapshot, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { getAuthorizedRole } from "./authorization";
+import {
+  captureMonitoringError,
+  clearMonitoringActor,
+  setMonitoringActor,
+} from "../utils/monitoring";
 
 const AuthContext = createContext(null);
 
@@ -19,6 +24,7 @@ export function AuthProvider({ children }) {
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       unsubscribeProfile();
+      clearMonitoringActor();
 
       if (!user) {
         setState({
@@ -46,6 +52,12 @@ export function AuthProvider({ children }) {
             : null;
           const isAuthorized = Boolean(role);
 
+          if (isAuthorized) {
+            setMonitoringActor({ userId: user.uid, userRole: role });
+          } else {
+            clearMonitoringActor();
+          }
+
           setState({
             user,
             role: isAuthorized ? role : null,
@@ -54,7 +66,14 @@ export function AuthProvider({ children }) {
           });
         },
         (error) => {
+          // A known active account is retained in the in-memory monitoring actor
+          // until this failure has been reported. Users never see raw details.
+          void captureMonitoringError(error, {
+            module: "auth",
+            operation: "read",
+          });
           console.error("ERP authorization profile error:", error);
+          clearMonitoringActor();
           setState({
             user,
             role: null,
@@ -68,6 +87,7 @@ export function AuthProvider({ children }) {
     return () => {
       unsubscribeProfile();
       unsubscribeAuth();
+      clearMonitoringActor();
     };
   }, []);
 

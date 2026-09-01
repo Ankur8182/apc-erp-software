@@ -6,6 +6,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { captureMonitoringError } from "./monitoring";
 
 export const AUDIT_ACTIONS = ["create", "update", "delete"];
 
@@ -221,6 +222,10 @@ export const logAuditEvent = async (event) => {
 
     return { success: true, id: auditReference.id, payload };
   } catch (error) {
+    void captureMonitoringError(error, {
+      module: "audit",
+      operation: "write",
+    });
     console.error("Audit logging failed:", error);
     return { success: false, error };
   }

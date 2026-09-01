@@ -1,5 +1,6 @@
 import React from "react";
 import { ERP_NAME } from "../config/branding";
+import { captureMonitoringError } from "../utils/monitoring";
 import "../Styles/AppErrorBoundary.css";
 
 class AppErrorBoundary extends React.Component {
@@ -16,6 +17,10 @@ class AppErrorBoundary extends React.Component {
     // Keep diagnostics available to support staff without exposing error
     // details, stack traces, or Firebase internals in the user interface.
     console.error("Unhandled application render error:", error);
+    void captureMonitoringError(error, {
+      module: "app",
+      operation: "application",
+    });
   }
 
   handleReload = () => {

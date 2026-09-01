@@ -22,6 +22,7 @@ import {
 } from "../utils/dailyProgressReporting";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { captureMonitoringError } from "../utils/monitoring";
 import { getSiteName, normaliseDate } from "../utils/financialReporting";
 import "../Styles/DailyProgressReport.css";
 
@@ -55,6 +56,7 @@ function DailyProgressReport() {
       },
       (error) => {
         console.error("DPR load error:", error);
+        void captureMonitoringError(error, { module: "dailyProgressReports", operation: "read" });
         setReports([]);
         setReportsError("Daily Progress Report data could not be loaded.");
         setReportsLoading(false);
@@ -70,7 +72,7 @@ function DailyProgressReport() {
       (snapshot) => {
         setSites(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },
-      (error) => console.error("DPR sites load error:", error)
+      (error) => { console.error("DPR sites load error:", error); void captureMonitoringError(error, { module: "dailyProgressReports", operation: "read" }); }
     );
 
     return () => unsubscribe();
@@ -82,7 +84,7 @@ function DailyProgressReport() {
       (snapshot) => {
         setMaterials(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },
-      (error) => console.error("DPR materials load error:", error)
+      (error) => { console.error("DPR materials load error:", error); void captureMonitoringError(error, { module: "dailyProgressReports", operation: "read" }); }
     );
 
     return () => unsubscribe();
@@ -94,7 +96,7 @@ function DailyProgressReport() {
       (snapshot) => {
         setVehicles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },
-      (error) => console.error("DPR vehicles load error:", error)
+      (error) => { console.error("DPR vehicles load error:", error); void captureMonitoringError(error, { module: "dailyProgressReports", operation: "read" }); }
     );
 
     return () => unsubscribe();
@@ -246,6 +248,7 @@ function DailyProgressReport() {
       resetForm();
     } catch (error) {
       console.error("DPR save error:", error);
+      void captureMonitoringError(error, { module: "dailyProgressReports", operation: "write" });
       alert("Daily Progress Report save nahi hua. Firebase connection/rules check karein.");
     } finally {
       setLoading(false);
@@ -295,6 +298,7 @@ function DailyProgressReport() {
       if (viewReport?.id === id) setViewReport(null);
     } catch (error) {
       console.error("DPR delete error:", error);
+      void captureMonitoringError(error, { module: "dailyProgressReports", operation: "write" });
       alert("Daily Progress Report delete nahi hua.");
     }
   };

@@ -1,12 +1,17 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ReportExportActions from "./ReportExportActions";
-import { printReport } from "../utils/reportExporting";
+import { exportReportPdf, printReport } from "../utils/reportExporting";
+import { captureMonitoringError } from "../utils/monitoring";
 
 jest.mock("../utils/reportExporting", () => ({
   downloadReportCsv: jest.fn(),
   exportReportPdf: jest.fn(),
   printReport: jest.fn(),
+}));
+
+jest.mock("../utils/monitoring", () => ({
+  captureMonitoringError: jest.fn(),
 }));
 
 const report = {
@@ -27,7 +32,7 @@ describe("ReportExportActions", () => {
     console.error.mockRestore();
   });
 
-  test("shows a safe print error if preview creation throws", () => {
+  test("shows a safe print error and records a sanitized export failure", () => {
     printReport.mockImplementation(() => {
       throw new Error("internal browser error");
     });
@@ -37,5 +42,19 @@ describe("ReportExportActions", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Print preview could not be opened. Please try again.");
     expect(screen.queryByText("internal browser error")).not.toBeInTheDocument();
+    expect(captureMonitoringError).toHaveBeenCalledWith(
+      expect.any(Error),
+      { module: "exports", operation: "export" }
+    );
+  });
+
+  test("does not create a monitoring event for a successful export", async () => {
+    exportReportPdf.mockResolvedValue();
+    render(<ReportExportActions report={report} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+
+    await waitFor(() => expect(exportReportPdf).toHaveBeenCalledWith(report));
+    expect(captureMonitoringError).not.toHaveBeenCalled();
   });
 });

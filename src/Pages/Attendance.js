@@ -6,6 +6,7 @@ import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { useAuth } from "../auth/AuthProvider";
 import { ATTENDANCE_STATUSES, getAttendanceKey, nonNegativeNumber } from "../utils/payroll";
 import { normaliseStatus } from "../utils/financialReporting";
+import { captureMonitoringError } from "../utils/monitoring";
 import "../Styles/Attendance.css";
 import { db } from "../firebase";
 import { collection, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, updateDoc } from "firebase/firestore";
@@ -34,11 +35,12 @@ function Attendance() {
       setAttendance(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
     }, (error) => {
       console.error("Firestore Attendance Error:", error);
+      void captureMonitoringError(error, { module: "attendance", operation: "read" });
       alert("Attendance data load nahi ho saka.");
     });
     const unsubscribeLabours = onSnapshot(collection(db, "labours"), (snapshot) => {
       setLabours(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    }, (error) => console.error("Labour reference Error:", error));
+    }, (error) => { console.error("Labour reference Error:", error); void captureMonitoringError(error, { module: "attendance", operation: "read" }); });
     return () => { unsubscribeAttendance(); unsubscribeLabours(); };
   }, []);
 
@@ -107,6 +109,7 @@ function Attendance() {
       clearForm();
     } catch (error) {
       console.error("Attendance save Error:", error);
+      void captureMonitoringError(error, { module: "attendance", operation: "write" });
       alert(error.message === "DUPLICATE_ATTENDANCE"
         ? "Is labour ki attendance is date ke liye pehle se recorded hai. Existing record ko edit karein."
         : "Attendance save nahi hua. Firebase connection/rules check karein.");
@@ -132,7 +135,7 @@ function Attendance() {
       await deleteDoc(doc(db, "attendance", item.id));
       const auditResult = await logAuditEvent({ action: "delete", module: "attendance", recordId: item.id, recordLabel: item.employeeName || item.labourName, details: "Attendance record deleted.", site: item.site });
       if (!auditResult.success) alert(getAuditFailureMessage());
-    } catch (error) { console.error("Delete Attendance Error:", error); alert("Attendance delete nahi hui."); }
+    } catch (error) { console.error("Delete Attendance Error:", error); void captureMonitoringError(error, { module: "attendance", operation: "write" }); alert("Attendance delete nahi hui."); }
   };
 
   const filteredAttendance = useMemo(() => attendance.filter((item) => {

@@ -3,6 +3,7 @@ import Layout from "../Components/Layout";
 import { DataTablePagination, DataTableToolbar } from "../Components/DataTableControls";
 import { getDistinctValues, useDataTable } from "../utils/dataTable";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
+import { captureMonitoringError } from "../utils/monitoring";
 import { useAuth } from "../auth/AuthProvider";
 import {
   calculatePayroll,
@@ -56,7 +57,7 @@ function Salary() {
       ["labourAdvances", setAdvances], ["salaryPayments", setPayments],
     ].map(([name, setter]) => onSnapshot(collection(db, name), (snapshot) => {
       setter(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    }, (error) => console.error(`Unable to load ${name}:`, error)));
+    }, (error) => { console.error(`Unable to load ${name}:`, error); void captureMonitoringError(error, { module: "payroll", operation: "read" }); }));
     return () => subscriptions.forEach((unsubscribe) => unsubscribe());
   }, []);
 
@@ -141,7 +142,7 @@ function Salary() {
       const auditResult = await logAuditEvent({ action: selectedExistingSalary ? "update" : "create", module: "salary", recordId: salaryId, recordLabel: salaryData.employeeName, details: `Payroll generated for ${month}: net ${formatMoney(salaryData.netSalary)}.`, site: salaryData.site });
       if (!auditResult.success) alert(getAuditFailureMessage());
       alert("Payroll successfully saved. Use Record Payment to settle the pending amount.");
-    } catch (error) { console.error("Save payroll error:", error); alert("Payroll save nahi hua. Firebase connection/rules check karein."); }
+    } catch (error) { console.error("Save payroll error:", error); void captureMonitoringError(error, { module: "payroll", operation: "write" }); alert("Payroll save nahi hua. Firebase connection/rules check karein."); }
     finally { setLoading(false); }
   };
 
@@ -171,7 +172,7 @@ function Salary() {
       alert("Salary payment recorded.");
       setPaymentTarget(null); setPaymentAmount(""); setPaymentReference(""); setPaymentRemarks("");
     } catch (error) {
-      console.error("Salary payment error:", error);
+      console.error("Salary payment error:", error); void captureMonitoringError(error, { module: "salary", operation: "write" });
       alert(error.message === "OVERPAYMENT" ? "Payment pending salary se zyada nahi ho sakta." : "Salary payment save nahi hua.");
     } finally { setLoading(false); }
   };
@@ -190,7 +191,7 @@ function Salary() {
       const auditResult = await logAuditEvent({ action: "create", module: "labourAdvances", recordId: advanceReference.id, recordLabel: getLabourName(labour), details: `Labour advance of ${formatMoney(amount)} recorded.`, site: labour.site });
       if (!auditResult.success) alert(getAuditFailureMessage());
       setAdvanceLabourId(""); setAdvanceAmount(""); setAdvanceReason(""); alert("Labour advance recorded.");
-    } catch (error) { console.error("Advance error:", error); alert("Labour advance save nahi hua."); }
+    } catch (error) { console.error("Advance error:", error); void captureMonitoringError(error, { module: "salary", operation: "write" }); alert("Labour advance save nahi hua."); }
     finally { setLoading(false); }
   };
 
@@ -201,7 +202,7 @@ function Salary() {
       await deleteDoc(doc(db, "salaries", salary.id));
       const auditResult = await logAuditEvent({ action: "delete", module: "salary", recordId: salary.id, recordLabel: salary.employeeName, details: "Unpaid payroll record deleted.", site: salary.site });
       if (!auditResult.success) alert(getAuditFailureMessage());
-    } catch (error) { console.error("Delete Salary Error:", error); alert("Salary delete nahi hui."); }
+    } catch (error) { console.error("Delete Salary Error:", error); void captureMonitoringError(error, { module: "salary", operation: "write" }); alert("Salary delete nahi hui."); }
   };
 
   const filteredSalaries = useMemo(() => salaries.filter((item) => {

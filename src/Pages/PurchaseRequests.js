@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { db } from "../firebase";
 import { getAuditFailureMessage, logAuditEvent } from "../utils/auditLogging";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
+import { captureMonitoringError } from "../utils/monitoring";
 import { buildDocumentNumber, canApprovePurchaseRequest, canManageProcurement, createInitialPurchaseRequestForm, createInitialPurchaseRequestItem, PURCHASE_PRIORITIES, PURCHASE_REQUEST_STATUSES, validatePurchaseRequest } from "../utils/procurement";
 import "../Styles/Procurement.css";
 
@@ -29,7 +30,7 @@ function PurchaseRequests() {
   useEffect(() => {
     let pending = 3;
     const done = () => { pending -= 1; if (pending <= 0) setLoading(false); };
-    const subscribe = (name, setData, error) => onSnapshot(query(collection(db, name), limit(500)), (snapshot) => { setData(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); done(); }, () => { setFeedback(error); done(); });
+    const subscribe = (name, setData, errorMessage) => onSnapshot(query(collection(db, name), limit(500)), (snapshot) => { setData(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))); done(); }, (error) => { void captureMonitoringError(error, { module: "procurement", operation: "read" }); setFeedback(errorMessage); done(); });
     const unRequests = subscribe("purchaseRequests", setRequests, "Purchase requests could not be loaded.");
     const unSites = subscribe("sites", setSites, "Sites could not be loaded.");
     const unMaterials = subscribe("materials", setMaterials, "Material reference data could not be loaded.");
@@ -89,7 +90,7 @@ function PurchaseRequests() {
       const audit = await logAuditEvent({ action: "create", module: "purchaseRequests", recordId: requestNumber, recordLabel: requestNumber, details: "Purchase request submitted for approval.", site: validation.value.site });
       setFeedback(audit.success ? `Purchase request ${requestNumber} submitted.` : getAuditFailureMessage());
       setForm(createInitialPurchaseRequestForm());
-    } catch (error) { console.error("Purchase request save error:", error); setFeedback(getUserFriendlyFirebaseError(error, "Purchase request could not be saved.")); }
+    } catch (error) { console.error("Purchase request save error:", error); void captureMonitoringError(error, { module: "procurement", operation: "write" }); setFeedback(getUserFriendlyFirebaseError(error, "Purchase request could not be saved.")); }
     finally { setSaving(false); }
   };
 
@@ -111,7 +112,7 @@ function PurchaseRequests() {
       });
       const audit = await logAuditEvent({ action: "update", module: "purchaseRequests", recordId: request.id, recordLabel: request.requestNumber, details: `Purchase request ${nextStatus}.`, site: request.site });
       setFeedback(audit.success ? `Purchase request ${nextStatus}.` : getAuditFailureMessage());
-    } catch (error) { console.error("Purchase request approval error:", error); setFeedback("The request status could not be updated."); }
+    } catch (error) { console.error("Purchase request approval error:", error); void captureMonitoringError(error, { module: "procurement", operation: "write" }); setFeedback("The request status could not be updated."); }
     finally { setSaving(false); }
   };
 

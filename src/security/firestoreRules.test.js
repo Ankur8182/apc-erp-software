@@ -48,4 +48,16 @@ describe("Firestore security rules", () => {
     expect(rules).toContain("match /inventoryItems/{itemId} {");
     expect(rules).toContain("allow read: if isAuthorizedErpUser() || isFieldUser();");
   });
+
+  test("keeps System Health events sanitized, append-only, and admin-readable", () => {
+    expect(rules).toContain("match /systemHealthEvents/{eventId} {");
+    expect(rules).toContain("allow read: if isAdmin();");
+    expect(rules).toContain("allow create: if canCreateSystemHealthEvent();");
+    expect(rules).toContain("allow update, delete: if false;");
+    expect(rules).toContain("request.resource.data.userId == request.auth.uid");
+    expect(rules).toContain('"FIRESTORE_WRITE"');
+    expect(rules).toContain('"application-crash"');
+    expect(rules).toContain('"subcontracting"');
+    expect(rules).not.toContain('request.resource.data.stack');
+  });
 });
