@@ -2,6 +2,8 @@ import {
   captureMonitoringError,
   createMonitoringEventPayload,
   createMonitoringThrottle,
+  getMonitoringRetentionReview,
+  MONITORING_RETENTION_DAYS,
   getRecentMonitoringEvents,
   getSystemHealthSummary,
   normaliseMonitoringError,
@@ -200,6 +202,47 @@ test("strips non-schema legacy fields before Admin health data is returned", () 
 });
 
 
+test("reviews retention candidates only within the supplied bounded event window", () => {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const now = Date.UTC(2026, 8, 14);
+  const events = [
+    { severity: "CRITICAL", timestamp: new Date(now - (180 * dayMs)) },
+    { severity: "ERROR", timestamp: new Date(now - (89 * dayMs)) },
+    { severity: "WARNING", timestamp: new Date(now - (30 * dayMs)) },
+    { severity: "INFO", timestamp: new Date(now - (8 * dayMs)) },
+    { severity: "ERROR", timestamp: null },
+  ];
+
+  const review = getMonitoringRetentionReview(events, { now });
+
+  expect(review).toMatchObject({
+    visibleEventCount: 5,
+    datedEventCount: 4,
+    undatedEventCount: 1,
+    eligibleVisibleCount: 3,
+    severityCounts: { CRITICAL: 1, ERROR: 2, WARNING: 1, INFO: 1 },
+    eligibleBySeverity: { CRITICAL: 1, ERROR: 0, WARNING: 1, INFO: 1 },
+  });
+  expect(review.oldestVisibleTimestamp.getTime()).toBe(now - (180 * dayMs));
+  expect(review.retentionDays).toEqual(MONITORING_RETENTION_DAYS);
+  expect(events[4].timestamp).toBeNull();
+});
+test("treats malformed monitoring timestamps as undated without crashing", () => {
+  const review = getMonitoringRetentionReview([
+    { severity: "ERROR", timestamp: { toDate: () => null } },
+    { severity: "WARNING", timestamp: { toDate: () => { throw new Error("bad legacy timestamp"); } } },
+    { severity: "INFO", timestamp: "" },
+    { severity: "WARNING", timestamp: { valueOf: () => { throw new Error("unparseable legacy value"); } } },
+  ], { now: Date.UTC(2026, 8, 14) });
+
+  expect(review).toMatchObject({
+    visibleEventCount: 4,
+    datedEventCount: 0,
+    undatedEventCount: 4,
+    oldestVisibleTimestamp: null,
+    eligibleVisibleCount: 0,
+  });
+});
 test("health summary stays observational and detects degraded or critical client signals", () => {
   const summary = getSystemHealthSummary([
     { severity: "ERROR", category: "FIRESTORE_WRITE", timestamp: new Date(1000) },

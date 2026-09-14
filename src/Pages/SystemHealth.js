@@ -5,6 +5,8 @@ import { useAuth } from "../auth/AuthProvider";
 import { canReadSystemHealth } from "../auth/authorization";
 import { getUserFriendlyFirebaseError } from "../utils/firebaseError";
 import {
+  getMonitoringRetentionReview,
+  MONITORING_RETENTION_DAYS,
   getMonitoringSafeMessage,
   getRecentMonitoringEvents,
   getSystemHealthSummary,
@@ -99,6 +101,10 @@ function SystemHealth() {
   const observedStatus = monitoringDataAvailable
     ? healthSummary.status
     : "ATTENTION REQUIRED";
+  const retentionReview = useMemo(
+    () => getMonitoringRetentionReview(events),
+    [events]
+  );
 
   if (!canRead) {
     return (
@@ -169,6 +175,29 @@ function SystemHealth() {
           </>
         )}
 
+        {monitoringDataAvailable && (
+          <section className="system-health-card system-health-retention-review" aria-label="Monitoring retention review">
+            <div className="system-health-card-heading">
+              <div>
+                <h2>Retention review</h2>
+                <p>Read-only review of the loaded recent event window. It never deletes, archives, or counts unqueried monitoring history.</p>
+              </div>
+              <span className="system-health-read-only-badge">Read-only review</span>
+            </div>
+            <div className="system-health-summary-grid system-health-retention-grid">
+              <article><span>Visible retained events</span><strong>{retentionReview.visibleEventCount}</strong><small>Newest bounded view only</small></article>
+              <article><span>Oldest visible</span><strong>{retentionReview.oldestVisibleTimestamp ? formatMonitoringTimestamp(retentionReview.oldestVisibleTimestamp) : "No dated events"}</strong><small>{retentionReview.undatedEventCount} undated record(s) excluded from candidates</small></article>
+              <article><span>Future review candidates</span><strong>{retentionReview.eligibleVisibleCount}</strong><small>Eligible only under the advisory policy</small></article>
+              <article><span>Dated events</span><strong>{retentionReview.datedEventCount}</strong><small>Use evidence review before any future cleanup</small></article>
+            </div>
+            <div className="system-health-signal-list system-health-retention-severities" aria-label="Visible monitoring events by severity">
+              {MONITORING_SEVERITIES.map((severity) => <span key={severity}>{toLabel(severity)} {retentionReview.severityCounts[severity]}</span>)}
+            </div>
+            <p className="system-health-retention-policy">
+              Advisory retention: Critical {MONITORING_RETENTION_DAYS.CRITICAL} days · Error {MONITORING_RETENTION_DAYS.ERROR} days · Warning {MONITORING_RETENTION_DAYS.WARNING} days · Info {MONITORING_RETENTION_DAYS.INFO} days. Candidate counts cover only these loaded records; preserve incident evidence and use a trusted backend or Admin SDK process before any archive/delete action.
+            </p>
+          </section>
+        )}
         <section className="system-health-card">
           <div className="system-health-card-heading">
             <div>

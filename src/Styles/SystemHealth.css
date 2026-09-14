@@ -115,3 +115,15 @@
   .system-health-filters { grid-template-columns: 1fr; }
   .system-health-signal-list { justify-content: flex-start; }
 }
+.system-health-retention-grid { margin-top: 1rem; }
+.system-health-retention-severities { margin-top: 0.75rem; }
+.system-health-retention-policy {
+  margin: 0.8rem 0 0;
+  padding: 0.7rem 0.8rem;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}

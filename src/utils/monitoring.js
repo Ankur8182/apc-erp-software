@@ -13,6 +13,15 @@ export const SYSTEM_HEALTH_COLLECTION = "systemHealthEvents";
 export const SYSTEM_HEALTH_EVENT_LIMIT = 100;
 export const MONITORING_THROTTLE_WINDOW_MS = 5 * 60 * 1000;
 export const MONITORING_SESSION_EVENT_LIMIT = 40;
+// This policy is deliberately advisory. The browser can only review the
+// bounded event window that it loaded; deletion and archival must remain a
+// separately approved trusted-backend operation.
+export const MONITORING_RETENTION_DAYS = Object.freeze({
+  CRITICAL: 180,
+  ERROR: 90,
+  WARNING: 30,
+  INFO: 7,
+});
 
 export const MONITORING_CATEGORIES = [
   "NETWORK",
@@ -207,12 +216,30 @@ const getSeverity = (category) => {
   return "ERROR";
 };
 
-const getTimestampDate = (value) => {
-  if (typeof value?.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
+const isValidDate = (value) => value instanceof Date && !Number.isNaN(value.getTime());
 
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+const getTimestampDate = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+
+  if (typeof value?.toDate === "function") {
+    try {
+      const converted = value.toDate();
+      return isValidDate(converted) ? converted : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (isValidDate(value)) return value;
+  if (value instanceof Date) return null;
+
+  try {
+    const parsed = new Date(value);
+    return isValidDate(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 };
 
 export const normaliseMonitoringError = (error, context = {}) => {
@@ -403,6 +430,67 @@ export const getRecentMonitoringEvents = async ({
       });
     })
     : [];
+};
+
+const getRetentionSeverity = (value) => (
+  MONITORING_SEVERITIES.includes(value) ? value : "ERROR"
+);
+
+export const getMonitoringRetentionReview = (events, {
+  now = Date.now(),
+  retentionDays = MONITORING_RETENTION_DAYS,
+} = {}) => {
+  const nowTimestamp = Number(now);
+  const safeNow = Number.isFinite(nowTimestamp) ? nowTimestamp : Date.now();
+  const records = Array.isArray(events) ? events : [];
+  const severityCounts = MONITORING_SEVERITIES.reduce((counts, severity) => ({
+    ...counts,
+    [severity]: 0,
+  }), {});
+  const eligibleBySeverity = MONITORING_SEVERITIES.reduce((counts, severity) => ({
+    ...counts,
+    [severity]: 0,
+  }), {});
+  let datedEventCount = 0;
+  let undatedEventCount = 0;
+  let oldestVisibleTimestamp = null;
+
+  records.forEach((event) => {
+    const severity = getRetentionSeverity(event?.severity);
+    const timestamp = getTimestampDate(event?.timestamp);
+    const retentionDaysForSeverity = Number(retentionDays?.[severity]);
+
+    severityCounts[severity] += 1;
+
+    if (!timestamp) {
+      undatedEventCount += 1;
+      return;
+    }
+
+    datedEventCount += 1;
+    if (!oldestVisibleTimestamp || timestamp.getTime() < oldestVisibleTimestamp.getTime()) {
+      oldestVisibleTimestamp = timestamp;
+    }
+
+    if (Number.isFinite(retentionDaysForSeverity) && retentionDaysForSeverity >= 0) {
+      const eligibleAt = safeNow - (retentionDaysForSeverity * 24 * 60 * 60 * 1000);
+      if (timestamp.getTime() <= eligibleAt) eligibleBySeverity[severity] += 1;
+    }
+  });
+
+  const eligibleVisibleCount = Object.values(eligibleBySeverity)
+    .reduce((total, count) => total + count, 0);
+
+  return {
+    visibleEventCount: records.length,
+    datedEventCount,
+    undatedEventCount,
+    oldestVisibleTimestamp,
+    severityCounts,
+    eligibleBySeverity,
+    eligibleVisibleCount,
+    retentionDays: { ...MONITORING_RETENTION_DAYS, ...(retentionDays || {}) },
+  };
 };
 
 export const getSystemHealthSummary = (events, {
