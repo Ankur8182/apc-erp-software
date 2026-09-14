@@ -54,10 +54,11 @@ service firebase.storage {
       allow read: if canReadDprPhoto(userId);
       allow create: if isValidDprImage() && hasValidStablePhotoName(photoFile) &&
         (isAdminOrManager() || (isFieldUser() && request.auth.uid == userId));
-      // A field user may clean up an unlinked partial upload only in their own
-      // path. The UI never exposes removal of linked DPR evidence.
-      allow delete: if isAdminOrManager() ||
-        (isFieldUser() && request.auth.uid == userId);
+      // DPR photo evidence is immutable from the field client. A field user
+      // may upload only within their own path, but cannot delete linked
+      // evidence through a direct Storage request. Trusted admin/manager
+      // users handle any reviewed cleanup of orphaned partial uploads.
+      allow delete: if isAdminOrManager();
       allow update: if false;
     }
 
@@ -65,8 +66,8 @@ service firebase.storage {
     // dprPhotos/ namespace above; this path cannot receive new objects.
     match /dpr/{userId}/{dprId}/{fileName} {
       allow read: if canReadDprPhoto(userId);
-      allow delete: if isAdminOrManager() ||
-        (isFieldUser() && request.auth.uid == userId);
+      allow delete: if isAdminOrManager();
+
       allow create, update: if false;
     }
 
