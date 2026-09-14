@@ -1,3 +1,34 @@
-# https://www.robotstxt.org/robotstxt.html
+# Public login entry is crawlable. These directives are not an authorization
+# control; Firebase Authentication, Firestore rules, and Hosting noindex
+# response headers protect ERP data.
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /dashboard
+Disallow: /labour
+Disallow: /sites
+Disallow: /site-details/
+Disallow: /materials
+Disallow: /inventory
+Disallow: /vendors
+Disallow: /purchase-requests
+Disallow: /purchase-orders
+Disallow: /goods-receipts
+Disallow: /work-orders
+Disallow: /boq
+Disallow: /client-billing
+Disallow: /expenses
+Disallow: /attendance
+Disallow: /salary
+Disallow: /vehicle
+Disallow: /invoice
+Disallow: /reports
+Disallow: /daily-progress-report
+Disallow: /audit-logs
+Disallow: /system-health
+Disallow: /user-management
+Disallow: /backup-recovery
+Disallow: /data-health-migration
+Disallow: /field-update
+Disallow: /field-dashboard
+
+Sitemap: https://a-p-construction-erp.web.app/sitemap.xml

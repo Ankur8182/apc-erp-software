@@ -18,6 +18,17 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "headers": [
+      {
+        "regex": "^/(dashboard|labour|sites|site-details|materials|inventory|vendors|purchase-requests|purchase-orders|goods-receipts|work-orders|boq|client-billing|expenses|attendance|salary|vehicle|invoice|reports|daily-progress-report|audit-logs|system-health|user-management|backup-recovery|data-health-migration|field-update|field-dashboard)(/.*)?$",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow, noarchive"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",

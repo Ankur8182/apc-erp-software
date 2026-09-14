@@ -4,6 +4,7 @@
 
 - [AP Construction ERP Operating Guide](AP_CONSTRUCTION_ERP_OPERATING_GUIDE.md) - primary handbook for owners, Admins, managers, field users, and maintainers.
 - [Release Notes v1](RELEASE_NOTES_V1.md) - product-level summary of the v1 release.
+- [Custom Domain and Search Indexing](CUSTOM_DOMAIN_AND_SEARCH_INDEXING.md) - safe public-entry SEO, Google Search Console, and future domain procedure.
 - [V1 Release Manifest](V1_RELEASE_MANIFEST.md) - release identity, deployment snapshot, roles, safeguards, and tag plan.
 - [V1 Production Handover](V1_PRODUCTION_HANDOVER.md) - operational handover, rollback, and post-release checklist.
 - [Security and Permission Audit](SECURITY_AUDIT.md) - active role boundary and deferred backend/photo-service position.
