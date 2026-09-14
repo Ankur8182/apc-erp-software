@@ -88,10 +88,17 @@ function SystemHealth() {
     [categoryFilter, events, severityFilter]
   );
 
+  const monitoringDataAvailable = !loading && !error;
   const healthSummary = useMemo(
-    () => getSystemHealthSummary(events, { isOnline: browserOnline }),
-    [browserOnline, events]
+    () => getSystemHealthSummary(events, {
+      isOnline: browserOnline,
+      monitoringDataAvailable,
+    }),
+    [browserOnline, events, monitoringDataAvailable]
   );
+  const observedStatus = monitoringDataAvailable
+    ? healthSummary.status
+    : "ATTENTION REQUIRED";
 
   if (!canRead) {
     return (
@@ -126,29 +133,41 @@ function SystemHealth() {
           </div>
         </section>
 
-        <section className="system-health-summary-grid" aria-label="System health summary">
-          <article className={`system-health-status-card system-health-status-${statusClassName(healthSummary.status)}`}>
-            <span>Observed status</span>
-            <strong>{healthSummary.status}</strong>
-            <small>Based on recent browser-reported events, not a backend availability check.</small>
-          </article>
-          <article><span>Last 24 hours</span><strong>{healthSummary.last24HoursCount}</strong><small>Sanitized failures observed</small></article>
-          <article><span>Last 7 days</span><strong>{healthSummary.last7DaysCount}</strong><small>Events in this retained view</small></article>
-          <article><span>Connection signal</span><strong>{browserOnline ? "Online" : "Offline"}</strong><small>Browser signal only</small></article>
-        </section>
+        {!loading && (
+          <>
+            <section className="system-health-summary-grid" aria-label="System health summary">
+              <article className={`system-health-status-card system-health-status-${statusClassName(observedStatus)}`}>
+                <span>Observed status</span>
+                <strong>{observedStatus}</strong>
+                <small>{monitoringDataAvailable
+                  ? "Based on recent browser-reported events, not a backend availability check."
+                  : "Monitoring history could not be loaded, so no healthy-application conclusion can be made."}
+                </small>
+              </article>
+              <article><span>Last 24 hours</span><strong>{monitoringDataAvailable ? healthSummary.last24HoursCount : "—"}</strong><small>{monitoringDataAvailable ? "Sanitized failures observed" : "Unavailable while monitoring history cannot load"}</small></article>
+              <article><span>Last 7 days</span><strong>{monitoringDataAvailable ? healthSummary.last7DaysCount : "—"}</strong><small>{monitoringDataAvailable ? "Events in this retained view" : "Unavailable while monitoring history cannot load"}</small></article>
+              <article><span>Connection signal</span><strong>{browserOnline ? "Online" : "Offline"}</strong><small>Browser signal only</small></article>
+            </section>
 
-        <section className="system-health-card system-health-insights">
-          <div>
-            <h2>Recent diagnostic signals</h2>
-            <p>Application crashes: {healthSummary.criticalCount} · Errors: {healthSummary.errorCount} · Warnings: {healthSummary.warningCount}</p>
-          </div>
-          <div className="system-health-signal-list" aria-label="Error categories in the last 24 hours">
-            <span>Network {healthSummary.byCategory.NETWORK}</span>
-            <span>Permission {healthSummary.byCategory.PERMISSION}</span>
-            <span>Firestore writes {healthSummary.byCategory.FIRESTORE_WRITE}</span>
-            <span>Firestore reads {healthSummary.byCategory.FIRESTORE_READ}</span>
-          </div>
-        </section>
+            <section className="system-health-card system-health-insights">
+              <div>
+                <h2>Recent diagnostic signals</h2>
+                <p>{monitoringDataAvailable
+                  ? `Application crashes: ${healthSummary.criticalCount} · Errors: ${healthSummary.errorCount} · Warnings: ${healthSummary.warningCount}`
+                  : "Recent error totals are unavailable until monitoring history can be loaded."}
+                </p>
+              </div>
+              {monitoringDataAvailable && (
+                <div className="system-health-signal-list" aria-label="Error categories in the last 24 hours">
+                  <span>Network {healthSummary.byCategory.NETWORK}</span>
+                  <span>Permission {healthSummary.byCategory.PERMISSION}</span>
+                  <span>Firestore writes {healthSummary.byCategory.FIRESTORE_WRITE}</span>
+                  <span>Firestore reads {healthSummary.byCategory.FIRESTORE_READ}</span>
+                </div>
+              )}
+            </section>
+          </>
+        )}
 
         <section className="system-health-card">
           <div className="system-health-card-heading">

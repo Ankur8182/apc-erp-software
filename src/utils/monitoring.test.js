@@ -5,6 +5,7 @@ import {
   getRecentMonitoringEvents,
   getSystemHealthSummary,
   normaliseMonitoringError,
+  normaliseMonitoringEvent,
   resetMonitoringStateForTests,
   setMonitoringActor,
   SYSTEM_HEALTH_EVENT_LIMIT,
@@ -56,6 +57,34 @@ test("normalizes permission, network, auth, and Firestore write errors without r
   expect(permission).not.toHaveProperty("message");
 });
 
+test("classifies validation, Firestore reads, exports, application crashes, and unknown errors safely", () => {
+  const validation = normaliseMonitoringError(
+    { code: "invalid-argument" },
+    { module: "fieldUpdate", operation: "write", now: 1000 }
+  );
+  const read = normaliseMonitoringError(
+    { code: "failed-precondition" },
+    { module: "inventory", operation: "read", now: 1000 }
+  );
+  const exportFailure = normaliseMonitoringError(
+    { code: "unexpected-provider-code" },
+    { module: "reports", operation: "export", now: 1000 }
+  );
+  const application = normaliseMonitoringError(
+    { code: "unexpected-provider-code" },
+    { module: "app", operation: "application", now: 1000 }
+  );
+  const unknown = normaliseMonitoringError(
+    { code: "unexpected-provider-code" },
+    { module: "unrecognised-module", operation: "unrecognised-operation", now: 1000 }
+  );
+
+  expect(validation).toMatchObject({ category: "VALIDATION", severity: "WARNING", code: "invalid-argument" });
+  expect(read).toMatchObject({ category: "FIRESTORE_READ", severity: "ERROR", code: "failed-precondition" });
+  expect(exportFailure).toMatchObject({ category: "EXPORT", severity: "ERROR", code: "unknown" });
+  expect(application).toMatchObject({ category: "APPLICATION", severity: "CRITICAL", code: "application-crash" });
+  expect(unknown).toMatchObject({ category: "UNKNOWN", severity: "ERROR", code: "unknown" });
+});
 test("creates a strict monitoring payload with no raw error data or personal fields", () => {
   const payload = createMonitoringEventPayload({
     actor: { userId: "user-1", userRole: "manager" },
@@ -130,11 +159,46 @@ test("uses a bounded timestamp-descending query for the Admin health view", asyn
 
   const events = await getRecentMonitoringEvents({ database: { name: "erp" } });
 
-  expect(events).toEqual([{ id: "health-1", category: "NETWORK" }]);
+  expect(events).toEqual([{ id: "health-1", category: "NETWORK", severity: "ERROR", code: "unknown", module: "unknown", operation: "unknown", timestamp: null }]);
   expect(orderBy).toHaveBeenCalledWith("timestamp", "desc");
   expect(limit).toHaveBeenCalledWith(SYSTEM_HEALTH_EVENT_LIMIT);
   expect(startAfter).not.toHaveBeenCalled();
 });
+
+test("strips non-schema legacy fields before Admin health data is returned", () => {
+  const event = normaliseMonitoringEvent({
+    id: "legacy-1",
+    category: "NETWORK",
+    severity: "WARNING",
+    code: "unavailable",
+    module: "expenses",
+    operation: "write",
+    timestamp: new Date(1000),
+    stack: "sensitive stack trace",
+    password: "not-safe",
+    aadhaar: "1234-5678-9012",
+    formPayload: { amount: 5000 },
+    authorization: "Bearer not-safe",
+    idToken: "token-not-safe",
+    bankAccount: "123456789",
+  });
+
+  expect(event).toEqual({
+    id: "legacy-1",
+    category: "NETWORK",
+    severity: "WARNING",
+    code: "unavailable",
+    module: "expenses",
+    operation: "write",
+    timestamp: new Date(1000),
+  });
+  expect(JSON.stringify(event)).not.toContain("sensitive");
+  expect(JSON.stringify(event)).not.toContain("aadhaar");
+  expect(JSON.stringify(event)).not.toContain("Bearer");
+  expect(JSON.stringify(event)).not.toContain("token-not-safe");
+  expect(JSON.stringify(event)).not.toContain("123456789");
+});
+
 
 test("health summary stays observational and detects degraded or critical client signals", () => {
   const summary = getSystemHealthSummary([
@@ -148,4 +212,5 @@ test("health summary stays observational and detects degraded or critical client
 
   expect(summary.status).toBe("DEGRADED");
   expect(critical.status).toBe("ATTENTION REQUIRED");
+  expect(getSystemHealthSummary([], { monitoringDataAvailable: false }).status).toBe("ATTENTION REQUIRED");
 });

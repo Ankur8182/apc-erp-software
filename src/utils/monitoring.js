@@ -252,6 +252,30 @@ export const formatMonitoringTimestamp = (value) => {
     : "Pending timestamp";
 };
 
+const normaliseEventEnum = (value, allowedValues, fallback) =>
+  allowedValues.includes(value) ? value : fallback;
+
+// Firestore rules already reject unknown fields for new records. This second
+// boundary keeps malformed or legacy documents from carrying raw data into the
+// Admin health UI at all.
+export const normaliseMonitoringEvent = (event = {}) => ({
+  id: String(event?.id || ""),
+  category: normaliseEventEnum(
+    String(event?.category || "").trim().toUpperCase(),
+    MONITORING_CATEGORIES,
+    "UNKNOWN"
+  ),
+  severity: normaliseEventEnum(
+    String(event?.severity || "").trim().toUpperCase(),
+    MONITORING_SEVERITIES,
+    "ERROR"
+  ),
+  code: normaliseEventEnum(normaliseText(event?.code), MONITORING_CODES, "unknown"),
+  module: normaliseModule(event?.module),
+  operation: normaliseOperation(event?.operation),
+  timestamp: getTimestampDate(event?.timestamp),
+});
+
 export const createMonitoringThrottle = ({
   windowMs = MONITORING_THROTTLE_WINDOW_MS,
   sessionLimit = MONITORING_SESSION_EVENT_LIMIT,
@@ -373,10 +397,10 @@ export const getRecentMonitoringEvents = async ({
   return Array.isArray(snapshot?.docs)
     ? snapshot.docs.map((entry) => {
       const data = typeof entry?.data === "function" ? entry.data() : {};
-      return {
-        id: String(entry?.id || ""),
+      return normaliseMonitoringEvent({
         ...(data && typeof data === "object" ? data : {}),
-      };
+        id: entry?.id,
+      });
     })
     : [];
 };
@@ -384,8 +408,10 @@ export const getRecentMonitoringEvents = async ({
 export const getSystemHealthSummary = (events, {
   now = Date.now(),
   isOnline = true,
+  monitoringDataAvailable = true,
 } = {}) => {
   const records = Array.isArray(events) ? events : [];
+  const dataAvailable = monitoringDataAvailable === true;
   const dayAgo = now - (24 * 60 * 60 * 1000);
   const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
   const datedEvents = records.map((event) => ({ event, date: getTimestampDate(event?.timestamp) }));
@@ -400,11 +426,12 @@ export const getSystemHealthSummary = (events, {
   const warningCount = last24Hours.filter(({ event }) => event?.severity === "WARNING").length;
 
   let status = "HEALTHY";
-  if (!isOnline || criticalCount > 0) status = "ATTENTION REQUIRED";
+  if (!dataAvailable || !isOnline || criticalCount > 0) status = "ATTENTION REQUIRED";
   else if (errorCount >= 3 || warningCount >= 5) status = "DEGRADED";
 
   return {
     status,
+    monitoringDataAvailable: dataAvailable,
     last24HoursCount: last24Hours.length,
     last7DaysCount: last7Days.length,
     criticalCount,

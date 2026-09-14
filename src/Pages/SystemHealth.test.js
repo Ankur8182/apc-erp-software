@@ -78,5 +78,8 @@ test("shows a safe load error without exposing raw Firestore details", async () 
 
   expect(await screen.findByRole("alert")).toHaveTextContent("do not have permission");
   expect(screen.queryByText("raw rule details")).not.toBeInTheDocument();
+  expect(screen.getByText("ATTENTION REQUIRED")).toBeInTheDocument();
+  expect(screen.queryByText("HEALTHY")).not.toBeInTheDocument();
+  expect(getSystemHealthSummary).toHaveBeenCalledWith([], expect.objectContaining({ monitoringDataAvailable: false }));
   consoleErrorSpy.mockRestore();
 });
