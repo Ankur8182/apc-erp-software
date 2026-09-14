@@ -1,70 +1,50 @@
-# Getting Started with Create React App
+# AP Construction ERP
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+AP Construction ERP is a React and Firebase construction-management application for site operations, procurement, inventory, labour and payroll, vehicles, client billing, BOQ/measurement, Daily Progress Reports, reports, audit history, backup export, and operational monitoring.
 
-## Available Scripts
+**Production:** <https://a-p-construction-erp.web.app>
+**Firebase project:** `a-p-construction-erp`
 
-In the project directory, you can run:
+## Documentation
 
-### `npm start`
+Start with [docs/AP_CONSTRUCTION_ERP_OPERATING_GUIDE.md](docs/AP_CONSTRUCTION_ERP_OPERATING_GUIDE.md). The full documentation index is at [docs/README.md](docs/README.md).
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Local development
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Install dependencies from the project root with the committed lockfile, then run:
 
-### `npm test`
+```powershell
+npm ci
+npm start
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+The local development app is normally available at <http://localhost:3000>.
 
-### `npm run build`
+## Safe quality checks
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```powershell
+git status
+git diff --check
+npm test -- --watchAll=false --runInBand
+npx eslint src
+npm run build
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+See [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) before any release. Review and stage specific files; do not use `git add .` by default.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Architecture
 
-### `npm run eject`
+- React with React Router and responsive/PWA app-shell behavior
+- Firebase Authentication for email/password sign-in
+- Cloud Firestore for role-protected ERP data
+- Firebase Hosting for the production single-page application
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+The application supports `admin`, `manager`, `viewer`, `supervisor`, and `engineer` roles. Firestore rules and route protection enforce permissions; hidden navigation alone is never the security boundary.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Current plan-dependent limitations
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+- Firebase Storage is not provisioned for the current Spark-plan operating state. DPR submission works without photos; photo upload is deferred.
+- Trusted Cloud Functions-based in-app User Management is deferred. Use the approved Firebase Console plus matching `users/{uid}` role-profile process.
+- Browser backup export is a controlled Firestore data export, not a full Firebase infrastructure backup or browser restore tool.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Do not add passwords, tokens, service-account keys, `.env` files, backup exports, or personal credentials to source control.
